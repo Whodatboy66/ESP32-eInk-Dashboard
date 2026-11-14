@@ -1,6 +1,6 @@
 profiles:
   esp32:
-    fqbn: esp32:esp32:esp32
+    fqbn: esp32:esp32:esp32:PartitionScheme=custom
     platforms:
       - platform: esp32:esp32 (3.3.7)
         platform_index_url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
@@ -14,7 +14,7 @@ profiles:
       properties:
         compiler.cpp.extra_flags: -DDEFAULT_PIN_PRESET_ESP32
   esp32_waveshare:
-    fqbn: esp32:esp32:esp32
+    fqbn: esp32:esp32:esp32:PartitionScheme=custom
     platforms:
       - platform: esp32:esp32 (3.3.7)
         platform_index_url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
@@ -28,7 +28,7 @@ profiles:
       properties:
         compiler.cpp.extra_flags: -DDEFAULT_PIN_PRESET_ESP32_WAVESHARE
   esp32c6_firebeetle:
-    fqbn: esp32:esp32:dfrobot_firebeetle2_esp32c6
+    fqbn: esp32:esp32:dfrobot_firebeetle2_esp32c6:PartitionScheme=custom,CDCOnBoot=cdc
     platforms:
       - platform: esp32:esp32 (3.3.7)
         platform_index_url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
@@ -42,7 +42,7 @@ profiles:
       properties:
         compiler.cpp.extra_flags: -DDEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE
   esp32c6_firebeetle_zigbee:
-    fqbn: esp32:esp32:dfrobot_firebeetle2_esp32c6:PartitionScheme=zigbee_zczr,ZigbeeMode=zczr
+    fqbn: esp32:esp32:dfrobot_firebeetle2_esp32c6:PartitionScheme=custom,ZigbeeMode=zczr,CDCOnBoot=cdc
     platforms:
       - platform: esp32:esp32 (3.3.7)
         platform_index_url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
@@ -56,7 +56,7 @@ profiles:
       properties:
         compiler.cpp.extra_flags: -DDEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE -DUSE_ZIGBEE=1
   esp32c6_supermini:
-    fqbn: esp32:esp32:makergo_c6_supermini
+    fqbn: esp32:esp32:makergo_c6_supermini:PartitionScheme=custom,CDCOnBoot=cdc
     platforms:
       - platform: esp32:esp32 (3.3.7)
         platform_index_url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
@@ -70,7 +70,7 @@ profiles:
       properties:
         compiler.cpp.extra_flags: -DDEFAULT_PIN_PRESET_ESP32C6_SUPERMINI
   esp32c6_supermini_zigbee:
-    fqbn: esp32:esp32:makergo_c6_supermini:PartitionScheme=zigbee_zczr,ZigbeeMode=zczr
+    fqbn: esp32:esp32:makergo_c6_supermini:PartitionScheme=custom,ZigbeeMode=zczr,CDCOnBoot=cdc
     platforms:
       - platform: esp32:esp32 (3.3.7)
         platform_index_url: https://raw.githubusercontent.com/espressif/arduino-esp32/gh-pages/package_esp32_index.json
