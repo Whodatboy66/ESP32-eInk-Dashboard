@@ -86,9 +86,12 @@ void refresh() {
   drawPattern(cycle % 2 == 0);
   unsigned long ms = millis() - t0;
   display.powerOff();
-  Serial.printf("[EPD]  refresh #%d took %lu ms -> %s\n", cycle, ms,
-                ms > 1500 ? "DISPLAY RESPONDED (it should show HELLO now)"
-                          : "NO RESPONSE (real refresh takes ~4000 ms)");
+  // A real refresh takes ~2.5-4.5 s. GxEPD2 gives up waiting for BUSY after 10 s per step,
+  // so anything far above that is a timeout, not a refresh.
+  const char* verdict = ms < 1500  ? "NO RESPONSE (commands not arriving: DIN/CLK/CS/DC)"
+                      : ms < 9000  ? "DISPLAY RESPONDED (it should show the new pattern now)"
+                                   : "BUSY TIMEOUT (BUSY wire not connected / not driven)";
+  Serial.printf("[EPD]  refresh #%d took %lu ms -> %s\n", cycle, ms, verdict);
   logBusy("after refresh");
   lastDraw = millis();
 }
