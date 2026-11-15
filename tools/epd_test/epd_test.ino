@@ -1,7 +1,7 @@
 // Display bring-up test: Waveshare e-Paper Driver HAT + 7.5" B/W 800x480 (GxEPD2_750_T7)
 // on a FireBeetle 2 ESP32-C6, same pins as the dashboard's "ESP32 C6" preset.
 //
-// - Board LED (GPIO15) blinks: the test firmware is running.
+// - Board LED (GPIO15) blinks fast (4x/s) from power-on: the test firmware is running.
 // - Serial log (115200) probes the BUSY line and times every refresh.
 // - Every 20 s the panel is redrawn (pattern alternates), so a working display shows a life sign.
 // - Never sleeps, so the USB serial monitor stays connected and wires can be fixed between cycles.
@@ -29,7 +29,6 @@ GxEPD2_BW<GxEPD2_750_T7, GxEPD2_750_T7::HEIGHT> display(
   GxEPD2_750_T7(PIN_CS, PIN_DC, PIN_RST, PIN_BUSY));
 
 unsigned long lastDraw = 0;
-unsigned long lastBlink = 0;
 int cycle = 0;
 String lastBusy;
 
@@ -94,13 +93,24 @@ void refresh() {
   lastDraw = millis();
 }
 
-void setup() {
+// Heartbeat in its own task, so the LED blinks from the first moment even while
+// setup() or a refresh is blocked waiting for the display.
+void heartbeat(void*) {
   pinMode(PIN_LED, OUTPUT);
+  for (;;) {
+    digitalWrite(PIN_LED, !digitalRead(PIN_LED));
+    vTaskDelay(pdMS_TO_TICKS(250));
+  }
+}
+
+void setup() {
+  xTaskCreate(heartbeat, "heartbeat", 2048, nullptr, 1, nullptr);
   Serial.begin(115200);
   unsigned long start = millis();
   while (!Serial && millis() - start < 4000) delay(10);
   delay(500);
   Serial.println("\n===== e-Paper display test =====");
+  Serial.println("(LED should blink 4x per second now)");
   Serial.printf("Pins CS=%d DC=%d RST=%d BUSY=%d SCK=%d MOSI=%d PWR=%d\n",
                 PIN_CS, PIN_DC, PIN_RST, PIN_BUSY, PIN_SCK, PIN_MOSI, PIN_PWR);
 
@@ -126,10 +136,6 @@ void setup() {
 }
 
 void loop() {
-  if (millis() - lastBlink > 500) {  // firmware heartbeat
-    digitalWrite(PIN_LED, !digitalRead(PIN_LED));
-    lastBlink = millis();
-  }
   static unsigned long lastProbe = 0;
   if (millis() - lastProbe > 1000) {  // report BUSY changes live (e.g. while fixing wires)
     String s = probeBusy();
