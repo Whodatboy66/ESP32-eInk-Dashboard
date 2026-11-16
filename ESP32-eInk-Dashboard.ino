@@ -21,6 +21,7 @@
 #include <driver/gpio.h>
 #include <driver/rtc_io.h>
 #include "src/input/ButtonGesture.h"
+#include "src/core/Timezone.h"
 #include "src/update/UpdateClient.h"
 #include "src/update/UpdateScreens.h"
 #include <esp_ota_ops.h>
@@ -78,6 +79,8 @@ bool apModeActive = false;
 
 // Over-the-air updates (docs/OTA_UPDATES.md). Settings and results are kept in NVS ("config").
 static bool otaAutoInstall = true;     // setup page "Install updates automatically"
+static bool otaBeta = false;           // setup page "Update channel": beta = test releases too
+static const ota::DeviceIds OTA_DEVICE{FW_BUILD, FW_DISPLAY, FW_CONFIG_SCHEMA};
 static uint32_t otaAvailBuild = 0;     // newer release seen but not installed: status-bar mark
 static char otaAvailVersion[16] = "";
 static bool otaPendingVerify = false;  // first start of a freshly installed image (not confirmed yet)
@@ -684,10 +687,18 @@ html += R"rawliteral(
     <label>Timezone</label>
     <input name="device_timezone" value=")rawliteral";
 
-html += device_timezone;
+html += htmlAttr(device_timezone);
 
-html += R"rawliteral(" placeholder="EST5EDT,M3.2.0/2,M11.1.0/2">
-    <div class="note">Used for the clock when the layout does not provide a timezone in the clock widget Extra1 field.</div>
+html += R"rawliteral(" list="tz_presets" placeholder="CET-1CEST,M3.5.0,M10.5.0/3">
+    <datalist id="tz_presets">
+      <option value="CET-1CEST,M3.5.0,M10.5.0/3">Germany, Austria, Switzerland, most of Central Europe</option>
+      <option value="GMT0BST,M3.5.0/1,M10.5.0">United Kingdom</option>
+      <option value="EET-2EEST,M3.5.0/3,M10.5.0/4">Finland, Greece, Romania</option>
+      <option value="EST5EDT,M3.2.0,M11.1.0">US Eastern</option>
+      <option value="PST8PDT,M3.2.0,M11.1.0">US Pacific</option>
+      <option value="UTC0">UTC</option>
+    </datalist>
+    <div class="note">A POSIX timezone rule including summer time, e.g. <b>CET-1CEST,M3.5.0,M10.5.0/3</b> for Germany. Names like CET or Europe/Berlin are turned into that rule when you save.</div>
 
     <hr>
 
@@ -814,6 +825,21 @@ html += otaAutoInstall ? " checked" : "";
 
 html += R"rawliteral(> Install updates automatically</label>
     <div class="note">On: a new version is installed at night by itself. Off: the status bar shows "Update available"; install it with a double tap on the button, or below.</div>
+
+    <label>Update channel</label>
+    <select name="ota_channel">
+      <option value="stable")rawliteral";
+
+html += otaBeta ? "" : " selected";
+
+html += R"rawliteral(>Stable (recommended)</option>
+      <option value="beta")rawliteral";
+
+html += otaBeta ? " selected" : "";
+
+html += R"rawliteral(>Beta: also test releases</option>
+    </select>
+    <div class="note">Beta gets test releases first (and every stable release). Use it only on a device you can reach.</div>
 
     <button type="submit">Save Configuration</button>
 
@@ -1209,7 +1235,8 @@ static String otaStatusHtml() {
   preferences.end();
   char date[16], line[96];
   String out;
-  snprintf(line, sizeof(line), "Installed: %s (%s). ", FW_VERSION, FW_VARIANT);
+  snprintf(line, sizeof(line), "Installed: %s (%s, %s), %s channel. ", FW_VERSION, FW_VARIANT, FW_DISPLAY,
+           ota::channelName(otaBeta));
   out += line;
   formatDate(updated, date, sizeof(date));
   out += "Last update: ";
@@ -1253,11 +1280,20 @@ void handleUpdateNow() {
 }
 
 void handleSave() {
+  // The timezone must be a rule the C library understands: a bare "CET" would silently be UTC.
+  char tzRule[CFG_TIMEZONE_MAX];
+  if (!normalizeTimezone(server.arg("device_timezone").c_str(), tzRule, sizeof(tzRule))) {
+    server.send(400, "text/plain",
+                "Timezone not recognized: \"" + server.arg("device_timezone") +
+                "\".\nUse a rule like CET-1CEST,M3.5.0,M10.5.0/3 (Germany) or a name like CET or "
+                "Europe/Berlin. Go back and correct it; nothing was saved.");
+    return;
+  }
   copyToCfg(wifi_ssid, sizeof(wifi_ssid), server.arg("wifi_ssid"));
   // Empty password fields keep the saved value, so re-opening setup doesn't require retyping them.
   if (server.arg("wifi_pass").length() > 0)
     copyToCfg(wifi_pass, sizeof(wifi_pass), server.arg("wifi_pass"));
-  copyToCfg(device_timezone, sizeof(device_timezone), server.arg("device_timezone"));
+  copyToCfg(device_timezone, sizeof(device_timezone), tzRule);
   copyToCfg(weather_location, sizeof(weather_location), server.arg("weather_location"));
   copyToCfg(stock_symbols, sizeof(stock_symbols), server.arg("stock_symbols"));
   for (int i = 0; i < ICS_MAX_FEEDS; i++)
@@ -1319,6 +1355,8 @@ void handleSave() {
   saveCustomPinConfig(preferences, customPins);
   otaAutoInstall = server.hasArg("ota_auto");  // an unticked checkbox isn't sent
   preferences.putBool("ota_auto", otaAutoInstall);
+  otaBeta = server.arg("ota_channel") == "beta";
+  preferences.putBool("ota_beta", otaBeta);
 
   preferences.end();
 
@@ -1930,10 +1968,12 @@ static bool waitForConfirmTap(uint32_t timeoutMs) {
 
 static void describeFetchFailure(const ota::FetchOutcome& f, char* out, size_t cap) {
   switch (f.result) {
-    case ota::FetchResult::NoRelease:   snprintf(out, cap, "No release on GitHub yet"); break;
+    case ota::FetchResult::NoRelease:   snprintf(out, cap, "No %s release on GitHub yet", ota::channelName(otaBeta)); break;
+    case ota::FetchResult::BadSignature: snprintf(out, cap, "Release signature not valid: not installed"); break;
     case ota::FetchResult::BadManifest: snprintf(out, cap, "Release information not readable, error %d", (int)f.manifestError); break;
     default:
-      if (f.httpCode < 0) snprintf(out, cap, "No connection to GitHub");
+      if (f.httpCode == HTTPC_ERROR_TOO_LESS_RAM) snprintf(out, cap, "Not enough memory: try again later");
+      else if (f.httpCode < 0) snprintf(out, cap, "No connection to GitHub");
       else snprintf(out, cap, "GitHub answered %d", f.httpCode);
       break;
   }
@@ -1952,7 +1992,7 @@ static void runUpdateSession(OtaTrigger trigger) {
   char lastUpdateText[16];
   formatDate(lastUpdate, lastUpdateText, sizeof(lastUpdateText));
   ota::DeviceInfo info{FW_VERSION, FW_VARIANT, lastUpdateText, batteryPercentNow(), usbPowered(),
-                       wifi_ssid, otaAutoInstall};
+                       wifi_ssid, otaAutoInstall, ota::channelName(otaBeta)};
   ota::showInfo(info);
 
   if (!wifi_ssid[0] || !startWiFiReliable(wifi_ssid, wifi_pass)) {
@@ -1962,13 +2002,13 @@ static void runUpdateSession(OtaTrigger trigger) {
     wifiFailures = 0;
     setProblem(PROBLEM_WIFI, false);
     ota::Manifest m;
-    ota::FetchOutcome f = ota::fetchManifest(m);
+    ota::FetchOutcome f = ota::fetchManifest(otaBeta, m);
     char detail[80];
     if (f.result != ota::FetchResult::Ok) {
       describeFetchFailure(f, detail, sizeof(detail));
       otaShowResult("Update check failed: try again later", detail);
     } else {
-      switch (ota::availability(m.build, m.minBuild, m.hasFile, FW_BUILD)) {
+      switch (ota::availabilityFor(m, OTA_DEVICE)) {
         case ota::Availability::UpToDate: {
           otaSetAvailable(nullptr);
           char title[40];
@@ -1978,6 +2018,15 @@ static void runUpdateSession(OtaTrigger trigger) {
         }
         case ota::Availability::NotForThisBoard:
           snprintf(detail, sizeof(detail), "Release %s has no file for %s", m.version, FW_VARIANT);
+          otaShowResult("No update for this device", detail);
+          break;
+        case ota::Availability::WrongDisplay:
+          snprintf(detail, sizeof(detail), "Release %s is built for display %s, this one is %s", m.version,
+                   m.fileDisplay, FW_DISPLAY);
+          otaShowResult("No update for this device", detail);
+          break;
+        case ota::Availability::IncompatibleSettings:
+          snprintf(detail, sizeof(detail), "Release %s can't read this device's settings", m.version);
           otaShowResult("No update for this device", detail);
           break;
         case ota::Availability::NeedsNewerFirmware:
@@ -2034,14 +2083,14 @@ static bool runNightCheck(int todayKey) {
   preferences.putInt("ota_day", todayKey);
   preferences.end();
   ota::Manifest m;
-  ota::FetchOutcome f = ota::fetchManifest(m);
+  ota::FetchOutcome f = ota::fetchManifest(otaBeta, m);
   if (f.result != ota::FetchResult::Ok) {
     char detail[80];
     describeFetchFailure(f, detail, sizeof(detail));
     otaSaveResult("Night check failed: %s", detail);
     return false;
   }
-  ota::Availability a = ota::availability(m.build, m.minBuild, m.hasFile, FW_BUILD);
+  ota::Availability a = ota::availabilityFor(m, OTA_DEVICE);
   bool failed = ota::failedBefore(m.build, otaBadBuild);
   switch (ota::nightAction(a, otaAutoInstall, otaBatteryOk(), failed)) {
     case ota::NightAction::Nothing:
@@ -2222,6 +2271,7 @@ void setup() {
     bootCount = 0;
   }
 
+  bool tzFixed = false;
   preferences.begin("config", true);
   memset(wifi_ssid, 0, sizeof(wifi_ssid));
   memset(wifi_pass, 0, sizeof(wifi_pass));
@@ -2251,8 +2301,16 @@ void setup() {
   preferences.getString("pkge_key", pkge_api_key, sizeof(pkge_api_key));
   memset(aerodatabox_key, 0, sizeof(aerodatabox_key));
   preferences.getString("adb_key", aerodatabox_key, sizeof(aerodatabox_key));
-  if (device_timezone[0] == '\0') {
-    strncpy(device_timezone, "UTC0", sizeof(device_timezone) - 1);
+  // Older setups may have saved a bare name like "CET" (which the C library treats as UTC).
+  char tzRule[CFG_TIMEZONE_MAX];
+  if (!normalizeTimezone(device_timezone, tzRule, sizeof(tzRule))) {
+    Serial.printf("Timezone \"%s\" not usable, using UTC: fix it on the setup page\n", device_timezone);
+    snprintf(tzRule, sizeof(tzRule), "UTC0");
+  }
+  if (strcmp(tzRule, device_timezone) != 0) {
+    Serial.printf("Timezone \"%s\" -> \"%s\"\n", device_timezone, tzRule);
+    snprintf(device_timezone, sizeof(device_timezone), "%s", tzRule);
+    tzFixed = true;
   }
   activePinPreset = parsePinPreset(preferences.getString("pin_preset", pinPresetValue(DEFAULT_PIN_PRESET)));
   customPins = loadCustomPinConfig(preferences, makePinPreset(DEFAULT_PIN_PRESET));
@@ -2262,6 +2320,7 @@ void setup() {
     forceSuperMiniLedsOff();
   }
   otaAutoInstall = preferences.getBool("ota_auto", true);
+  otaBeta = preferences.getBool("ota_beta", false);
   otaAvailBuild = preferences.getUInt("ota_avail", 0);
   preferences.getString("ota_availv", otaAvailVersion, sizeof(otaAvailVersion));
   if (otaAvailBuild <= FW_BUILD) otaAvailBuild = 0;  // already installed
@@ -2269,9 +2328,24 @@ void setup() {
   otaBadBuild = preferences.getUInt("ota_bad", 0);
 
   preferences.end();
-  DBGF("Firmware %s (build %d, %s), auto update %s", FW_VERSION, FW_BUILD, FW_VARIANT,
-       otaAutoInstall ? "on" : "off");
+  DBGF("Firmware %s (build %d, %s, %s, settings schema %d), auto update %s, channel %s", FW_VERSION,
+       FW_BUILD, FW_VARIANT, FW_DISPLAY, FW_CONFIG_SCHEMA, otaAutoInstall ? "on" : "off",
+       ota::channelName(otaBeta));
   otaReadBootState();
+  if (tzFixed) {  // store the corrected rule once
+    preferences.begin("config", false);
+    preferences.putString("device_timezone", device_timezone);
+    preferences.end();
+  }
+#ifdef OTA_TEST_CRASH
+  // Test build only (docs/OTA_TESTS.md): crash in the first start after an over-the-air install,
+  // before the update can confirm itself. Never crashes when flashed over USB.
+  if (otaPendingVerify) {
+    Serial.println("[OTA test] crashing on purpose");
+    Serial.flush();
+    abort();
+  }
+#endif
 
   // Setup mode asked by a setup hold while the board was awake.
   if (setupRequest == SETUP_REQUEST_MAGIC) {
@@ -2323,6 +2397,14 @@ void setup() {
     bootCount = 0;
   }
   otaBootCheck();
+#ifdef OTA_TEST_HANG
+  // Test build only (docs/OTA_TESTS.md): hang after "Updated to" in the first start after an
+  // over-the-air install; the 3-minute timer must restart the board and roll back.
+  if (otaPendingVerify) {
+    Serial.println("[OTA test] hanging on purpose");
+    for (;;) delay(1000);
+  }
+#endif
 
 // DBGF("Wifi %s Pass %s", wifi_ssid.c_str(), wifi_pass.c_str());
 

@@ -66,7 +66,7 @@ void progressBar(int16_t y, int quarter) {
 void showInfo(const DeviceInfo& info) {
   char l1[64], l2[48], l3[48], l4[48], l5[80], ssid[40];
   snprintf(l1, sizeof(l1), "Firmware %s   -   %s", info.version, info.variant);
-  snprintf(l2, sizeof(l2), "Channel: stable   -   Auto install: %s", info.autoInstall ? "on" : "off");
+  snprintf(l2, sizeof(l2), "Channel: %s   -   Auto install: %s", info.channel, info.autoInstall ? "on" : "off");
   snprintf(l3, sizeof(l3), "Last update: %s", info.lastUpdate);
   if (info.batteryPercent < 0) snprintf(l4, sizeof(l4), "Power: USB");
   else snprintf(l4, sizeof(l4), "Battery: %d %%%s", info.batteryPercent, info.usbPowered ? " - USB connected" : "");

@@ -86,7 +86,7 @@ To change the settings later, hold the button for 4 seconds and release it to re
 | Field | What to enter |
 | --- | --- |
 | **WiFi network / password** | Your Wi-Fi. Leave the password empty to keep the saved one. |
-| **Timezone** | A POSIX TZ string used by the clock and the calendar, e.g. `EST5EDT,M3.2.0/2,M11.1.0/2` (US Eastern), `CET-1CEST,M3.5.0,M10.5.0/3` (Central Europe), `GMT0BST,M3.5.0/1,M10.5.0` (UK). [List of TZ strings](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv). |
+| **Timezone** | A POSIX timezone rule including summer time, used by the clock and the calendar: `CET-1CEST,M3.5.0,M10.5.0/3` (Germany and most of Central Europe), `GMT0BST,M3.5.0/1,M10.5.0` (UK), `EST5EDT,M3.2.0,M11.1.0` (US Eastern); the field suggests these. Common names (`CET`, `MEZ`, `Europe/Berlin`, `Europe/London`, `America/New_York`, …) are turned into their rule when you save. A bare `CET` used to be taken as UTC (1 hour behind in German winter); a saved one is corrected at the next start. Anything else is refused with a message. [List of rules](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv). |
 | **Weather Location** | A city, optionally with a 2-letter country code (`London, GB`), or `latitude,longitude` (`51.51,-0.13`). A city is looked up once with Open-Meteo's geocoding. |
 | **Stock Symbols** | Up to 5 Yahoo Finance symbols, comma separated: `AAPL,NVDA,^IXIC`. Indexes start with `^`. |
 | **Calendar iCal URLs** | Up to 3 `.ics` links, merged into one calendar. See [Getting your Google Calendar link](#getting-your-google-calendar-link). |
@@ -99,6 +99,7 @@ To change the settings later, hold the button for 4 seconds and release it to re
 | **PKGE API Key** | The API key of your PKGE Business account, for package tracking (see [Tracking your packages](#tracking-your-packages)). Leave empty to keep the saved key; enter `-` to remove it. |
 | **AeroDataBox API Key** | Optional: your RapidAPI key, for live flight status (see [Live flight status](#live-flight-status-optional)). Leave empty to keep the saved key; enter `-` to remove it. |
 | **Pin Preset** | Your board's wiring. Pick **Custom** to enter your own pins. |
+| **Update channel** | **Stable** (default) or **Beta**: beta also gets test releases first. Use beta only on a device you can reach. |
 | **Install updates automatically** | On (default): a new firmware version is installed at night by itself. Off: the top bar shows `Update available`; install it with a double tap or **Check for updates now**. See [Firmware updates](#firmware-updates). |
 
 Settings are stored in the board's flash and survive firmware updates, unless you erase the flash when uploading.
@@ -275,6 +276,7 @@ The device updates itself from the releases of its GitHub repository; settings a
 
 - **Automatically:** once a night (03:00–03:59) it checks for a new version. With **Install updates automatically** on, it installs it right away; with it off, the top bar shows `Update available` next to the version until you install it. A version that was installed once and rolled back is not installed automatically again; a double tap still installs it.
 - **Double tap:** shows the device info (version, last update, battery, Wi-Fi) and checks. If there is a new version, the screen shows it with up to 3 "New in this version" lines and **Tap to install - cancels in 15 s**: tap once to install; without a tap the dashboard returns.
+- **Channel:** stable devices only get regular releases; beta devices also get test releases (setup page, **Update channel**). Switching from beta back to stable never goes back to an older version: the device stays on its beta build until a newer stable build exists.
 - **Setup page:** **Check for updates now** restarts the device, which goes online, checks and installs a new version without asking. The screen shows the progress; the setup page shows the last result next time.
 
 An install shows its steps on the screen (Downloading, Verifying, Installing, Restarting), then **Updated to .65** with what's new, then the dashboard. Messages in plain language:
@@ -283,7 +285,8 @@ An install shows its steps on the screen (Downloading, Verifying, Installing, Re
 | --- | --- |
 | `Up to date: .64` | No newer version |
 | `No Wi-Fi: try again later` | The device couldn't connect |
-| `Update check failed: try again later` | GitHub couldn't be reached, or there is no release yet |
+| `No update for this device` | The release has no file for this board or display, or can't read this device's settings |
+| `Update check failed: try again later` | GitHub couldn't be reached, there is no release yet, or the release signature isn't valid (then it is never installed) |
 | `Battery too low for an update: please charge` | Below 30 % and no USB: charge it, the next check tries again |
 | `Update failed: previous version kept` | The download or install failed, or the new version didn't start or couldn't reach Wi-Fi (it rolls back by itself) |
 | `Update needs a USB install` | The new version can't be installed over the air from this one |

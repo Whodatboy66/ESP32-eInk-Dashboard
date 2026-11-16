@@ -1,0 +1,161 @@
+name: OTA test release
+
+# Manual only. Publishes a deliberately broken update on the BETA channel, to check on a device set
+# to beta that it is rejected or rolled back (docs/OTA_TESTS.md). Stable devices never see it.
+# "restore" puts the beta channel back to the latest regular release: run it after the tests.
+#
+# Test builds use build numbers 90001-90005, far above real builds, so they always look newer.
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: Which broken update to publish on the beta channel
+        type: choice
+        options: [wrong-board, bad-checksum, unsigned, crash, hang, restore]
+
+concurrency:
+  group: ota-test
+  cancel-in-progress: false
+
+env:
+  ARDUINO_CLI_VERSION: 1.6.0
+  APP_SLOT_BYTES: 1966080
+  # The test device: a FireBeetle 2 ESP32-C6 (docs/PROJECT_INFO.md).
+  PROFILE: esp32c6_firebeetle
+  PRESET: DEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE
+  BOARD_NAME: ESP32C6-FireBeetle
+
+jobs:
+  test-release:
+    runs-on: ubuntu-24.04
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    env:
+      SCENARIO: ${{ inputs.scenario }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Test build number
+        if: inputs.scenario != 'restore'
+        run: |
+          case "$SCENARIO" in
+            wrong-board)  N=1 ;;
+            bad-checksum) N=2 ;;
+            unsigned)     N=3 ;;
+            crash)        N=4; FLAGS="-DOTA_TEST_CRASH" ;;
+            hang)         N=5; FLAGS="-DOTA_TEST_HANG" ;;
+          esac
+          echo "TEST_BUILD=$((90000 + N))" >> "$GITHUB_ENV"
+          echo "TEST_FLAGS=${FLAGS:-}" >> "$GITHUB_ENV"
+
+      - name: Cache Arduino downloads
+        if: inputs.scenario != 'restore'
+        uses: actions/cache@v6
+        with:
+          path: ~/.arduino15/staging
+          key: arduino-dl-${{ runner.os }}-cli-${{ env.ARDUINO_CLI_VERSION }}-${{ hashFiles('sketch.yaml') }}
+
+      - name: Setup Arduino CLI
+        if: inputs.scenario != 'restore'
+        run: |
+          mkdir -p "$HOME/.local/bin"
+          curl -fsSL https://raw.githubusercontent.com/arduino/arduino-cli/master/install.sh \
+            | BINDIR="$HOME/.local/bin" sh -s "$ARDUINO_CLI_VERSION"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      # The real firmware with a test build number; crash / hang builds break themselves on purpose,
+      # but only in their first start after an over-the-air install (OTA_TEST_* in the sketch).
+      - name: Compile test firmware
+        if: inputs.scenario != 'restore'
+        run: |
+          arduino-cli compile --profile "$PROFILE" \
+            --build-property "compiler.cpp.extra_flags=-D$PRESET -DFW_BUILD=$TEST_BUILD $TEST_FLAGS" \
+            --build-property "upload.maximum_size=$APP_SLOT_BYTES" \
+            --export-binaries --output-dir build_out .
+
+      - name: Write manifest.json
+        if: inputs.scenario != 'restore'
+        run: |
+          FILE="$BOARD_NAME-ota-test-$SCENARIO.bin"
+          mkdir -p firmware/test
+          cp build_out/ESP32-eInk-Dashboard.ino.bin "firmware/test/$FILE"
+          ID=$(grep -a -o 'OTA-ID:[a-z0-9_][a-z0-9_]*:[a-z0-9_][a-z0-9_]*:[0-9][0-9]*:[0-9][0-9]*:END' \
+                 "firmware/test/$FILE" | head -1 || true)
+          [[ -n "$ID" ]] || { echo "::error::No OTA-ID string in the test image"; exit 1; }
+          IFS=: read -r _ VARIANT DISPLAY SCHEMA BUILD _ <<< "$ID"
+          printf '{"variant": "%s", "file": "%s", "display": "%s", "config_schema": %s, "build": %s}\n' \
+            "$VARIANT" "$FILE" "$DISPLAY" "$SCHEMA" "$BUILD" > firmware/test/variant.json
+          python3 -I tools/ota/make_manifest.py --build "$TEST_BUILD" --version ".$TEST_BUILD" \
+            --tag ota-test --notes "OTA test: $SCENARIO" --channel beta --dir firmware --out manifest.json
+          # Break it the way the scenario says.
+          python3 -I - "$SCENARIO" "$PROFILE" <<'EOF'
+          import json, sys
+          scenario, profile = sys.argv[1], sys.argv[2]
+          m = json.load(open("manifest.json"))
+          if scenario == "wrong-board":
+              m["files"] = {"test_other_board": m["files"][profile]}  # nothing for this board
+          elif scenario == "bad-checksum":
+              m["files"][profile]["sha256"] = "0" * 64                 # image won't match
+          json.dump(m, open("manifest.json", "w"), indent=1, sort_keys=True)
+          EOF
+          cat manifest.json
+
+      - name: Sign manifest.json
+        if: inputs.scenario != 'restore' && inputs.scenario != 'unsigned'
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          if [[ -z "$OTA_SIGNING_KEY" ]]; then
+            echo "::error::Secret OTA_SIGNING_KEY is not set (see docs/OTA_UPDATES.md, Signing)"
+            exit 1
+          fi
+          KEY="$RUNNER_TEMP/ota_signing_key.pem"
+          trap 'rm -f "$KEY"' EXIT
+          ( umask 077; printf '%s\n' "$OTA_SIGNING_KEY" > "$KEY" )
+          openssl dgst -sha256 -sign "$KEY" -out manifest.sig manifest.json
+          rm -f "$KEY"
+          sed -n 's/^    "\(.*\)\\n"$/\1/p' src/update/OtaPublicKey.h > "$RUNNER_TEMP/ota_public_key.pem"
+          openssl dgst -sha256 -verify "$RUNNER_TEMP/ota_public_key.pem" -signature manifest.sig manifest.json
+
+      - name: Publish on the beta channel
+        if: inputs.scenario != 'restore'
+        run: |
+          R="$GITHUB_REPOSITORY"
+          # The test image lives in its own pre-release, which is never "latest".
+          if ! gh release view ota-test --repo "$R" >/dev/null 2>&1; then
+            gh release create ota-test --repo "$R" --prerelease --target "$GITHUB_SHA" \
+              --title "OTA test images" --notes "Deliberately broken test builds (docs/OTA_TESTS.md). Never install by hand."
+          fi
+          gh release upload ota-test firmware/test/*.bin --repo "$R" --clobber
+          if ! gh release view beta --repo "$R" >/dev/null 2>&1; then
+            gh release create beta --repo "$R" --prerelease --target "$GITHUB_SHA" \
+              --title "Beta channel" --notes "Channel file for devices set to beta. Not a firmware release."
+          fi
+          gh release upload beta manifest.json --repo "$R" --clobber
+          if [[ "$SCENARIO" == "unsigned" ]]; then
+            gh release delete-asset beta manifest.sig --repo "$R" --yes || true
+          else
+            gh release upload beta manifest.sig --repo "$R" --clobber
+          fi
+          gh release edit beta --repo "$R" --prerelease \
+            --notes "Channel file for devices set to beta: currently the OTA TEST '$SCENARIO' (run the OTA test release workflow with 'restore' when done)."
+          echo "Beta channel now offers test build .$TEST_BUILD ($SCENARIO)." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Restore the beta channel
+        if: inputs.scenario == 'restore'
+        run: |
+          R="$GITHUB_REPOSITORY"
+          mkdir restore
+          gh release download --repo "$R" --pattern manifest.json --pattern manifest.sig --dir restore
+          if [[ ! -f restore/manifest.sig ]]; then
+            echo "::error::The latest regular release has no manifest.sig: publish a signed release (build 66 or later) first"
+            exit 1
+          fi
+          gh release upload beta restore/manifest.json restore/manifest.sig --repo "$R" --clobber
+          VERSION=$(python3 -I -c 'import json; print(json.load(open("restore/manifest.json"))["version"])')
+          gh release edit beta --repo "$R" --prerelease \
+            --notes "Channel file for devices set to beta: currently firmware $VERSION. Not a firmware release."
+          echo "Beta channel restored to $VERSION." >> "$GITHUB_STEP_SUMMARY"

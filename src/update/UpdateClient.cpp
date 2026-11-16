@@ -5,7 +5,18 @@
 #include <Update.h>
 #include <mbedtls/sha256.h>
 
+#include <memory>
+#include <new>
+
 #include "../../configure.h"
+#include "OtaPublicKey.h"
+#include "Signature.h"
+
+// What this image is, as one string: CI reads it back out of the .bin to write the manifest entry
+// (tools/ota/make_manifest.py), so the manifest always matches what was compiled. Sent as the
+// User-Agent, which also keeps the linker from dropping it.
+extern "C" const char OTA_FIRMWARE_ID[] =
+    "OTA-ID:" FW_VARIANT ":" FW_DISPLAY ":" FW_STR(FW_CONFIG_SCHEMA) ":" FW_STR(FW_BUILD) ":END";
 
 // The ESP-IDF default certificate bundle (common CAs), linked into the core's mbedTLS library.
 extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
@@ -17,6 +28,8 @@ namespace {
 constexpr uint32_t HTTP_TIMEOUT_MS = 15000;
 constexpr uint32_t STALL_TIMEOUT_MS = 20000;   // no data for this long: give up
 constexpr size_t MANIFEST_MAX_BYTES = 8192;
+constexpr size_t SIGNATURE_MAX_BYTES = 160;  // DER ECDSA P-256: at most 72 bytes
+constexpr int TOO_LARGE = -100;              // download(): the body didn't fit the buffer
 
 // TLS client that verifies every connection with the certificate bundle and only talks to GitHub.
 // The core clears the bundle setting whenever a connection is closed (stop_ssl_socket() wipes
@@ -38,45 +51,120 @@ public:
 void prepare(HTTPClient& http) {
   http.setFollowRedirects(HTTPC_FORCE_FOLLOW_REDIRECTS);  // GitHub redirects to its file host
   http.setTimeout(HTTP_TIMEOUT_MS);
-  http.setUserAgent("ESP32-eInk-Dashboard/" FW_VERSION);
+  http.setUserAgent(String("ESP32-eInk-Dashboard ") + OTA_FIRMWARE_ID);
+}
+
+// Collects a response body into a fixed buffer (binary safe: the signature is DER).
+class BufferStream : public Stream {
+public:
+  BufferStream(uint8_t* buf, size_t cap) : buf_(buf), cap_(cap) {}
+  size_t write(uint8_t c) override {
+    if (len_ >= cap_) {
+      overflow_ = true;
+      return 0;
+    }
+    buf_[len_++] = c;
+    return 1;
+  }
+  size_t write(const uint8_t* data, size_t n) override {
+    size_t i = 0;
+    while (i < n && write(data[i])) i++;
+    return i;
+  }
+  int available() override { return 0; }
+  int read() override { return -1; }
+  int peek() override { return -1; }
+  void flush() override {}
+  size_t length() const { return len_; }
+  bool overflow() const { return overflow_; }
+
+private:
+  uint8_t* buf_;
+  size_t cap_;
+  size_t len_ = 0;
+  bool overflow_ = false;
+};
+
+// GET url into buf; returns the HTTP code (200 = complete body in buf), a negative HTTPClient
+// error, or TOO_LARGE.
+int download(const char* url, uint8_t* buf, size_t cap, size_t* len) {
+  GitHubClient client;
+  HTTPClient http;
+  prepare(http);
+  *len = 0;
+  if (!http.begin(client, url)) return HTTPC_ERROR_CONNECTION_REFUSED;
+  int code = http.GET();
+  if (code == HTTP_CODE_OK) {
+    BufferStream body(buf, cap);
+    int n = http.writeToStream(&body);
+    if (body.overflow()) code = TOO_LARGE;
+    else if (n < 0) code = n;
+    *len = body.length();
+  }
+  http.end();
+  return code;
 }
 
 }  // namespace
 
-FetchOutcome fetchManifest(Manifest& out) {
+namespace {
+
+FetchOutcome fetchManifestOnce(bool beta, Manifest& out) {
   FetchOutcome outcome;
-  GitHubClient client;
-  HTTPClient http;
-  prepare(http);
-  const char* url = "https://github.com/" OTA_REPO "/releases/latest/download/manifest.json";
-  if (!http.begin(client, url)) return outcome;
+  out = Manifest{};
+  char url[192];
+  std::unique_ptr<uint8_t[]> json(new (std::nothrow) uint8_t[MANIFEST_MAX_BYTES]);
+  if (!json) {
+    outcome.httpCode = HTTPC_ERROR_TOO_LESS_RAM;
+    return outcome;
+  }
+  if (!manifestUrl(url, sizeof(url), OTA_REPO, beta, "manifest.json")) return outcome;
 
-  outcome.httpCode = http.GET();
+  size_t jsonLen = 0;
+  outcome.httpCode = download(url, json.get(), MANIFEST_MAX_BYTES, &jsonLen);
   if (outcome.httpCode != HTTP_CODE_OK) {
-    outcome.result = outcome.httpCode == HTTP_CODE_NOT_FOUND ? FetchResult::NoRelease : FetchResult::HttpError;
-    Serial.printf("[OTA] manifest: HTTP %d\n", outcome.httpCode);
-    http.end();
-    return outcome;
-  }
-  int size = http.getSize();
-  if (size > (int)MANIFEST_MAX_BYTES) {
-    outcome.result = FetchResult::BadManifest;
-    outcome.manifestError = ManifestError::BadJson;
-    http.end();
-    return outcome;
-  }
-  String body = http.getString();
-  http.end();
-  if (body.length() > MANIFEST_MAX_BYTES) {  // no Content-Length: checked after reading
-    outcome.result = FetchResult::BadManifest;
-    outcome.manifestError = ManifestError::BadJson;
+    outcome.result = outcome.httpCode == HTTP_CODE_NOT_FOUND ? FetchResult::NoRelease
+                   : outcome.httpCode == TOO_LARGE ? FetchResult::BadManifest
+                   : FetchResult::HttpError;
+    if (outcome.httpCode == TOO_LARGE) outcome.manifestError = ManifestError::BadJson;
+    Serial.printf("[OTA] %s manifest: HTTP %d\n", channelName(beta), outcome.httpCode);
     return outcome;
   }
 
-  outcome.manifestError = parseManifest(body.c_str(), body.length(), FW_VARIANT, out);
+  // Signature first: nothing in an unsigned or altered manifest is used.
+  uint8_t sig[SIGNATURE_MAX_BYTES];
+  size_t sigLen = 0;
+  if (!manifestUrl(url, sizeof(url), OTA_REPO, beta, "manifest.sig")) return outcome;
+  int code = download(url, sig, sizeof(sig), &sigLen);
+  if (code != HTTP_CODE_OK && code != HTTP_CODE_NOT_FOUND && code != TOO_LARGE) {
+    outcome.httpCode = code;
+    outcome.result = FetchResult::HttpError;
+    return outcome;
+  }
+  if (code != HTTP_CODE_OK || !verifySignature(OTA_PUBLIC_KEY_PEM, json.get(), jsonLen, sig, sigLen)) {
+    Serial.printf("[OTA] manifest signature %s: rejected\n", code == HTTP_CODE_OK ? "invalid" : "missing");
+    outcome.result = FetchResult::BadSignature;
+    return outcome;
+  }
+
+  outcome.manifestError = parseManifest(reinterpret_cast<const char*>(json.get()), jsonLen, FW_VARIANT, out);
   outcome.result = outcome.manifestError == ManifestError::None ? FetchResult::Ok : FetchResult::BadManifest;
-  Serial.printf("[OTA] manifest: build %u (%s), file for %s: %s, error %d\n", (unsigned)out.build,
-                out.version, FW_VARIANT, out.hasFile ? out.fileName : "none", (int)outcome.manifestError);
+  Serial.printf("[OTA] %s manifest (signed): build %u (%s), file for %s: %s, error %d\n", channelName(beta),
+                (unsigned)out.build, out.version, FW_VARIANT, out.hasFile ? out.fileName : "none",
+                (int)outcome.manifestError);
+  return outcome;
+}
+
+}  // namespace
+
+FetchOutcome fetchManifest(bool beta, Manifest& out) {
+  FetchOutcome outcome = fetchManifestOnce(beta, out);
+  if (outcome.result == FetchResult::BadSignature) {
+    // manifest.json and manifest.sig are two downloads: while a release is being published they
+    // can briefly not belong together. Try the pair once more before calling it invalid.
+    delay(5000);
+    outcome = fetchManifestOnce(beta, out);
+  }
   return outcome;
 }
 

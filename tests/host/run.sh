@@ -3,6 +3,8 @@
 # Usage: tests/host/run.sh            (uses g++; override with CXX=/path/to/g++)
 # ArduinoJson (header-only) is needed for some tests: set ARDUINOJSON_INCLUDE to the folder that
 # contains ArduinoJson.h, otherwise the copy installed by arduino-cli for sketch.yaml is used.
+# Tests marked "// needs: mbedtls" link mbedTLS (2.28 or 3.x): the system one (Ubuntu:
+# libmbedtls-dev), or the one under MBEDTLS_PREFIX (include/ and lib/).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."
@@ -28,7 +30,14 @@ status=0
 for test in tests/host/test_*.cpp; do
   name="$(basename "$test" .cpp)"
   echo "== $name"
-  if ! "$CXX" -std=c++17 -Wall -Wextra -Werror "${INCLUDES[@]}" "$test" -o "$OUT/$name"; then
+  EXTRA=()
+  if grep -q '^// needs: mbedtls' "$test"; then
+    if [[ -n "${MBEDTLS_PREFIX:-}" ]]; then
+      EXTRA+=(-I"$MBEDTLS_PREFIX/include" -L"$MBEDTLS_PREFIX/lib" -Wl,-rpath,"$MBEDTLS_PREFIX/lib")
+    fi
+    EXTRA+=(-lmbedcrypto)
+  fi
+  if ! "$CXX" -std=c++17 -Wall -Wextra -Werror "${INCLUDES[@]}" "$test" "${EXTRA[@]}" -o "$OUT/$name"; then
     echo "!! $name: build failed"
     status=1
     continue

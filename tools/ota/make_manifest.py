@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """Writes manifest.json for an over-the-air release (format: src/update/Manifest.h).
 
-Used by the CI release job. Each build artifact folder holds a variant.json
-({"variant": "<sketch.yaml profile>", "file": "<app .bin name>"}) next to the app image.
+Used by the CI release job. Each build artifact folder holds a variant.json next to the app image:
+  {"variant": "<sketch.yaml profile>", "file": "<app .bin name>", "display": "bw750",
+   "config_schema": 1, "build": 66}
+The build job reads variant, display, config_schema and build from the OTA-ID string compiled
+into the image (src/update/UpdateClient.cpp), so the manifest matches what was built.
+The manifest is signed afterwards (manifest.sig, see docs/OTA_UPDATES.md).
 
 Example:
   tools/ota/make_manifest.py --build 65 --version .65 --tag firmware-.65 \
@@ -37,6 +41,7 @@ def main():
     p.add_argument("--dir", required=True, help="folder with the build artifacts")
     p.add_argument("--out", required=True, help="manifest.json to write")
     p.add_argument("--notes-out", help="also write the GitHub release notes (Markdown) here")
+    p.add_argument("--channel", choices=["stable", "beta"], default="stable", help="for the release notes")
     args = p.parse_args()
 
     if not SAFE_NAME.match(args.tag):
@@ -57,12 +62,20 @@ def main():
     for vj in sorted(pathlib.Path(args.dir).rglob("variant.json")):
         info = json.loads(vj.read_text())
         variant, name = info["variant"], info["file"]
+        display, schema, build = info.get("display", ""), info.get("config_schema"), info.get("build")
         if not SAFE_NAME.match(name):
             fail(f"unsafe file name {name!r}")
+        if not SAFE_NAME.match(display) or len(display) > 15:
+            fail(f"{variant}: bad display id {display!r}")
+        if not isinstance(schema, int) or schema < 0:
+            fail(f"{variant}: bad config_schema {schema!r}")
+        if build != args.build:
+            fail(f"{variant}: image is build {build!r}, release is build {args.build}")
         if variant in files:
             fail(f"two builds for variant {variant!r}")
         data = (vj.parent / name).read_bytes()
-        files[variant] = {"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest()}
+        files[variant] = {"name": name, "size": len(data), "sha256": hashlib.sha256(data).hexdigest(),
+                          "display": display, "config_schema": schema}
     if not files:
         fail(f"no variant.json found under {args.dir}")
 
@@ -80,7 +93,8 @@ def main():
         print(f"{variant}: {f['name']} {f['size']} bytes sha256 {f['sha256']}")
 
     if args.notes_out:
-        lines = [f"Firmware {args.version} (build {args.build}).", ""]
+        lines = [f"Firmware {args.version} (build {args.build}), {args.channel} channel"
+                 + (": only devices set to beta install it." if args.channel == "beta" else "."), ""]
         if notes:
             lines += ["What's new:"] + [f"- {n}" for n in notes] + [""]
         lines += [

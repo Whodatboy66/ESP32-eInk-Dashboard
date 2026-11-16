@@ -77,6 +77,9 @@ arduino-cli monitor -p COM3 --profile esp32c6_firebeetle -c baudrate=115200
 - **One-time step for build 64 (OTA partition table):** the first upload of build 64 or later changes the
   flash layout to two app slots. Settings survive (NVS keeps its offset). After that, updates come over the
   air (double tap, setup page button, or at night). Publishing a release: [OTA_UPDATES.md](OTA_UPDATES.md#publishing-a-release).
+- **Releases are signed (build 66 on):** the GitHub secret `OTA_SIGNING_KEY` must hold the private key
+  ([OTA_UPDATES.md](OTA_UPDATES.md#signing)). Host tests need mbedTLS too
+  (`CXX=... MBEDTLS_PREFIX=... tests/host/run.sh`, or `sudo apt install libmbedtls-dev`).
 
 ## Host tests
 
@@ -116,3 +119,4 @@ logs `took ~3400 ms -> DISPLAY RESPONDED`.
 | CI workflow uses core 3.3.12 / GxEPD2 1.6.9 / GFX 1.12.6, profiles use 3.3.7 / 1.6.8 / 1.12.5 | Fixed: CI builds the `sketch.yaml` profiles |
 | All HTTPS calls use `setInsecure()` (no certificate check) | Stage 2 (full security list: plan A.4) |
 | Upstream repo has no license; HighSpeed font is personal-use only | See plan A.5 |
+| Timezone `CET` (no offset) is treated as UTC by the C library: clock 1 h behind in German winter | Fixed (build 66): names like CET / Europe/Berlin are turned into `CET-1CEST,M3.5.0,M10.5.0/3`, invalid strings are refused on the setup page, a saved `CET` is corrected at boot |

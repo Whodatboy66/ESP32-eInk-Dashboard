@@ -39,9 +39,10 @@ static void test_night_action_skips_a_build_that_rolled_back() {
   CHECK(nightAction(Availability::Newer, true, true, /*failedBefore=*/true) == NightAction::NotifyOnly);
   CHECK(nightAction(Availability::Newer, true, true, false) == NightAction::Install);
   CHECK(failedBefore(65, 65));
-  CHECK(failedBefore(64, 65));
-  CHECK(!failedBefore(66, 65));
+  CHECK(!failedBefore(66, 65));  // the next build is the fix
   CHECK(!failedBefore(65, 0));
+  // Only that exact build: a failed test build 90004 must not block the real builds below it.
+  CHECK(!failedBefore(67, 90004));
 }
 
 static void test_night_action() {
@@ -80,6 +81,17 @@ static void test_allowed_hosts() {
   CHECK(!isAllowedHost("evil-githubusercontent.com"));
   CHECK(!isAllowedHost(""));
   CHECK(!isAllowedHost(nullptr));
+}
+
+static void test_channel_urls() {
+  char url[160];
+  CHECK(manifestUrl(url, sizeof(url), "Owner/Repo", false, "manifest.json"));
+  CHECK_STR(url, "https://github.com/Owner/Repo/releases/latest/download/manifest.json");
+  CHECK(manifestUrl(url, sizeof(url), "Owner/Repo", true, "manifest.sig"));
+  CHECK_STR(url, "https://github.com/Owner/Repo/releases/download/beta/manifest.sig");
+  CHECK(!manifestUrl(url, 30, "Owner/Repo", true, "manifest.sig"));
+  CHECK_STR(channelName(false), "stable");
+  CHECK_STR(channelName(true), "beta");
 }
 
 static void test_sha256_hex() {
@@ -131,6 +143,7 @@ int main() {
   test_night_action_skips_a_build_that_rolled_back();
   test_safe_names_and_urls();
   test_allowed_hosts();
+  test_channel_urls();
   test_sha256_hex();
   test_sanitize_note();
   test_progress_steps();

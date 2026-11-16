@@ -4,10 +4,11 @@
 //   {"schema": 1, "build": 65, "version": ".65", "min_build": 0, "tag": "firmware-.65",
 //    "notes": ["What's new, up to 3 lines"],
 //    "files": {"esp32c6_firebeetle": {"name": "ESP32C6-FireBeetle.bin", "size": 1359040,
-//                                     "sha256": "<64 hex digits>"}, ...}}
+//                                     "sha256": "<64 hex digits>", "display": "bw750",
+//                                     "config_schema": 1}, ...}}
 //
-// Only the entry for this board variant is read. Not signed yet (stage 1 follow-up): the
-// manifest is trusted because it comes over verified HTTPS from this repository's releases.
+// Only the entry for this board variant is read. The manifest is signed (manifest.sig, see
+// Signature.h); it is parsed only after the signature check.
 
 #include <ArduinoJson.h>
 #include <cstdint>
@@ -32,6 +33,15 @@ struct Manifest {
   char fileName[64] = "";
   uint32_t fileSize = 0;
   char sha256[65] = "";
+  char fileDisplay[16] = "";      // display the file is built for (FW_DISPLAY)
+  uint32_t fileConfigSchema = 0;  // settings schema of the new firmware (FW_CONFIG_SCHEMA)
+};
+
+// What the running firmware is (FW_BUILD, FW_DISPLAY, FW_CONFIG_SCHEMA).
+struct DeviceIds {
+  uint32_t build;
+  const char* displayId;  // not "display": display.h defines a macro of that name
+  uint32_t configSchema;
 };
 
 enum class ManifestError : uint8_t {
@@ -76,12 +86,30 @@ inline ManifestError parseManifest(const char* json, size_t len, const char* var
   const char* name = file["name"] | "";
   const char* sha = file["sha256"] | "";
   uint32_t size = file["size"] | 0u;
+  const char* displayId = file["display"] | "";
   if (!isSafeName(name) || !isSha256Hex(sha) || size == 0) return ManifestError::BadFile;
+  if (!isSafeName(displayId) || std::strlen(displayId) >= sizeof(out.fileDisplay) ||
+      !file["config_schema"].is<uint32_t>()) {
+    return ManifestError::BadFile;
+  }
+  copyField(out.fileDisplay, sizeof(out.fileDisplay), displayId);
+  out.fileConfigSchema = file["config_schema"].as<uint32_t>();
   out.hasFile = true;
   copyField(out.fileName, sizeof(out.fileName), name);
   copyField(out.sha256, sizeof(out.sha256), sha);
   out.fileSize = size;
   return ManifestError::None;
+}
+
+// Can this device install the release? Adds the display and settings-schema checks to
+// availability(): the new firmware must be built for this display and able to read (or migrate)
+// this device's settings.
+inline Availability availabilityFor(const Manifest& m, const DeviceIds& d) {
+  Availability a = availability(m.build, m.minBuild, m.hasFile, d.build);
+  if (a != Availability::Newer) return a;
+  if (std::strcmp(m.fileDisplay, d.displayId) != 0) return Availability::WrongDisplay;
+  if (m.fileConfigSchema < d.configSchema) return Availability::IncompatibleSettings;
+  return Availability::Newer;
 }
 
 }  // namespace ota

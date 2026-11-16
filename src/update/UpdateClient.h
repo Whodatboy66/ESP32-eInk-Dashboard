@@ -1,7 +1,8 @@
 #pragma once
-// Over-the-air update client: downloads manifest.json from the latest release of OTA_REPO and
-// installs the release file for this board into the inactive app slot (docs/OTA_UPDATES.md).
-// Every request uses verified HTTPS (the ESP-IDF certificate bundle). Needs Wi-Fi.
+// Over-the-air update client: downloads the signed manifest of OTA_REPO's release channel
+// (stable = latest release, beta = the "beta" pre-release) and installs the release file for this
+// board into the inactive app slot (docs/OTA_UPDATES.md). Every request uses verified HTTPS (the
+// ESP-IDF certificate bundle) and only goes to GitHub. Needs Wi-Fi.
 
 #include <Arduino.h>
 
@@ -14,7 +15,8 @@ enum class FetchResult : uint8_t {
   Ok,
   NoRelease,    // HTTP 404: no release with a manifest yet
   HttpError,    // other HTTP / connection error (code in httpCode)
-  BadManifest   // downloaded, but not a valid manifest (error in manifestError)
+  BadSignature, // manifest.sig missing or not made with our signing key: nothing is used
+  BadManifest   // signed, but not a valid manifest (error in manifestError)
 };
 
 struct FetchOutcome {
@@ -23,7 +25,7 @@ struct FetchOutcome {
   ManifestError manifestError = ManifestError::None;
 };
 
-FetchOutcome fetchManifest(Manifest& out);
+FetchOutcome fetchManifest(bool beta, Manifest& out);
 
 enum class InstallStage : uint8_t { Downloading, Verifying, Installing };
 

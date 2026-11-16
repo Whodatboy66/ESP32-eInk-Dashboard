@@ -17,7 +17,9 @@ enum class Availability : uint8_t {
   UpToDate,            // the release is not newer than the running firmware
   Newer,               // a newer release for this board, installable
   NeedsNewerFirmware,  // newer, but needs at least min_build (install an intermediate release by USB)
-  NotForThisBoard      // newer, but the release has no file for this board variant
+  NotForThisBoard,     // newer, but the release has no file for this board variant
+  WrongDisplay,        // newer, but its file is built for another display
+  IncompatibleSettings // newer, but it can't read this device's settings (config schema too new)
 };
 
 inline Availability availability(uint32_t remoteBuild, uint32_t minBuild, bool hasFileForVariant,
@@ -49,11 +51,12 @@ enum class NightAction : uint8_t {
   WaitForCharge   // auto install on, battery too low: show the mark, try again next night
 };
 
-// A build that was installed but rolled back (failed to start or to reach Wi-Fi) is not
+// The build that was installed but rolled back (failed to start or to reach Wi-Fi) is not
 // auto-installed again: that would repeat every night, and every few minutes within the night
-// hour. 0 = no failed build.
+// hour. Only that exact build: the next one is the fix (and test builds far above the real ones,
+// docs/OTA_TESTS.md, must not block them). 0 = no failed build.
 inline bool failedBefore(uint32_t remoteBuild, uint32_t failedBuild) {
-  return failedBuild != 0 && remoteBuild <= failedBuild;
+  return failedBuild != 0 && remoteBuild == failedBuild;
 }
 
 inline NightAction nightAction(Availability a, bool autoInstall, bool batteryOk, bool failedBefore = false) {
@@ -74,6 +77,17 @@ inline bool isSafeName(const char* s) {
     if (!ok || n >= 63) return false;
   }
   return true;
+}
+
+// Release channels: "stable" reads the newest regular release (GitHub's "latest" skips
+// pre-releases); "beta" reads the fixed pre-release "beta", whose manifest CI replaces with every
+// release (beta and stable), so it always names the newest build of either kind.
+inline const char* channelName(bool beta) { return beta ? "beta" : "stable"; }
+
+inline bool manifestUrl(char* out, size_t cap, const char* repo, bool beta, const char* file) {
+  int n = beta ? std::snprintf(out, cap, "https://github.com/%s/releases/download/beta/%s", repo, file)
+               : std::snprintf(out, cap, "https://github.com/%s/releases/latest/download/%s", repo, file);
+  return n > 0 && static_cast<size_t>(n) < cap;
 }
 
 // https://github.com/<repo>/releases/download/<tag>/<name>; false if a part is unsafe or too long.

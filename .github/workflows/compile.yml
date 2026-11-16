@@ -2,7 +2,9 @@ name: Build firmware
 
 # Every push and pull request: host tests + firmware build for every sketch.yaml profile with a
 # size check. A GitHub release is only published when started by hand from main with "release".
-# The release carries manifest.json: devices install it over the air (docs/OTA_UPDATES.md).
+# The release carries manifest.json + manifest.sig (signed with the OTA_SIGNING_KEY secret):
+# devices install it over the air (docs/OTA_UPDATES.md). Channel "stable" = a regular release
+# ("latest"); "beta" = a pre-release. Both refresh the fixed "beta" pre-release that beta devices read.
 on:
   push:
   pull_request:
@@ -20,6 +22,15 @@ on:
         description: Oldest build that may install this release over the air (0 = any)
         type: string
         default: "0"
+      channel:
+        description: "stable = all devices; beta = only devices set to the beta channel"
+        type: choice
+        options: [stable, beta]
+        default: stable
+      rotate_key:
+        description: "Allow a changed signing public key (OtaPublicKey.h). Locks out devices with the old key"
+        type: boolean
+        default: false
 
 # A newer push cancels the older push build of the same branch. Manual runs (releases) have their
 # own group, so a push never cancels or replaces a release in progress.
@@ -75,6 +86,9 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      # mbedTLS for the signature test (the device uses the same library, in the ESP32 core).
+      - name: Install mbedTLS
+        run: sudo apt-get update -q && sudo apt-get install -y -q libmbedtls-dev
       # ArduinoJson (header-only) for the manifest tests, same version as sketch.yaml.
       - name: Get ArduinoJson
         run: |
@@ -159,6 +173,26 @@ jobs:
             exit 1
           fi
 
+      # The image names itself (OTA-ID string, src/update/UpdateClient.cpp): variant, display,
+      # settings schema and build come from what was compiled, not from this file.
+      - name: Read firmware id
+        env:
+          EXPECTED_BUILD: ${{ needs.version.outputs.build }}
+        run: |
+          ID=$(grep -a -o 'OTA-ID:[a-z0-9_][a-z0-9_]*:[a-z0-9_][a-z0-9_]*:[0-9][0-9]*:[0-9][0-9]*:END' \
+                 build_out/ESP32-eInk-Dashboard.ino.bin | head -1 || true)
+          if [[ -z "$ID" ]]; then
+            echo "::error::No OTA-ID string in the image (src/update/UpdateClient.cpp; ids: a-z 0-9 _ only)"
+            exit 1
+          fi
+          IFS=: read -r _ VARIANT DISPLAY SCHEMA BUILD _ <<< "$ID"
+          echo "Firmware id: $ID"
+          if [[ "$VARIANT" != "${{ matrix.profile }}" || "$BUILD" != "$EXPECTED_BUILD" ]]; then
+            echo "::error::Image id '$ID' doesn't match profile ${{ matrix.profile }} / build $EXPECTED_BUILD"
+            exit 1
+          fi
+          { echo "FW_DISPLAY=$DISPLAY"; echo "FW_SCHEMA=$SCHEMA"; echo "FW_BUILD=$BUILD"; } >> "$GITHUB_ENV"
+
       - name: Rename firmware
         run: |
           mkdir -p firmware
@@ -168,8 +202,10 @@ jobs:
             mv "$f" "${{ matrix.name }}-$f"
           done
           # Which app image is for which board variant (read by tools/ota/make_manifest.py).
-          printf '{"variant": "%s", "file": "%s"}\n' "${{ matrix.profile }}" \
-            "${{ matrix.name }}-ESP32-eInk-Dashboard.ino.bin" > variant.json
+          printf '{"variant": "%s", "file": "%s", "display": "%s", "config_schema": %s, "build": %s}\n' \
+            "${{ matrix.profile }}" "${{ matrix.name }}-ESP32-eInk-Dashboard.ino.bin" \
+            "$FW_DISPLAY" "$FW_SCHEMA" "$FW_BUILD" > variant.json
+          cat variant.json
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v7
@@ -190,6 +226,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Devices only accept manifests signed for the public key they carry. A changed key in the
+      # repository (e.g. a re-run of make_signing_key.sh) would lock all of them out: refuse it
+      # unless "rotate_key" is ticked on purpose.
+      - name: Signing key unchanged since the last release
+        env:
+          ROTATE: ${{ inputs.rotate_key }}
+        run: |
+          PREV=$(git tag -l 'firmware-*' --sort=-creatordate | while read -r t; do
+                   if git cat-file -e "$t:src/update/OtaPublicKey.h" 2>/dev/null; then echo "$t"; break; fi
+                 done || true)
+          if [[ -z "$PREV" ]]; then
+            echo "No earlier release with a signing key: first signed release."
+          elif git diff --quiet "$PREV" HEAD -- src/update/OtaPublicKey.h; then
+            echo "Public key unchanged since $PREV."
+          elif [[ "$ROTATE" == "true" ]]; then
+            echo "::warning::Signing key changed since $PREV (rotate_key ticked): devices with the old key need a USB flash."
+          else
+            echo "::error::src/update/OtaPublicKey.h changed since $PREV. Devices carry the old key and would reject this and every later release. Restore the old key, or tick rotate_key if the old private key is lost or leaked."
+            exit 1
+          fi
 
       - name: Download all firmware artifacts
         uses: actions/download-artifact@v8
@@ -203,18 +263,59 @@ jobs:
           VERSION: ${{ needs.version.outputs.version }}
           WHATS_NEW: ${{ inputs.whats_new }}
           MIN_BUILD: ${{ inputs.min_build }}
+          CHANNEL: ${{ inputs.channel }}
         run: |
           python3 -I tools/ota/make_manifest.py --build "$BUILD" --version "$VERSION" \
             --tag "firmware-$VERSION" --min-build "${MIN_BUILD:-0}" --notes "$WHATS_NEW" \
-            --dir firmware --out manifest.json --notes-out release_notes.md
-          cat release_notes.md
+            --channel "$CHANNEL" --dir firmware --out manifest.json --notes-out release_notes.md
+          cat manifest.json release_notes.md
+
+      # Devices only trust a manifest signed with the private key whose public key they carry
+      # (src/update/OtaPublicKey.h). Checked here against that public key before publishing, so a
+      # wrong secret stops the release instead of locking out the devices.
+      - name: Sign manifest.json
+        env:
+          OTA_SIGNING_KEY: ${{ secrets.OTA_SIGNING_KEY }}
+        run: |
+          if [[ -z "$OTA_SIGNING_KEY" ]]; then
+            echo "::error::Secret OTA_SIGNING_KEY is not set (see docs/OTA_UPDATES.md, Signing)"
+            exit 1
+          fi
+          KEY="$RUNNER_TEMP/ota_signing_key.pem"
+          trap 'rm -f "$KEY"' EXIT
+          ( umask 077; printf '%s\n' "$OTA_SIGNING_KEY" > "$KEY" )
+          openssl dgst -sha256 -sign "$KEY" -out manifest.sig manifest.json
+          rm -f "$KEY"
+          sed -n 's/^    "\(.*\)\\n"$/\1/p' src/update/OtaPublicKey.h > "$RUNNER_TEMP/ota_public_key.pem"
+          if ! openssl dgst -sha256 -verify "$RUNNER_TEMP/ota_public_key.pem" -signature manifest.sig manifest.json; then
+            echo "::error::OTA_SIGNING_KEY doesn't match the public key in src/update/OtaPublicKey.h"
+            exit 1
+          fi
 
       - name: Create release and upload firmware
         uses: softprops/action-gh-release@v3
         with:
           tag_name: firmware-${{ needs.version.outputs.version }}
-          name: ESP32 Firmware Build ${{ needs.version.outputs.version }}
+          name: ESP32 Firmware Build ${{ needs.version.outputs.version }}${{ inputs.channel == 'beta' && ' (beta)' || '' }}
           body_path: release_notes.md
+          prerelease: ${{ inputs.channel == 'beta' }}
+          make_latest: ${{ inputs.channel == 'beta' && 'false' || 'true' }}
           files: |
             firmware/**/*.bin
             manifest.json
+            manifest.sig
+
+      # Beta devices read releases/download/beta/manifest.json. Every release (beta or stable)
+      # replaces it, so beta devices get the newest build of either kind.
+      - name: Update the beta channel
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          if ! gh release view beta --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create beta --repo "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+              --title "Beta channel" --notes "Channel file for devices set to beta. Not a firmware release."
+          fi
+          gh release upload beta manifest.json manifest.sig --repo "$GITHUB_REPOSITORY" --clobber
+          gh release edit beta --repo "$GITHUB_REPOSITORY" --prerelease \
+            --notes "Channel file for devices set to beta: currently firmware $VERSION. Not a firmware release."

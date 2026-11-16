@@ -18,6 +18,7 @@ struct DeviceInfo {
   bool usbPowered;
   const char* wifi;        // network name
   bool autoInstall;
+  const char* channel;     // "stable" / "beta"
 };
 
 // Double tap / setup page: device info and "Checking for updates..." (full refresh).
