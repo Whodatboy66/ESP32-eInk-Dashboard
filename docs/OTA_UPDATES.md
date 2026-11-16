@@ -79,12 +79,19 @@ Design details:
 - **Release channels:** mark a release as *pre-release* to test it on my own device first (a "beta"
   setting reads the newest pre-release manifest). Parents' devices stay on "stable" and only get
   releases I've promoted.
-- **When to check:** once a day plus on demand (button hold or setup page "Check for update"). An
-  update costs about 1.4 MB of download (10-20 s of Wi-Fi), which is negligible for the battery when it
-  happens only on new releases.
-- **Battery guard:** skip updates below about 30 % battery (the firmware already measures the voltage).
-- **Visible on the display:** briefly show "Updating to .64..." and the current version in the status bar,
-  so parents can see what happened.
+- **When to check:** once a night automatically, plus on demand: **double tap** on the touch sensor or the
+  setup page button **"Check for updates now"** (backup if the sensor fails). An update costs about 1.4 MB
+  of download (10-20 s of Wi-Fi), which is negligible for the battery when it happens only on new releases.
+- **Auto-install vs. notify only:** setup page checkbox **"Install updates automatically"** (per device,
+  default on). With it off, the night-time check only shows an **"Update available"** mark in the status
+  bar; installing then takes a double tap + confirm tap (or the setup page button).
+- **Battery guard (decided):** below 30 % battery no update is installed unless USB is connected
+  (the firmware already measures the voltage). The screen says "Battery too low for an update: please charge".
+- **Visible on the display:** info screen (version, channel, last update, battery, Wi-Fi) → "New version
+  .65" with up to 3 "What's new" lines from the release notes → "Tap to install (cancels in 15 s)" →
+  progress steps (Downloading %, Verifying, Installing, Restarting; partial refresh about 1.6 s per step) →
+  after the restart "Updated to .65 ✓" once. Failures in plain language ("Update failed: previous version kept").
+  Details and checklist: stage 1 in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md).
 
 ## What keeps it safe
 
