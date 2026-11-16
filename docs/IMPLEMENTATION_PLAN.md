@@ -154,28 +154,34 @@ handed out. Every stage ends with a `FW_BUILD` bump, a line in [CHANGELOG.md](..
 **Done when:** a push builds in CI with a size report; the device boots into the dashboard with no sensor connected.
 
 ### Stage 1: Secure OTA (spec §9, Phase 6)
-- [ ] OTA partition table (A.3); one-time USB migration, settings kept
-- [ ] `FW_BUILD`, board id, display id, config-schema version compiled in
-- [ ] Update client: daily night-time check, manifest download, **ECDSA signature check**, board/display/schema/min-version checks, no downgrades, SHA-256 check while writing
-- [ ] **Battery guard (decided):** below 30 % battery no update is installed unless USB is connected; the device retries at the next check
-- [ ] Rollback: new firmware is confirmed only after Wi-Fi + display refresh succeed
+Implemented so far (part 1, **not yet tested on hardware**); still open: signature, channels, display id, config schema.
+
+- [x] OTA partition table (A.3); one-time USB migration, settings kept (nvs offset unchanged)
+- [x] `FW_BUILD` (64) and board variant (`FW_VARIANT` = sketch.yaml profile) compiled in
+- [ ] Display id, config-schema version compiled in and checked
+- [x] Update client (`src/update/`): daily night-time check (03:00-03:59), manifest download over verified HTTPS (certificate bundle), board-variant and min-build checks, no downgrades, SHA-256 check while writing, size check
+- [ ] **ECDSA signature check** of the manifest
+- [x] **Battery guard (decided):** below 30 % battery no update is installed unless USB is connected; the device retries at the next check
+- [x] Rollback: new firmware is confirmed only after Wi-Fi + display refresh succeed; without Wi-Fi it rolls back right away (clean restart); a hang rolls back after 3 min (timer restart); using the button (hold, setup, update screen) confirms it, so a user restart doesn't roll back; a build that rolled back is not auto-installed again
 - [ ] Channels stable/beta (per device setting)
-- [ ] CI: release job builds app binaries + manifest, signs with a GitHub secret, publishes only when triggered manually (pre-release = beta); the release notes field fills a short **"What's new"** list (max. 3 lines) in the signed manifest
-- [ ] Host tests: manifest parsing, version and compatibility rules, battery-guard and auto/notify decisions
+- [x] CI: release job publishes app binaries + `manifest.json` only when triggered manually; the "What's new" input (max. 3 lines) goes into the manifest and the release notes
+- [ ] CI: sign the manifest with a GitHub secret; pre-release = beta
+- [x] Host tests: manifest parsing, version and compatibility rules, battery-guard and auto/notify decisions, double tap
 
 **Update triggers and settings (decided):**
-- [ ] **Setup page checkbox "Install updates automatically"** (per device, default on). On: the night-time check installs by itself. Off (notify only): the night-time check only looks; a new version shows a small **"Update available"** mark in the status bar until it's installed
-- [ ] **Double tap on the TTP223 = info and update screen** ("do it now", works in both modes). Add `ButtonEvent::DoubleTap` to `src/input/ButtonGesture.h` with host tests: second tap within about 400 ms; a single tap is then reported after that window (refresh starts about 0.4 s later). Must also work as the first wake from deep sleep (first tap wakes, second tap is caught after boot)
-- [ ] **Setup page button "Check for updates now"**: backup trigger if the touch sensor fails; shows the same result as the screen
-- [ ] Until the TTP223 is installed: the setup-page button is the manual trigger (the BOOT button stays reserved for setup recovery)
+- [x] **Setup page checkbox "Install updates automatically"** (per device, default on). On: the night-time check installs by itself. Off (notify only): the night-time check only looks; a new version shows a small **"Update available"** mark in the status bar until it's installed
+- [x] **Double tap on the TTP223 = info and update screen** ("do it now", works in both modes). Add `ButtonEvent::DoubleTap` to `src/input/ButtonGesture.h` with host tests: second tap within about 400 ms; a single tap is then reported after that window (refresh starts about 0.4 s later). Must also work as the first wake from deep sleep (first tap wakes, second tap is caught after boot)
+- [x] **Setup page button "Check for updates now"**: backup trigger if the touch sensor fails. The setup network goes away when the device restarts to go online, so the result appears on the e-ink screen (and as "Last check" on the setup page next time); a newer version is installed without a confirm tap
+- [x] Until the TTP223 is installed: the setup-page button is the manual trigger (the BOOT button stays reserved for setup recovery)
 
 **Update screens (e-ink, partial refresh about 1.6 s per step):**
-- [ ] Info screen (double tap): firmware version, channel, last update date, battery %, Wi-Fi status, then "Checking for updates…"
-- [ ] Update available: "New version .65", the "What's new" lines, **"Tap to install (cancels in 15 s)"**. No tap: back to the dashboard (protects against accidental touches)
-- [ ] Progress: Downloading (bar refreshed every 20-25 %), Verifying, Installing, Restarting
-- [ ] After the restart, shown once: "Updated to .65 ✓" + "What's new", then the dashboard
-- [ ] Plain-language results: "Up to date (.64)", "No Wi-Fi: try again later", "Battery too low for an update: please charge", "Update failed: previous version kept"
-- [ ] Status bar shows the current version (and the "Update available" mark in notify-only mode)
+Wording follows the e-paper font, which has no ( ) ! ' and no ✓: "Tap to install - cancels in 15 s", "Up to date: .64"; the check mark is drawn with lines.
+- [x] Info screen (double tap): firmware version, channel, last update date, battery %, Wi-Fi status, then "Checking for updates…"
+- [x] Update available: "New version .65", the "What's new" lines, **"Tap to install (cancels in 15 s)"**. No tap: back to the dashboard (protects against accidental touches)
+- [x] Progress: Downloading (bar refreshed every 20-25 %), Verifying, Installing, Restarting
+- [x] After the restart, shown once: "Updated to .65 ✓" + "What's new", then the dashboard
+- [x] Plain-language results: "Up to date (.64)", "No Wi-Fi: try again later", "Battery too low for an update: please charge", "Update failed: previous version kept"
+- [x] Status bar shows the current version (and the "Update available" mark in notify-only mode)
 
 **Done when:** a beta release installs itself on my device at night (auto on) and via double tap + confirm tap (auto off); notify-only shows the status-bar mark; below 30 % without USB it refuses with the battery message; a corrupted, unsigned or wrong-board image is rejected; a release that crashes on boot rolls back; settings survive.
 

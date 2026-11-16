@@ -33,6 +33,10 @@ Wiring and switch settings: [docs/PROJECT_INFO.md](docs/PROJECT_INFO.md#hardware
 
 To change the settings later: hold the touch button for 4 s and release, or tap **RST** and then hold **BOOT** for 1 s.
 
+**Updates** come over the air from this repository's releases: at night by themselves, after a double tap
+on the touch button, or with **Check for updates now** on the setup page ([user guide](docs/USER_GUIDE.md#firmware-updates)).
+The first firmware with updates (build 64) has to be flashed once over USB; settings are kept.
+
 ## Documentation
 
 | Document | Contents |
@@ -40,7 +44,7 @@ To change the settings later: hold the touch button for 4 s and release, or tap 
 | [User guide](docs/USER_GUIDE.md) | Widgets, setup page fields, screen behavior, wake button, building, troubleshooting |
 | [Project info](docs/PROJECT_INFO.md) | Our hardware and wiring, build/flash workflow, host tests, findings |
 | [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Assessment, stages, hardware test log |
-| [OTA updates](docs/OTA_UPDATES.md) | Design of the self-updating firmware |
+| [OTA updates](docs/OTA_UPDATES.md) | Self-updating firmware: status, publishing a release, design |
 | [Fonts](fonts/README.md) | Font conversion (`tools/ListFontConvertV4.py`) |
 
 ## Repository layout
@@ -52,7 +56,7 @@ To change the settings later: hold the touch button for 4 s and release, or tap 
 | `src/` | New firmware modules |
 | `tests/host/` | Tests that run on the PC (`tests/host/run.sh`) |
 | `fonts/` | Font headers and conversion notes |
-| `tools/` | Display bring-up test, font converter, VS Code IntelliSense setup |
+| `tools/` | Display bring-up test, font converter, VS Code IntelliSense setup, release manifest (`tools/ota/`) |
 | `docs/` | Documentation and images |
 | `.github/workflows/` | CI: builds every profile on each push, size check, manual releases |
 

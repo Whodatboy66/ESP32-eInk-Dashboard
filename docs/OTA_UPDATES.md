@@ -7,15 +7,65 @@ with no USB flashing?
 (3.3.7). The one hard requirement is a **one-time USB flash per device** to switch to an OTA-capable
 partition table. After that, every update can arrive over Wi-Fi.
 
+## Status (stage 1, part 1)
+
+Implemented, **not yet tested on hardware**: A/B partition table, update client with verified HTTPS,
+board-variant / build / min-build checks, SHA-256 check, rollback, battery guard, night-time check with
+"Install updates automatically" (auto or notify only), double tap + confirm tap, setup page
+"Check for updates now", e-ink screens, CI release job with `manifest.json`.
+**Still open:** ECDSA signature of the manifest, stable/beta channels, display id / config schema.
+Until the signature exists, the devices trust whatever a release of this repository contains: only
+publish from a trusted account (2FA on).
+
+Code: `src/update/UpdatePolicy.h` (decisions, host-tested), `src/update/Manifest.h` (format, host-tested),
+`src/update/UpdateClient.cpp` (download + install), `src/update/UpdateScreens.cpp` (screens), the
+flow in `ESP32-eInk-Dashboard.ino` ("Over-the-air updates").
+
+### One-time USB migration (per device)
+
+The old firmware has a single app slot. Flash the new firmware once over USB with
+`arduino-cli compile --profile esp32c6_firebeetle -u -p COM3 .` (writes bootloader, partition table,
+`boot_app0` and app separately). The `nvs` partition keeps its offset, so Wi-Fi and all settings stay.
+**Not** a release's `*.merged.bin`: it is padded with empty flash and erases the settings.
+From then on updates come over the air.
+
+### Publishing a release
+
+1. Raise `FW_BUILD` in `configure.h` (e.g. 64 -> 65; `FW_VERSION` becomes ".65"), commit, push; CI must be green.
+2. GitHub -> Actions -> "Build firmware" -> Run workflow on `main`: tick **release**, fill **whats_new**
+   (up to 3 lines separated by `|`, max. 70 characters each, plain text), leave **min_build** at 0
+   unless older builds must not update directly.
+3. The release `firmware-.65` gets every board's images plus `manifest.json`. Devices look at
+   `releases/latest/download/manifest.json`: auto-install devices install it the next night, the
+   others show "Update available"; a double tap installs it at once.
+
+Test a release on your own device first (double tap) before parents' devices pick it up at night.
+A new version must confirm itself within 3 minutes (Wi-Fi + display worked); a crash, hang, restart
+or missing Wi-Fi before that rolls back to the previous version, and that build is then not
+auto-installed again. A release that starts fine but misbehaves later is not caught: publish the
+next build to replace it.
+
+### Manifest format
+
+```json
+{"schema": 1, "build": 65, "version": ".65", "min_build": 0, "tag": "firmware-.65",
+ "notes": ["Up to 3 What's new lines"],
+ "files": {"esp32c6_firebeetle": {"name": "ESP32C6-FireBeetle-ESP32-eInk-Dashboard.ino.bin",
+                                  "size": 1458848, "sha256": "<64 hex digits>"}}}
+```
+
+Written by `tools/ota/make_manifest.py` in the release job. The device reads only the entry for its
+own variant (`FW_VARIANT`), refuses unsafe names, unknown `schema`, and builds that aren't newer.
+
 ## What the device needs
 
 | Building block | Available? | Notes |
 |---|---|---|
 | Write new firmware while running | Yes | `Update` / `HTTPUpdate` libraries in the core |
-| Two app slots (A/B) | **No, not yet** | `partitions.csv` has one `factory` app slot and no `otadata`. Needs a new table, flashed once over USB |
+| Two app slots (A/B) | Yes (build 64) | `partitions.csv` has `otadata` + `app0`/`app1`. Devices with older firmware need one USB flash |
 | Automatic rollback if new firmware fails | Yes | `CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=1` in the C6 core; the core has `verifyRollbackLater()` / `esp_ota_mark_app_valid_cancel_rollback()` hooks |
 | Verified HTTPS to GitHub | Yes | `CONFIG_MBEDTLS_CERTIFICATE_BUNDLE=1`, `NetworkClientSecure::setCACertBundle()`. The project currently uses `setInsecure()` everywhere and should change that for updates at least |
-| Follow GitHub's download redirect | Yes | `HTTPClient::setFollowRedirects()` (already used in `directFetch.cpp`) |
+| Follow GitHub's download redirect | Yes, with care | `HTTPClient::setFollowRedirects()`. The core forgets the certificate bundle when it reconnects for a redirect to another host, so `UpdateClient.cpp` attaches it again on every connect (and only allows github.com / *.githubusercontent.com) |
 | Keep settings across updates | Yes | Settings live in NVS (`0x9000`); OTA only writes the inactive app slot |
 
 ## Partition table (4 MB flash)
@@ -107,14 +157,14 @@ Design details:
 
 ## GitHub side
 
-The existing `.github/workflows/compile.yml` already builds every variant and creates a release
-named `firmware-<FW_VERSION>`. Changes needed:
+`.github/workflows/compile.yml` builds every variant from the `sketch.yaml` profiles (same versions as
+local builds) with the OTA partition table, and a manual run with "release" publishes
+`firmware-<FW_VERSION>` with all images and `manifest.json` (sizes + SHA-256 of the app images).
 
-1. Build the **app-only `.bin`** (not just `merged.bin`) with the new OTA partition table.
-2. Compute SHA-256 and size, generate `manifest.json`, sign it (`manifest.sig`) with the secret key; attach both.
-   Publish only on manual trigger; pre-release = beta channel.
-3. Align core and library versions with `sketch.yaml`, so OTA builds match local builds.
-4. Enable Actions on the fork (off by default for forks), and trigger it on a tag or manually.
+- [x] App-only `.bin` per board + `manifest.json`, published only on a manual trigger
+- [x] Core and library versions from `sketch.yaml`
+- [x] Actions enabled on the fork
+- [ ] Sign the manifest (`manifest.sig`) with a secret key; pre-release = beta channel
 
 ## Effort estimate
 

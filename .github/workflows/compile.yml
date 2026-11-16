@@ -2,15 +2,24 @@ name: Build firmware
 
 # Every push and pull request: host tests + firmware build for every sketch.yaml profile with a
 # size check. A GitHub release is only published when started by hand from main with "release".
+# The release carries manifest.json: devices install it over the air (docs/OTA_UPDATES.md).
 on:
   push:
   pull_request:
   workflow_dispatch:
     inputs:
       release:
-        description: Publish a GitHub release (main only; FW_VERSION must not be released yet)
+        description: Publish a GitHub release (main only; FW_BUILD must not be released yet)
         type: boolean
         default: false
+      whats_new:
+        description: "What's new, shown on the devices: up to 3 short lines separated by | (max. 70 characters each)"
+        type: string
+        default: ""
+      min_build:
+        description: Oldest build that may install this release over the air (0 = any)
+        type: string
+        default: "0"
 
 # A newer push cancels the older push build of the same branch. Manual runs (releases) have their
 # own group, so a push never cancels or replaces a release in progress.
@@ -22,20 +31,18 @@ env:
   # Same as the developer machines (docs/PROJECT_INFO.md). Core and library versions are NOT
   # set here: every build uses the sketch.yaml profile, so CI and local builds always match.
   ARDUINO_CLI_VERSION: 1.6.0
-  # app0 in partitions.csv (0x360000): the build fails if the image doesn't fit today's layout.
-  APP_PARTITION_BYTES: 3538944
-  # Planned OTA app slot (docs/IMPLEMENTATION_PLAN.md A.3, 0x1E0000 = 1.875 MB): the size check
-  # fails above it, so the firmware keeps fitting the A/B layout of stage 1.
-  OTA_SLOT_BYTES: 1966080
+  # One OTA app slot in partitions.csv (app0/app1, 0x1E0000 = 1.875 MB): the build fails above it.
+  APP_SLOT_BYTES: 1966080
 
 jobs:
   # --------------------------------------------------
-  # Read FW_VERSION from configure.h; for a release, refuse a version already released
+  # Read FW_BUILD from configure.h; for a release, refuse a build already released
   # --------------------------------------------------
   version:
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.read.outputs.version }}
+      build: ${{ steps.read.outputs.build }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -47,17 +54,19 @@ jobs:
         env:
           RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
         run: |
-          VERSION=$(sed -n 's/^#define FW_VERSION *"\([^"]*\)".*/\1/p' configure.h)
-          if ! [[ "$VERSION" =~ ^[0-9A-Za-z._-]+$ ]]; then
-            echo "::error::Could not read FW_VERSION from configure.h (got '$VERSION')"
+          BUILD=$(sed -n 's/^#define FW_BUILD *\([0-9][0-9]*\).*/\1/p' configure.h)
+          if ! [[ "$BUILD" =~ ^[0-9]+$ ]]; then
+            echo "::error::Could not read FW_BUILD from configure.h (got '$BUILD')"
             exit 1
           fi
+          VERSION=".$BUILD"  # FW_VERSION in configure.h
           if [[ "$RELEASE" == "true" ]] && git rev-parse -q --verify "refs/tags/firmware-$VERSION" >/dev/null; then
-            echo "::error::firmware-$VERSION is already released: bump FW_VERSION in configure.h"
+            echo "::error::firmware-$VERSION is already released: bump FW_BUILD in configure.h"
             exit 1
           fi
-          echo "Firmware version $VERSION"
+          echo "Firmware version $VERSION (build $BUILD)"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
 
   # --------------------------------------------------
   # Hardware-independent logic, compiled and run on the PC
@@ -66,6 +75,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
+      # ArduinoJson (header-only) for the manifest tests, same version as sketch.yaml.
+      - name: Get ArduinoJson
+        run: |
+          AJ=$(sed -n 's/.*- ArduinoJson (\(.*\))/\1/p' sketch.yaml | head -1)
+          mkdir -p "$RUNNER_TEMP/arduinojson"
+          curl -fsSL -o "$RUNNER_TEMP/arduinojson/ArduinoJson.h" \
+            "https://github.com/bblanchon/ArduinoJson/releases/download/v$AJ/ArduinoJson-v$AJ.h"
+          echo "ARDUINOJSON_INCLUDE=$RUNNER_TEMP/arduinojson" >> "$GITHUB_ENV"
       - name: Run host tests
         run: tests/host/run.sh
 
@@ -117,7 +134,7 @@ jobs:
           arduino-cli compile \
             --profile ${{ matrix.profile }} \
             --build-property "compiler.cpp.extra_flags=-D${{ matrix.preset }}" \
-            --build-property "upload.maximum_size=$APP_PARTITION_BYTES" \
+            --build-property "upload.maximum_size=$APP_SLOT_BYTES" \
             --export-binaries \
             --output-dir build_out \
             . 2>&1 | tee compile.log
@@ -133,13 +150,12 @@ jobs:
             echo "### ${{ matrix.name }} (\`${{ matrix.profile }}\`)"
             echo "| | Bytes | Limit | Used |"
             echo "|---|---:|---:|---:|"
-            echo "| App image vs. planned OTA slot | $APP | $OTA_SLOT_BYTES | $(pct "$APP" "$OTA_SLOT_BYTES") |"
-            echo "| App image vs. current app0 | $APP | $APP_PARTITION_BYTES | $(pct "$APP" "$APP_PARTITION_BYTES") |"
+            echo "| App image vs. OTA slot | $APP | $APP_SLOT_BYTES | $(pct "$APP" "$APP_SLOT_BYTES") |"
             echo "| Static RAM | $RAM | $RAM_MAX | $(pct "$RAM" "$RAM_MAX") |"
           } >> "$GITHUB_STEP_SUMMARY"
-          echo "App image $APP bytes, OTA slot $OTA_SLOT_BYTES bytes, static RAM $RAM of $RAM_MAX bytes"
-          if (( APP > OTA_SLOT_BYTES )); then
-            echo "::error::App image ($APP bytes) is larger than the planned OTA slot ($OTA_SLOT_BYTES bytes). See docs/IMPLEMENTATION_PLAN.md A.3."
+          echo "App image $APP bytes, OTA slot $APP_SLOT_BYTES bytes, static RAM $RAM of $RAM_MAX bytes"
+          if (( APP > APP_SLOT_BYTES )); then
+            echo "::error::App image ($APP bytes) is larger than the OTA slot ($APP_SLOT_BYTES bytes). See docs/IMPLEMENTATION_PLAN.md A.3."
             exit 1
           fi
 
@@ -151,6 +167,9 @@ jobs:
           for f in *.bin; do
             mv "$f" "${{ matrix.name }}-$f"
           done
+          # Which app image is for which board variant (read by tools/ota/make_manifest.py).
+          printf '{"variant": "%s", "file": "%s"}\n' "${{ matrix.profile }}" \
+            "${{ matrix.name }}-ESP32-eInk-Dashboard.ino.bin" > variant.json
 
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v7
@@ -177,9 +196,25 @@ jobs:
         with:
           path: firmware
 
+      # Inputs go through env, never straight into the script (no shell injection).
+      - name: Write manifest.json and release notes
+        env:
+          BUILD: ${{ needs.version.outputs.build }}
+          VERSION: ${{ needs.version.outputs.version }}
+          WHATS_NEW: ${{ inputs.whats_new }}
+          MIN_BUILD: ${{ inputs.min_build }}
+        run: |
+          python3 -I tools/ota/make_manifest.py --build "$BUILD" --version "$VERSION" \
+            --tag "firmware-$VERSION" --min-build "${MIN_BUILD:-0}" --notes "$WHATS_NEW" \
+            --dir firmware --out manifest.json --notes-out release_notes.md
+          cat release_notes.md
+
       - name: Create release and upload firmware
         uses: softprops/action-gh-release@v3
         with:
           tag_name: firmware-${{ needs.version.outputs.version }}
           name: ESP32 Firmware Build ${{ needs.version.outputs.version }}
-          files: firmware/**/*.bin
+          body_path: release_notes.md
+          files: |
+            firmware/**/*.bin
+            manifest.json

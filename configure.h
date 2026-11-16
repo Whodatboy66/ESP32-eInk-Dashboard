@@ -6,9 +6,25 @@
 #define DEBUG               1   // set to 1 to enable debug prints
 #endif
 
-#ifndef FW_VERSION
-#define FW_VERSION          ".63"
+// Firmware build number: an integer that only goes up with each release. The update client only
+// installs a release with a higher build. FW_VERSION (status bar, release name) follows from it.
+#ifndef FW_BUILD
+#define FW_BUILD            64
 #endif
+#define FW_STR_(x)          #x
+#define FW_STR(x)           FW_STR_(x)
+#ifndef FW_VERSION
+#define FW_VERSION          "." FW_STR(FW_BUILD)
+#endif
+
+// Over-the-air updates (docs/OTA_UPDATES.md): releases of this GitHub repository.
+#ifndef OTA_REPO
+#define OTA_REPO            "Whodatboy66/ESP32-eInk-Dashboard"
+#endif
+#define OTA_BATTERY_MIN_PCT 30      // below this, no install unless USB is connected
+#define OTA_NIGHT_HOUR      3       // daily check during this local hour (03:00-03:59)
+#define OTA_CONFIRM_MS      15000   // "Tap to install" waits this long, then cancels
+#define OTA_DONE_SCREEN_MS  10000   // "Updated to ..." stays at least this long after the restart
 
 #if DEBUG
   #define DBG(x)            Serial.println(x)
@@ -100,6 +116,26 @@ inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32Default;
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Custom;
 #endif
 
+// Build variant = the sketch.yaml profile. The update client only installs the release file
+// made for the same variant, so an image for another board can never be installed.
+#if defined(DEFAULT_PIN_PRESET_ESP32_WAVESHARE)
+  #define FW_VARIANT "esp32_waveshare"
+#elif defined(DEFAULT_PIN_PRESET_ESP32)
+  #define FW_VARIANT "esp32"
+#elif defined(DEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE)
+  #define FW_VARIANT "esp32c6_firebeetle"
+#elif defined(DEFAULT_PIN_PRESET_ESP32C6_SUPERMINI)
+  #define FW_VARIANT "esp32c6_supermini"
+#elif CONFIG_IDF_TARGET_ESP32C6 && defined(ARDUINO_MAKERGO_C6_SUPERMINI)
+  #define FW_VARIANT "esp32c6_supermini"
+#elif CONFIG_IDF_TARGET_ESP32C6
+  #define FW_VARIANT "esp32c6_firebeetle"
+#elif CONFIG_IDF_TARGET_ESP32
+  #define FW_VARIANT "esp32"
+#else
+  #define FW_VARIANT "unknown"
+#endif
+
 extern PinConfig activePins;
 
 inline void applyPinPreset(PinPreset preset) {
@@ -136,6 +172,7 @@ inline gpio_num_t getDemoWakeGpio() {
 #define BUTTON_SETUP_HOLD_MS  4000    // hold 4 seconds (then release) to open setup mode
 #define BUTTON_FAULT_MS       15000   // a "touch" this long is a sensor fault: ignored, no gesture
 #define BUTTON_DEBOUNCE_MS    60      // the input must read low this long to count as released
+#define BUTTON_DOUBLE_TAP_MS  400     // a second tap within this time = double tap (update screen)
 
 // Backup way into setup mode when the touch sensor is missing or broken: tap RST, then within
 // BOOT_SETUP_WINDOW_MS press and hold the board's BOOT button for BOOT_SETUP_HOLD_MS.

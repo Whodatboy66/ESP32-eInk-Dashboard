@@ -14,6 +14,7 @@ A low-power desk dashboard for ESP32 boards and 7.5" ePaper displays. It shows t
 - [The setup page](#the-setup-page)
 - [How the screen behaves](#how-the-screen-behaves)
 - [Wake button](#wake-button)
+- [Firmware updates](#firmware-updates)
 - [Building the firmware](#building-the-firmware)
 - [Troubleshooting](#troubleshooting)
 - [Project structure](#project-structure)
@@ -71,7 +72,7 @@ The firmware picks the matching preset for your board automatically. You can cho
 
 ## Quick start
 
-1. **Flash the firmware.** Use a [prebuilt release](https://github.com/VoIPshare/ESP32-eInk-Dashboard/releases) (flash the merged image at address `0x0000`, for example with the [espboards.dev programmer](https://www.espboards.dev/tools/program/)), or [build it yourself](#building-the-firmware).
+1. **Flash the firmware.** Use a [prebuilt release](https://github.com/Whodatboy66/ESP32-eInk-Dashboard/releases) (flash the `*.merged.bin` image at address `0x0000`, for example with the [espboards.dev programmer](https://www.espboards.dev/tools/program/); it erases all settings, which is fine on a new device), or [build it yourself](#building-the-firmware).
 2. **Power on the board.** The screen shows "ESP32 AP Mode".
 3. **Join the Wi-Fi network `Dashboard-Setup`** from your phone or computer. The setup page opens by itself (captive portal). If it doesn't, browse to `http://192.168.4.1`.
 4. **Fill in the setup page** (see below) and press **Save Configuration**. The device restarts and draws the dashboard.
@@ -98,6 +99,7 @@ To change the settings later, hold the button for 4 seconds and release it to re
 | **PKGE API Key** | The API key of your PKGE Business account, for package tracking (see [Tracking your packages](#tracking-your-packages)). Leave empty to keep the saved key; enter `-` to remove it. |
 | **AeroDataBox API Key** | Optional: your RapidAPI key, for live flight status (see [Live flight status](#live-flight-status-optional)). Leave empty to keep the saved key; enter `-` to remove it. |
 | **Pin Preset** | Your board's wiring. Pick **Custom** to enter your own pins. |
+| **Install updates automatically** | On (default): a new firmware version is installed at night by itself. Off: the top bar shows `Update available`; install it with a double tap or **Check for updates now**. See [Firmware updates](#firmware-updates). |
 
 Settings are stored in the board's flash and survive firmware updates, unless you erase the flash when uploading.
 
@@ -256,15 +258,39 @@ It is an active-HIGH input with the internal pull-down: a `TTP223` module with i
 | Action | Result |
 | --- | --- |
 | Short tap | Wakes the device and does a full refresh |
+| Double tap | Device info and update check (see [Firmware updates](#firmware-updates)) |
 | Hold 2 seconds, then release | Reboots the dashboard |
 | Hold 4 seconds, then release | Setup mode: starts the `Dashboard-Setup` network and the setup page |
 | Held 15 seconds or longer | Treated as a sensor fault and ignored (see below) |
 
-Releasing before 2 seconds counts as a short tap; releasing between 2 and 4 seconds reboots, between 4 and 15 seconds opens setup mode. The holds also work while the dashboard is awake and refreshing; a short tap then is ignored. On the ESP32-C6 SuperMini, the onboard LED shows the stage: green while holding, flashing cyan from 2 s (release to reboot), flashing white from 4 s (release for setup). Setup mode closes by itself after 5 minutes without activity (each time the setup page is opened, the 5 minutes start again) and the dashboard resumes normally. On a device that was never configured, setup mode stays open until you save.
+Releasing before 2 seconds counts as a short tap; a second tap within 0.4 seconds makes it a double tap (so a single tap's refresh starts 0.4 seconds later). From deep sleep, the first tap wakes the device and the second is caught after it starts: tap twice at a calm pace rather than very fast. Releasing between 2 and 4 seconds reboots, between 4 and 15 seconds opens setup mode. The holds also work while the dashboard is awake and refreshing; a short tap then is ignored. On the ESP32-C6 SuperMini, the onboard LED shows the stage: green while holding, flashing cyan from 2 s (release to reboot), flashing white from 4 s (release for setup). Setup mode closes by itself after 5 minutes without activity (each time the setup page is opened, the 5 minutes start again) and the dashboard resumes normally. On a device that was never configured, setup mode stays open until you save.
 
 **Sensor fault:** if the input reads "pressed" for 15 seconds (a stuck, miswired or recalibrating sensor), the press is ignored, and the device stops waking on the button, using its timer only, until the input reads "not pressed" again. The dashboard keeps running.
 
 **Without a working button (BOOT backup):** tap **RST**, then within 3 seconds press and hold the board's **BOOT** button for 1 second: the device opens setup mode. Don't hold BOOT while tapping RST, which starts the chip's download mode instead. The BOOT pin is `GPIO9` on ESP32-C6 boards and `GPIO0` on ESP32 boards; this is skipped if a custom pin map uses that pin.
+
+## Firmware updates
+
+The device updates itself from the releases of its GitHub repository; settings are kept.
+
+- **Automatically:** once a night (03:00–03:59) it checks for a new version. With **Install updates automatically** on, it installs it right away; with it off, the top bar shows `Update available` next to the version until you install it. A version that was installed once and rolled back is not installed automatically again; a double tap still installs it.
+- **Double tap:** shows the device info (version, last update, battery, Wi-Fi) and checks. If there is a new version, the screen shows it with up to 3 "New in this version" lines and **Tap to install - cancels in 15 s**: tap once to install; without a tap the dashboard returns.
+- **Setup page:** **Check for updates now** restarts the device, which goes online, checks and installs a new version without asking. The screen shows the progress; the setup page shows the last result next time.
+
+An install shows its steps on the screen (Downloading, Verifying, Installing, Restarting), then **Updated to .65** with what's new, then the dashboard. Messages in plain language:
+
+| Message | Meaning |
+| --- | --- |
+| `Up to date: .64` | No newer version |
+| `No Wi-Fi: try again later` | The device couldn't connect |
+| `Update check failed: try again later` | GitHub couldn't be reached, or there is no release yet |
+| `Battery too low for an update: please charge` | Below 30 % and no USB: charge it, the next check tries again |
+| `Update failed: previous version kept` | The download or install failed, or the new version didn't start or couldn't reach Wi-Fi (it rolls back by itself) |
+| `Update needs a USB install` | The new version can't be installed over the air from this one |
+
+After an update the new version confirms itself once Wi-Fi and the display worked; until then (at most 3 minutes) any crash, hang or restart returns to the previous version. Using the button in that time (a hold, setup mode, the update screen) also confirms it.
+
+The first firmware with updates needs one USB flash (it changes the flash layout): `arduino-cli upload` keeps the settings, the `*.merged.bin` image erases them. After that, no cable is needed. Maintainers: publishing a release is described in [OTA_UPDATES.md](OTA_UPDATES.md#publishing-a-release).
 
 ## Building the firmware
 
@@ -306,7 +332,7 @@ In [configure.h](../configure.h):
 
 | Option | Default | Meaning |
 | --- | --- | --- |
-| `FW_VERSION` | e.g. `".59"` | Shown next to the battery indicator. CI builds can override it. |
+| `FW_VERSION` | `"." FW_BUILD` | Shown in the top bar. Follows `FW_BUILD`. |
 | `DEBUG` | `1` | Serial debug log. Debug builds wait 3 s after a reset so a serial monitor can attach. |
 | `USE_COLORDISPLAY` | `0` | 4-color panel instead of black and white. |
 
@@ -317,6 +343,10 @@ Timing constants you can adjust:
 | `BUTTON_REBOOT_HOLD_MS` / `BUTTON_SETUP_HOLD_MS` | 2 s / 4 s | [configure.h](../configure.h) | Button hold times for reboot and setup mode |
 | `BUTTON_FAULT_MS` | 15 s | configure.h | A longer "press" is a sensor fault and is ignored |
 | `BOOT_SETUP_WINDOW_MS` / `BOOT_SETUP_HOLD_MS` | 3 s / 1 s | configure.h | BOOT backup: time after a reset to press BOOT, and how long to hold it |
+| `BUTTON_DOUBLE_TAP_MS` | 0.4 s | configure.h | Time for the second tap of a double tap |
+| `FW_BUILD` | e.g. `64` | configure.h | Firmware build number; `FW_VERSION` (".64") follows from it. Raise it for every release |
+| `OTA_REPO` | this fork | configure.h | GitHub repository whose releases the device installs |
+| `OTA_BATTERY_MIN_PCT` / `OTA_NIGHT_HOUR` / `OTA_CONFIRM_MS` | 30 % / 3 / 15 s | configure.h | Battery guard, hour of the night-time check, time for the confirm tap |
 | `AP_TIMEOUT_MS` | 5 min | [ESP32-eInk-Dashboard.ino](../ESP32-eInk-Dashboard.ino) | Setup mode closes after this long without activity |
 | `WAKE_AFTER_MINUTE_MS` | 500 ms | main sketch | Wake-up offset after each minute starts |
 | `NTP_RESYNC_S` | 1 h | main sketch | Maximum time between internet time syncs |

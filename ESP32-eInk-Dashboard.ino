@@ -21,6 +21,17 @@
 #include <driver/gpio.h>
 #include <driver/rtc_io.h>
 #include "src/input/ButtonGesture.h"
+#include "src/update/UpdateClient.h"
+#include "src/update/UpdateScreens.h"
+#include <esp_ota_ops.h>
+#include <esp_timer.h>
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+#include <driver/usb_serial_jtag.h>
+#endif
+
+// What opened the update screen. Above the first function: Arduino puts the generated function
+// prototypes there.
+enum class OtaTrigger : uint8_t { DoubleTap, SetupPage };
 
 static void copyToCfg(char* dest, size_t cap, const String& s) {
   if (!dest || cap == 0) return;
@@ -64,6 +75,22 @@ PinPreset activePinPreset = DEFAULT_PIN_PRESET;
 
 bool forceUpdateStatusBar = false;
 bool apModeActive = false;
+
+// Over-the-air updates (docs/OTA_UPDATES.md). Settings and results are kept in NVS ("config").
+static bool otaAutoInstall = true;     // setup page "Install updates automatically"
+static uint32_t otaAvailBuild = 0;     // newer release seen but not installed: status-bar mark
+static char otaAvailVersion[16] = "";
+static bool otaPendingVerify = false;  // first start of a freshly installed image (not confirmed yet)
+static bool otaWifiOk = false;         // Wi-Fi worked during this wake (needed to confirm an update)
+static unsigned long otaUpdatedShownAt = 0;  // millis() when "Updated to" was drawn; 0 = not shown
+static int otaLastCheckDay = 0;              // ota::dayKey() of the last night-time check (NVS)
+static uint32_t otaBadBuild = 0;             // a build that rolled back: no auto install (NVS)
+RTC_DATA_ATTR bool redrawAll = false;        // an update screen covered the dashboard: redraw all
+// A setup page "Check for updates now" survives the restart in no-init RTC memory.
+constexpr uint32_t UPDATE_REQUEST_MAGIC = 0x0DA7E5AF;
+RTC_NOINIT_ATTR uint32_t updateRequest;
+#define OTA_RESULT_SCREEN_MS 6000             // result messages stay this long
+#define OTA_CONFIRM_TIMEOUT_S 180             // a new image not confirmed by then: restart = rollback
 
 
 unsigned long previousMillis = 0;
@@ -340,6 +367,9 @@ static String htmlAttr(const char* s) {
   }
   return out;
 }
+
+static String otaStatusHtml();
+static void formatDate(uint32_t t, char* out, size_t cap);
 
 /* --------------------------------------------------
    HTML PAGE (stored in flash to save RAM)
@@ -770,9 +800,29 @@ html += R"rawliteral(
 
 
 html += R"rawliteral(
+    <hr>
+
+    <label>Firmware updates</label>
+    <div class="note">)rawliteral";
+
+html += otaStatusHtml();
+
+html += R"rawliteral(</div>
+    <label><input type="checkbox" name="ota_auto" value="1" style="width:auto")rawliteral";
+
+html += otaAutoInstall ? " checked" : "";
+
+html += R"rawliteral(> Install updates automatically</label>
+    <div class="note">On: a new version is installed at night by itself. Off: the status bar shows "Update available"; install it with a double tap on the button, or below.</div>
+
     <button type="submit">Save Configuration</button>
 
   </form>
+
+  <form action="/update" method="POST">
+    <button type="submit" class="scanBtn">Check for updates now</button>
+  </form>
+  <div class="note">The device restarts, connects to your Wi-Fi and installs a newer version right away if there is one (it needs 30 % battery or USB). The screen shows the progress and the result.</div>
 
   <div class="footer">
     Device will restart after saving
@@ -1040,8 +1090,11 @@ void drawStatus(LayoutItem* item) {
     snprintf(buf, sizeof(buf), "%.2f V", voltage);
   }
 
-  char versionBuf[32];
-  snprintf(versionBuf, sizeof(versionBuf), "v%s", FW_VERSION);
+  char versionBuf[48];
+  if (otaAvailBuild > FW_BUILD)  // notify only: a newer release waits for a double tap
+    snprintf(versionBuf, sizeof(versionBuf), "Update available  v%s", FW_VERSION);
+  else
+    snprintf(versionBuf, sizeof(versionBuf), "v%s", FW_VERSION);
 
   display.fillRect(item->PosX, item->PosY, item->Width, item->Height, GxEPD_WHITE);
 
@@ -1147,6 +1200,58 @@ void handleConfig() {
   server.send(200, "text/html", buildPage());
 }
 
+// Setup page: installed version and the last update result.
+static String otaStatusHtml() {
+  preferences.begin("config", true);
+  String result = preferences.getString("ota_result", "");
+  uint32_t resultTime = preferences.getUInt("ota_rtime", 0);
+  uint32_t updated = preferences.getUInt("ota_updt", 0);
+  preferences.end();
+  char date[16], line[96];
+  String out;
+  snprintf(line, sizeof(line), "Installed: %s (%s). ", FW_VERSION, FW_VARIANT);
+  out += line;
+  formatDate(updated, date, sizeof(date));
+  out += "Last update: ";
+  out += date;
+  out += ".";
+  if (result.length()) {
+    formatDate(resultTime, date, sizeof(date));
+    out += "<br>Last check";
+    if (strcmp(date, "never") != 0) {
+      out += " (";
+      out += date;
+      out += ")";
+    }
+    out += ": ";
+    out += htmlAttr(result.c_str());
+  }
+  if (otaAvailBuild > FW_BUILD) {
+    out += "<br><b>Version ";
+    out += htmlAttr(otaAvailVersion);
+    out += " is available.</b>";
+  }
+  return out;
+}
+
+// "Check for updates now": restart, connect to Wi-Fi, check and install (the screen shows it).
+void handleUpdateNow() {
+  apLastActivity = millis();
+  if (wifi_ssid[0] == '\0') {
+    server.send(400, "text/plain", "Save your Wi-Fi settings first.");
+    return;
+  }
+  updateRequest = UPDATE_REQUEST_MAGIC;
+  server.send(200, "text/html",
+    "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    "<title>Checking for updates</title></head><body style=\"font-family:Arial,Helvetica,sans-serif;text-align:center;padding:30px\">"
+    "<h2>Checking for updates</h2><p>The device restarts and connects to your Wi-Fi. "
+    "Its screen shows the result; a newer version is installed right away.</p>"
+    "<p>You can close this page.</p></body></html>");
+  delay(1500);
+  ESP.restart();
+}
+
 void handleSave() {
   copyToCfg(wifi_ssid, sizeof(wifi_ssid), server.arg("wifi_ssid"));
   // Empty password fields keep the saved value, so re-opening setup doesn't require retyping them.
@@ -1212,6 +1317,8 @@ void handleSave() {
   preferences.putUInt("mqtt_port", mqtt_port);
   preferences.putString("pin_preset", pinPresetValue(activePinPreset));
   saveCustomPinConfig(preferences, customPins);
+  otaAutoInstall = server.hasArg("ota_auto");  // an unticked checkbox isn't sent
+  preferences.putBool("ota_auto", otaAutoInstall);
 
   preferences.end();
 
@@ -1312,6 +1419,7 @@ ESP.restart();
 
 
 void startAP() {
+  otaConfirmByUser("setup mode");
   setCpuFrequencyMhz(cpuFullMhz);
   apModeActive = true;
   apLastActivity = millis();
@@ -1334,6 +1442,7 @@ void startAP() {
 
   server.on("/", handleConfig);
   server.on("/save", HTTP_POST, handleSave);
+  server.on("/update", HTTP_POST, handleUpdateNow);
   // OS connectivity checks (Android /generate_204, Apple /hotspot-detect.html, Windows /connecttest.txt)
   // and any other URL get redirected to the setup page.
   server.onNotFound([]() {
@@ -1373,9 +1482,10 @@ void startAP() {
 constexpr int BUTTON_ACTION_NONE = 0;
 constexpr int BUTTON_ACTION_AP = 2;
 constexpr int BUTTON_ACTION_REBOOT = 3;
+constexpr int BUTTON_ACTION_UPDATE = 4;  // double tap: info and update screen
 
 static constexpr ButtonTiming BUTTON_TIMING{
-  BUTTON_REBOOT_HOLD_MS, BUTTON_SETUP_HOLD_MS, BUTTON_FAULT_MS, BUTTON_DEBOUNCE_MS};
+  BUTTON_REBOOT_HOLD_MS, BUTTON_SETUP_HOLD_MS, BUTTON_FAULT_MS, BUTTON_DEBOUNCE_MS, BUTTON_DOUBLE_TAP_MS};
 
 // Set when the input read "pressed" for BUTTON_FAULT_MS (stuck, disconnected or recalibrating
 // sensor). Kept across deep sleep: while it is set and the input still reads HIGH, the input is
@@ -1397,30 +1507,39 @@ int readWakeButtonAction() {
 
   configureButtonInput();
   bool high = digitalRead(activePins.demoButton) == HIGH;
+  bool buttonWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
   DBGF("[Button] GPIO%d is %s at %lu ms%s", activePins.demoButton,
        high ? "HIGH (pressed)" : "LOW", millis(), buttonFaulted ? " (sensor fault flagged)" : "");
   if (!high) {
     buttonFaulted = false;
-    return BUTTON_ACTION_NONE;
-  }
-  if (buttonFaulted) {
+    // A tap woke the board and was already released: wait briefly for a second tap.
+    if (!buttonWake) return BUTTON_ACTION_NONE;
+  } else if (buttonFaulted) {
     DBG(F("[Button] still HIGH since the fault: ignored"));
     return BUTTON_ACTION_NONE;
   }
 
-  // After a button wake the press began at wake time, so count the boot time as held time.
   ButtonGesture gesture(BUTTON_TIMING);
-  gesture.beginPress(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1 ? 0 : millis());
+  if (high) {
+    // After a button wake the press began at wake time, so count the boot time as held time.
+    gesture.beginPress(buttonWake ? 0 : millis());
+  } else {
+    gesture.beginAfterTap(millis());
+  }
   for (;;) {
     uint32_t now = millis();
     switch (gesture.update(digitalRead(activePins.demoButton) == HIGH, now)) {
       case ButtonEvent::None:
-        updateSuperMiniHoldFeedback(gesture.heldMs(now));
+        if (gesture.isPressed()) updateSuperMiniHoldFeedback(gesture.heldMs(now));
         delay(10);
         break;
       case ButtonEvent::Tap:
         forceSuperMiniLedsOff();
         return BUTTON_ACTION_NONE;
+      case ButtonEvent::DoubleTap:
+        forceSuperMiniLedsOff();
+        Serial.println("Button double tap -> update screen");
+        return BUTTON_ACTION_UPDATE;
       case ButtonEvent::Reboot:
         forceSuperMiniLedsOff();
         Serial.println("Button held -> reboot");
@@ -1446,9 +1565,13 @@ int readWakeButtonAction() {
 constexpr uint32_t SETUP_REQUEST_MAGIC = 0x5E7AB0A7;
 RTC_NOINIT_ATTR uint32_t setupRequest;
 
-// True while the watch task tracks a press (including the release debounce) or is acting on a
-// gesture (restarting). The sleep path waits for it, so a release just before sleep isn't lost.
+// True while the watch task tracks a press (including the release debounce and the double-tap
+// window) or is acting on a gesture (restarting). The sleep path waits for it, so a release just
+// before sleep isn't lost.
 static volatile bool buttonBusy = false;
+// The last tap / double tap seen by the watch task (ButtonEvent), for the update screen's confirm
+// tap and for a double tap while the dashboard refreshes. Reset to None by the reader.
+static volatile ButtonEvent buttonMailbox = ButtonEvent::None;
 
 // Watches the button while the dashboard is awake (WiFi, fetching, drawing), so a hold works at
 // any time, not only from deep sleep. A short tap is ignored: the dashboard is already refreshing.
@@ -1462,9 +1585,16 @@ static void buttonWatchTask(void*) {
         break;
       case ButtonEvent::Tap:
         forceSuperMiniLedsOff();
+        buttonMailbox = ButtonEvent::Tap;
+        break;
+      case ButtonEvent::DoubleTap:
+        forceSuperMiniLedsOff();
+        Serial.println("Button double tap -> update screen");
+        buttonMailbox = ButtonEvent::DoubleTap;
         break;
       case ButtonEvent::Reboot:
         buttonBusy = true;
+        otaConfirmByUser("reboot hold");
         forceSuperMiniLedsOff();
         Serial.println("Button held -> reboot");
         flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
@@ -1472,6 +1602,7 @@ static void buttonWatchTask(void*) {
         break;
       case ButtonEvent::Setup:
         buttonBusy = true;
+        otaConfirmByUser("setup hold");
         setupRequest = SETUP_REQUEST_MAGIC;
         forceSuperMiniLedsOff();
         Serial.println("Button held -> AP config mode");
@@ -1484,7 +1615,7 @@ static void buttonWatchTask(void*) {
         break;
     }
     buttonFaulted = gesture.isFaulted();
-    buttonBusy = gesture.isPressed();
+    buttonBusy = gesture.isBusy();
     vTaskDelay(pdMS_TO_TICKS(20));
   }
 }
@@ -1652,6 +1783,397 @@ bool startWiFiReliable(const char* ssid, const char* password)
 // }
 
 // =======================
+// Over-the-air updates
+// =======================
+// Triggers: double tap (info screen, confirm tap to install), setup page "Check for updates now"
+// (installs right away) and the night-time check (installs when "Install updates automatically"
+// is on, otherwise only shows "Update available" in the status bar). See docs/OTA_UPDATES.md.
+
+static const char* const OTA_NOTE_KEYS[ota::MAX_NOTES] = { "ota_n0", "ota_n1", "ota_n2" };
+static char otaSessionVersion[16] = "";
+
+// USB connected to a computer (USB-Serial/JTAG sees the host). A plain USB charger isn't seen,
+// but then the battery reads high while charging.
+static bool usbPowered() {
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+  return usb_serial_jtag_is_connected();
+#else
+  return false;
+#endif
+}
+
+// Battery charge in percent, -1 without a battery sensor.
+static int batteryPercentNow() {
+  return hasBatteryPin() ? batteryPercent(readBattery()) : -1;
+}
+
+static bool otaBatteryOk() {
+  int pct = batteryPercentNow();
+  return ota::batteryAllowsInstall(pct >= 0, pct, usbPowered(), OTA_BATTERY_MIN_PCT);
+}
+
+// Local time in the device timezone for the update code; restores the previous TZ afterwards
+// (the clock widget may use its own timezone, and later redraws rely on it).
+struct LocalTimezone {
+  char saved[CFG_TIMEZONE_MAX] = "";
+  bool hadTz = false;
+  LocalTimezone() {
+    const char* tz = getenv("TZ");
+    if (tz) {
+      hadTz = true;
+      snprintf(saved, sizeof(saved), "%s", tz);
+    }
+    setenv("TZ", device_timezone[0] ? device_timezone : "UTC0", 1);
+    tzset();
+  }
+  ~LocalTimezone() {
+    if (hadTz) setenv("TZ", saved, 1);
+    else unsetenv("TZ");
+    tzset();
+  }
+};
+
+static void formatDate(uint32_t t, char* out, size_t cap) {
+  if (t < 1700000000UL) {
+    snprintf(out, cap, "never");
+    return;
+  }
+  LocalTimezone tz;
+  time_t tt = (time_t)t;
+  struct tm tmv;
+  localtime_r(&tt, &tmv);
+  strftime(out, cap, "%Y-%m-%d", &tmv);
+}
+
+// Last result, shown on the setup page.
+static void otaSaveResult(const char* fmt, ...) {
+  char text[96];
+  va_list args;
+  va_start(args, fmt);
+  vsnprintf(text, sizeof(text), fmt, args);
+  va_end(args);
+  Serial.printf("[OTA] %s\n", text);
+  preferences.begin("config", false);
+  preferences.putString("ota_result", text);
+  preferences.putUInt("ota_rtime", (uint32_t)time(nullptr));
+  preferences.end();
+}
+
+// "Update available" mark in the status bar (nullptr clears it).
+static void otaSetAvailable(const ota::Manifest* m) {
+  uint32_t build = m ? m->build : 0;
+  if (build == otaAvailBuild) return;
+  otaAvailBuild = build;
+  snprintf(otaAvailVersion, sizeof(otaAvailVersion), "%s", m ? m->version : "");
+  preferences.begin("config", false);
+  preferences.putUInt("ota_avail", otaAvailBuild);
+  preferences.putString("ota_availv", otaAvailVersion);
+  preferences.end();
+  forceUpdateStatusBar = true;
+}
+
+static void otaProgress(ota::InstallStage stage, int quarter) {
+  ota::showProgress(stage, quarter, otaSessionVersion);
+}
+
+// Downloads and activates m, then restarts into it (doesn't return). On a failure the message is
+// shown, and this returns.
+static void otaInstallAndRestart(const ota::Manifest& m) {
+  snprintf(otaSessionVersion, sizeof(otaSessionVersion), "%s", m.version);
+  if (otaPendingVerify) {  // never overwrite the fallback slot while this image is unconfirmed
+    otaShowResult("Update postponed", "This version is still starting up: try again in a minute");
+    return;
+  }
+
+  ota::InstallResult r = ota::install(m, otaProgress);
+  if (r == ota::InstallResult::Ok) {
+    // Remembered for the new firmware: "Updated to" + What's new, and to notice a rollback.
+    // Written only now, so an interrupted download isn't reported as a failed start later.
+    preferences.begin("config", false);
+    preferences.putUInt("ota_done", m.build);
+    preferences.putUChar("ota_nn", m.noteCount);
+    for (int i = 0; i < ota::MAX_NOTES; i++)
+      preferences.putString(OTA_NOTE_KEYS[i], i < m.noteCount ? m.notes[i] : "");
+    preferences.end();
+    otaSaveResult("Installed %s, restarting", m.version);
+    ota::showRestarting(m.version);
+    delay(300);
+    ESP.restart();
+  }
+
+  otaSaveResult("Update to %s failed: %s", m.version, ota::describe(r));
+  ota::showMessage("Update failed: previous version kept", ota::describe(r));
+  delay(OTA_RESULT_SCREEN_MS);
+}
+
+static void otaShowResult(const char* title, const char* detail) {
+  otaSaveResult("%s%s%s", title, detail[0] ? " - " : "", detail);
+  ota::showMessage(title, detail);
+  delay(OTA_RESULT_SCREEN_MS);
+}
+
+// Waits for a tap or double tap seen by the button task.
+static bool waitForConfirmTap(uint32_t timeoutMs) {
+  if (!hasDemoButtonPin()) return false;
+  buttonMailbox = ButtonEvent::None;
+  unsigned long start = millis();
+  while (millis() - start < timeoutMs) {
+    ButtonEvent e = buttonMailbox;
+    if (e == ButtonEvent::Tap || e == ButtonEvent::DoubleTap) {
+      buttonMailbox = ButtonEvent::None;
+      return true;
+    }
+    delay(20);
+  }
+  return false;
+}
+
+static void describeFetchFailure(const ota::FetchOutcome& f, char* out, size_t cap) {
+  switch (f.result) {
+    case ota::FetchResult::NoRelease:   snprintf(out, cap, "No release on GitHub yet"); break;
+    case ota::FetchResult::BadManifest: snprintf(out, cap, "Release information not readable, error %d", (int)f.manifestError); break;
+    default:
+      if (f.httpCode < 0) snprintf(out, cap, "No connection to GitHub");
+      else snprintf(out, cap, "GitHub answered %d", f.httpCode);
+      break;
+  }
+}
+
+// Interactive check: info screen, then the result or the update (double tap: after a confirm tap).
+// Leaves an update screen on the display: the caller redraws the dashboard afterwards.
+static void runUpdateSession(OtaTrigger trigger) {
+  otaConfirmByUser("update screen");
+  setCpuFrequencyMhz(cpuFullMhz);
+  initDisplay(true);
+
+  preferences.begin("config", true);
+  uint32_t lastUpdate = preferences.getUInt("ota_updt", 0);
+  preferences.end();
+  char lastUpdateText[16];
+  formatDate(lastUpdate, lastUpdateText, sizeof(lastUpdateText));
+  ota::DeviceInfo info{FW_VERSION, FW_VARIANT, lastUpdateText, batteryPercentNow(), usbPowered(),
+                       wifi_ssid, otaAutoInstall};
+  ota::showInfo(info);
+
+  if (!wifi_ssid[0] || !startWiFiReliable(wifi_ssid, wifi_pass)) {
+    otaShowResult("No Wi-Fi: try again later", wifi_ssid[0] ? "" : "Set up Wi-Fi on the setup page first");
+  } else {
+    otaWifiOk = true;
+    wifiFailures = 0;
+    setProblem(PROBLEM_WIFI, false);
+    ota::Manifest m;
+    ota::FetchOutcome f = ota::fetchManifest(m);
+    char detail[80];
+    if (f.result != ota::FetchResult::Ok) {
+      describeFetchFailure(f, detail, sizeof(detail));
+      otaShowResult("Update check failed: try again later", detail);
+    } else {
+      switch (ota::availability(m.build, m.minBuild, m.hasFile, FW_BUILD)) {
+        case ota::Availability::UpToDate: {
+          otaSetAvailable(nullptr);
+          char title[40];
+          snprintf(title, sizeof(title), "Up to date: %s", FW_VERSION);
+          otaShowResult(title, "");
+          break;
+        }
+        case ota::Availability::NotForThisBoard:
+          snprintf(detail, sizeof(detail), "Release %s has no file for %s", m.version, FW_VARIANT);
+          otaShowResult("No update for this device", detail);
+          break;
+        case ota::Availability::NeedsNewerFirmware:
+          snprintf(detail, sizeof(detail), "Release %s needs build %u or newer: install it over USB",
+                   m.version, (unsigned)m.minBuild);
+          otaShowResult("Update needs a USB install", detail);
+          break;
+        case ota::Availability::Newer:
+          if (!otaBatteryOk()) {
+            otaSetAvailable(&m);
+            snprintf(detail, sizeof(detail), "Battery %d %% - an update needs %d %% or USB power",
+                     batteryPercentNow(), OTA_BATTERY_MIN_PCT);
+            otaShowResult("Battery too low for an update: please charge", detail);
+          } else if (trigger == OtaTrigger::DoubleTap) {
+            ota::showAvailable(m, FW_VERSION, true, OTA_CONFIRM_MS);
+            if (waitForConfirmTap(OTA_CONFIRM_MS)) {
+              ota::showAvailable(m, FW_VERSION, false, 0);
+              otaInstallAndRestart(m);  // returns only after a failure
+            } else {
+              otaSetAvailable(&m);  // no tap: back to the dashboard, the mark stays
+              otaSaveResult("%s available, not installed", m.version);
+            }
+          } else {
+            ota::showAvailable(m, FW_VERSION, false, 0);
+            otaInstallAndRestart(m);
+          }
+          break;
+      }
+    }
+  }
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_OFF);
+  setCpuFrequencyMhz(80);
+}
+
+// Night-time check due (OTA_NIGHT_HOUR, once per day)? Needs the real time.
+static bool otaNightCheckDue(int* todayKey) {
+  time_t now = time(nullptr);
+  if (now < 1700000000) return false;
+  LocalTimezone tz;
+  struct tm t;
+  localtime_r(&now, &t);
+  *todayKey = ota::dayKey(t.tm_year + 1900, t.tm_yday);
+  return ota::nightCheckDue(t.tm_hour, *todayKey, otaLastCheckDay, OTA_NIGHT_HOUR);
+}
+
+// Night-time check, while Wi-Fi is up. Returns true if it drew an update screen (the dashboard
+// must be redrawn).
+static bool runNightCheck(int todayKey) {
+  // Once per night, also after a failure. In NVS: an install or rollback restart would reset RTC
+  // memory and start the check again.
+  otaLastCheckDay = todayKey;
+  preferences.begin("config", false);
+  preferences.putInt("ota_day", todayKey);
+  preferences.end();
+  ota::Manifest m;
+  ota::FetchOutcome f = ota::fetchManifest(m);
+  if (f.result != ota::FetchResult::Ok) {
+    char detail[80];
+    describeFetchFailure(f, detail, sizeof(detail));
+    otaSaveResult("Night check failed: %s", detail);
+    return false;
+  }
+  ota::Availability a = ota::availability(m.build, m.minBuild, m.hasFile, FW_BUILD);
+  bool failed = ota::failedBefore(m.build, otaBadBuild);
+  switch (ota::nightAction(a, otaAutoInstall, otaBatteryOk(), failed)) {
+    case ota::NightAction::Nothing:
+      if (a == ota::Availability::UpToDate) otaSetAvailable(nullptr);
+      otaSaveResult("Night check: %s", a == ota::Availability::UpToDate ? "up to date" : "no installable update");
+      return false;
+    case ota::NightAction::NotifyOnly:
+      otaSetAvailable(&m);
+      otaSaveResult(failed ? "Night check: %s available, failed before - install it with a double tap"
+                           : "Night check: %s available", m.version);
+      return false;
+    case ota::NightAction::WaitForCharge:
+      otaSetAvailable(&m);
+      otaSaveResult("Night check: %s waits, battery too low", m.version);
+      return false;
+    case ota::NightAction::Install:
+      initDisplay(false);
+      ota::showAvailable(m, FW_VERSION, false, 0);
+      otaInstallAndRestart(m);  // returns only after a failure
+      return true;
+  }
+  return false;
+}
+
+// The bootloader starts a new image in "pending verify" state; it is confirmed here once Wi-Fi
+// and a display refresh have worked. A crash or reset before that rolls back to the old version.
+extern "C" bool verifyRollbackLater() { return true; }
+
+// Called before deep sleep, after the dashboard was drawn. Without Wi-Fi the new firmware isn't
+// confirmed: roll back right away with a clean restart (not through deep sleep, whose wake would
+// start the old firmware on RTC memory laid out by the new one).
+static esp_timer_handle_t otaHangTimer = nullptr;
+
+// Confirms the running image and records the update. Also called from the button task: uses its
+// own Preferences object, not the global one the main task may have open.
+static void otaMarkValid(const char* why) {
+  if (!otaPendingVerify) return;
+  esp_ota_mark_app_valid_cancel_rollback();
+  otaPendingVerify = false;
+  if (otaHangTimer) esp_timer_stop(otaHangTimer);
+  otaAvailBuild = 0;
+  Preferences p;
+  p.begin("config", false);
+  p.putUInt("ota_updt", (uint32_t)time(nullptr));
+  p.putUInt("ota_done", 0);
+  p.putUInt("ota_avail", 0);
+  char text[48];
+  snprintf(text, sizeof(text), "Updated to %s", FW_VERSION);
+  p.putString("ota_result", text);
+  p.putUInt("ota_rtime", (uint32_t)time(nullptr));
+  p.end();
+  Serial.printf("[OTA] new firmware %s confirmed (%s)\n", FW_VERSION, why);
+}
+
+// The user is operating the device (a hold, setup mode, the update screen): the new firmware
+// clearly runs, so a restart now must not roll it back.
+static void otaConfirmByUser(const char* why) {
+  otaMarkValid(why);
+}
+
+static void otaConfirmIfPending() {
+  if (!otaPendingVerify) return;
+  if (!otaWifiOk) {
+    Serial.println("[OTA] new firmware not confirmed (no Wi-Fi): rolling back");
+    Serial.flush();
+    esp_ota_mark_app_invalid_rollback_and_reboot();
+    return;  // only if there is no previous version to go back to
+  }
+  otaMarkValid("Wi-Fi and display OK");
+}
+
+// Early at boot: is this a new, not yet confirmed image? Then a hang must not keep it forever: a
+// one-shot timer restarts the board, and the bootloader rolls back (a restart before the
+// confirmation always does).
+static void otaReadBootState() {
+  const esp_partition_t* running = esp_ota_get_running_partition();
+  esp_ota_img_states_t state;
+  otaPendingVerify = running && esp_ota_get_state_partition(running, &state) == ESP_OK &&
+                     state == ESP_OTA_IMG_PENDING_VERIFY;
+  if (!otaPendingVerify) return;
+  Serial.println("[OTA] new firmware, not confirmed yet");
+  esp_timer_create_args_t args = {};
+  args.callback = [](void*) { esp_restart(); };
+  args.name = "ota_hang";
+  if (esp_timer_create(&args, &otaHangTimer) == ESP_OK)
+    esp_timer_start_once(otaHangTimer, OTA_CONFIRM_TIMEOUT_S * 1000000ULL);
+}
+
+// At boot, after the button: "Updated to" screen once, or the notice of a rollback.
+static void otaBootCheck() {
+  preferences.begin("config", true);
+  uint32_t doneBuild = preferences.getUInt("ota_done", 0);
+  char notes[ota::MAX_NOTES][ota::NOTE_LEN] = {};
+  uint8_t noteCount = preferences.getUChar("ota_nn", 0);
+  if (noteCount > ota::MAX_NOTES) noteCount = ota::MAX_NOTES;
+  for (int i = 0; i < noteCount; i++) preferences.getString(OTA_NOTE_KEYS[i], notes[i], ota::NOTE_LEN);
+  preferences.end();
+  if (!doneBuild) return;
+
+  if (doneBuild == FW_BUILD) {
+    if (!otaPendingVerify) {  // already confirmed (e.g. by a hold right away): just clean up
+      preferences.begin("config", false);
+      preferences.putUInt("ota_done", 0);
+      preferences.end();
+      return;
+    }
+    initDisplay(true);
+    ota::showUpdated(FW_VERSION, notes, noteCount);
+    otaUpdatedShownAt = millis();
+    if (!otaUpdatedShownAt) otaUpdatedShownAt = 1;
+    return;
+  }
+  if (doneBuild > FW_BUILD && esp_ota_get_last_invalid_partition() == nullptr) {
+    doneBuild = 0;  // no rolled-back image: the restart into the update never happened
+  }
+  // An update was installed but this (older) firmware runs: the new one failed and rolled back.
+  preferences.begin("config", false);
+  preferences.putUInt("ota_done", 0);
+  if (doneBuild > FW_BUILD) {
+    otaBadBuild = doneBuild;  // not installed again automatically (no reinstall loop)
+    preferences.putUInt("ota_bad", otaBadBuild);
+  }
+  preferences.end();
+  if (doneBuild > FW_BUILD) {
+    otaSaveResult("Update to build %u failed after the restart: %s kept", (unsigned)doneBuild, FW_VERSION);
+    initDisplay(true);
+    ota::showMessage("Update failed: previous version kept", "The new version did not start correctly.", true);
+    delay(OTA_RESULT_SCREEN_MS);  // a cold start: the dashboard is fully redrawn next
+  }
+}
+
+// =======================
 // Setup
 // =======================
 void setup() {
@@ -1693,6 +2215,12 @@ void setup() {
     case ESP_SLEEP_WAKEUP_ULP: Serial.println("Wakeup caused by ULP program"); break;
     default: Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason); break;
   }
+  // An update screen covered the dashboard during the last wake: redraw (and refetch) everything.
+  if (redrawAll) {
+    redrawAll = false;
+    fullRefresh = true;
+    bootCount = 0;
+  }
 
   preferences.begin("config", true);
   memset(wifi_ssid, 0, sizeof(wifi_ssid));
@@ -1733,9 +2261,17 @@ void setup() {
   if (activePinPreset == PinPreset::Esp32C6SuperMini) {
     forceSuperMiniLedsOff();
   }
-
+  otaAutoInstall = preferences.getBool("ota_auto", true);
+  otaAvailBuild = preferences.getUInt("ota_avail", 0);
+  preferences.getString("ota_availv", otaAvailVersion, sizeof(otaAvailVersion));
+  if (otaAvailBuild <= FW_BUILD) otaAvailBuild = 0;  // already installed
+  otaLastCheckDay = preferences.getInt("ota_day", 0);
+  otaBadBuild = preferences.getUInt("ota_bad", 0);
 
   preferences.end();
+  DBGF("Firmware %s (build %d, %s), auto update %s", FW_VERSION, FW_BUILD, FW_VARIANT,
+       otaAutoInstall ? "on" : "off");
+  otaReadBootState();
 
   // Setup mode asked by a setup hold while the board was awake.
   if (setupRequest == SETUP_REQUEST_MAGIC) {
@@ -1758,13 +2294,18 @@ void setup() {
 #endif
 
   // Check the button as early as possible, so the hold time matches what the user feels.
+  bool updateScreenRequested = false;
   switch (readWakeButtonAction()) {
     case BUTTON_ACTION_AP:
       startAP();
       return;
     case BUTTON_ACTION_REBOOT:
+      otaConfirmByUser("reboot hold");
       ESP.restart();
       return;
+    case BUTTON_ACTION_UPDATE:
+      updateScreenRequested = true;
+      break;
     case BUTTON_ACTION_NONE:
     default:
       break;
@@ -1772,6 +2313,16 @@ void setup() {
   if (hasDemoButtonPin()) {
     xTaskCreate(buttonWatchTask, "button", 3072, nullptr, 2, nullptr);
   }
+
+  // Update screen: double tap, or "Check for updates now" on the setup page (before the restart).
+  bool setupPageUpdate = updateRequest == UPDATE_REQUEST_MAGIC;
+  updateRequest = 0;
+  if (setupPageUpdate || updateScreenRequested) {
+    runUpdateSession(setupPageUpdate ? OtaTrigger::SetupPage : OtaTrigger::DoubleTap);
+    fullRefresh = true;  // the update screen covered the dashboard
+    bootCount = 0;
+  }
+  otaBootCheck();
 
 // DBGF("Wifi %s Pass %s", wifi_ssid.c_str(), wifi_pass.c_str());
 
@@ -1865,21 +2416,27 @@ void setup() {
     display.powerOff();  // keeps controller RAM; the panel is powered again for the next update
   }
 
+  // Daily update check at night (installs or only marks, see runNightCheck).
+  int otaTodayKey = 0;
+  bool otaNightDue = !otaPendingVerify && otaNightCheckDue(&otaTodayKey);
+
   // Bring Wi-Fi up only when at least one widget needs fresh data.
   bool needWiFi =
     eventIf || stocksIf || openMeteoIf || trackingIf || bambuIf || fullRefresh || flightStatusDue
     || (calendarIf && hasIcsFeeds())
     || makerworldDue
-    || ntpDue;
+    || ntpDue
+    || otaNightDue
+    || otaPendingVerify;  // a new firmware confirms itself only after Wi-Fi worked
 
   // Wi-Fi failed recently: keep the previous content until the backoff ends (a button wake
   // always tries).
-  if (needWiFi && wifiFailures && nowTs < wifiRetryAfter &&
+  if (needWiFi && wifiFailures && nowTs < wifiRetryAfter && !otaPendingVerify &&
       esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_EXT1) {
     DBGF("WiFi backoff: next attempt in %ld s", (long)(wifiRetryAfter - nowTs));
     needWiFi = false;
     if (!fullRefresh) openMeteoIf = stocksIf = eventIf = calendarIf = trackingIf = false;
-    bambuIf = makerworldDue = flightStatusDue = false;
+    bambuIf = makerworldDue = flightStatusDue = otaNightDue = false;
   }
 
   DBGF("Bambu %d Print %d Prev %d Weather %d Stocks %d Events %d Calendar %d MW %d NTP %d Full %d",
@@ -1890,6 +2447,7 @@ void setup() {
     setCpuFrequencyMhz(cpuFullMhz);
     if (startWiFiReliable(wifi_ssid, wifi_pass)) {
       DBG("WiFi connected.");
+      otaWifiOk = true;
       wifiFailures = 0;
       setProblem(PROBLEM_WIFI, false);
       initTime();
@@ -1955,6 +2513,9 @@ void setup() {
         setProblem(PROBLEM_TIME, true);
       }
 
+      // Last, so the dashboard data is already fetched. An auto install restarts the board.
+      if (otaNightDue && runNightCheck(otaTodayKey)) redrawAll = true;
+
     } else {
       DBG("WiFi FAILED → keeping the previous content");
       setProblem(PROBLEM_WIFI, true);
@@ -1985,6 +2546,9 @@ void setup() {
   /* FullREFRESH */
   if (fullRefresh) {
     DBG(F("Do the full refresh"));
+
+    // "Updated to" after an update restart stays at least OTA_DONE_SCREEN_MS.
+    while (otaUpdatedShownAt && millis() - otaUpdatedShownAt < OTA_DONE_SCREEN_MS) delay(50);
 
     display.setFullWindow();
     display.fillScreen(GxEPD_WHITE);
@@ -2042,6 +2606,19 @@ void setup() {
     if (infoBattery && (batteryIf || forceUpdateStatusBar || problems != problemsShown))
       updatePartial(infoBattery, drawStatus);
   }
+  // A double tap while the dashboard was refreshing: open the update screen now. A tap may still
+  // be waiting for its second tap.
+  unsigned long tapWait = millis();
+  while (buttonBusy && millis() - tapWait < BUTTON_DOUBLE_TAP_MS + 200UL) delay(10);
+  if (buttonMailbox == ButtonEvent::DoubleTap) {
+    buttonMailbox = ButtonEvent::None;
+    runUpdateSession(OtaTrigger::DoubleTap);
+    redrawAll = true;
+  }
+
+  // A freshly installed firmware: confirm it now that Wi-Fi and the display worked (or roll back).
+  otaConfirmIfPending();
+
   bootCount++;
   DBGF("Finished Boot %d\n", bootCount);
 
@@ -2055,6 +2632,7 @@ void setup() {
   } else {
     DBG(F("Time not set, sleeping 60s"));
   }
+  if (redrawAll) sleep_us = 1000000ULL;  // redraw the dashboard right away
   DBGF("Awake %lu ms, sleeping %llu ms", millis(), sleep_us / 1000ULL);
 
   // hibernate() clears the controller's internal frame buffer used for partial refresh XOR.

@@ -74,6 +74,9 @@ arduino-cli monitor -p COM3 --profile esp32c6_firebeetle -c baudrate=115200
 - The monitor disconnects when the board sleeps. Press RST to see a full boot log.
 - Settings (Wi-Fi, keys, location) live in NVS and survive firmware uploads.
 - Setup mode without the touch sensor: tap **RST**, then within 3 s hold **BOOT** for 1 s.
+- **One-time step for build 64 (OTA partition table):** the first upload of build 64 or later changes the
+  flash layout to two app slots. Settings survive (NVS keeps its offset). After that, updates come over the
+  air (double tap, setup page button, or at night). Publishing a release: [OTA_UPDATES.md](OTA_UPDATES.md#publishing-a-release).
 
 ## Host tests
 
