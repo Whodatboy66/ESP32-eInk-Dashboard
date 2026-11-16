@@ -79,7 +79,7 @@ jobs:
         include:
           # arduino-cli ignores the build properties of sketch.yaml profiles, so the pin preset
           # define is passed here. Locally the preset follows the board (configure.h), except
-          # esp32_waveshare, which needs the same flag (see README "arduino-cli").
+          # esp32_waveshare, which needs the same flag (see docs/USER_GUIDE.md "arduino-cli").
           - name: ESP32
             profile: esp32
             preset: DEFAULT_PIN_PRESET_ESP32

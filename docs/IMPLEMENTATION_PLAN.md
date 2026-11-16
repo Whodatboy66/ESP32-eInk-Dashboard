@@ -137,7 +137,7 @@ doctest** in CI (spec §15). Switching to PlatformIO isn't needed for this.
 
 Order differs slightly from spec §14: **OTA comes early (stage 1)**. Every later stage then reaches devices
 without USB, and the partition change (the only step that needs USB) happens once, before devices are
-handed out. Every stage ends with a `FW_BUILD` bump, a changelog line and, from stage 1 on, a beta release.
+handed out. Every stage ends with a `FW_BUILD` bump, a line in [CHANGELOG.md](../CHANGELOG.md) and, from stage 1 on, a beta release.
 
 ### Stage 0: Reproducible base (spec Phase 1)
 - [x] Fix `sketch.yaml` profiles (partition, Zigbee flag): done `daa506c`
@@ -149,6 +149,7 @@ handed out. Every stage ends with a `FW_BUILD` bump, a changelog line and, from 
 - [x] CI: compile on every push and pull request + size check (fails above the planned 1.875 MB OTA slot, flash/RAM table in the run summary); host tests (`tests/host/run.sh`); releases only from a manual run with "release" ticked
 - [x] Button input fix (A.6): pull-down (kept in deep sleep), 15 s fault limit (no gesture, no button wake while stuck), setup on release after 4 s; BOOT button backup (tap RST, then hold BOOT 1 s). Gesture logic in `src/input/ButtonGesture.h` with host tests. **Not yet tested on hardware**
 - [ ] License question to upstream (A.5): issue text drafted, to be posted by me
+- [x] Repository layout: short README, manual in `docs/USER_GUIDE.md`, `docs/images/`, font converter in `tools/`, `CHANGELOG.md` (code moves into `src/` with stage 2)
 
 **Done when:** a push builds in CI with a size report; the device boots into the dashboard with no sensor connected.
 
@@ -237,7 +238,4 @@ Only tests actually performed on the device go here.
 
 ## Changelog
 
-| Version | Stage | Change |
-|---|---|---|
-| .63 + fork | 0 | `sketch.yaml` profiles fixed; `tools/epd_test`; docs |
-| .63 + fork | 0 | Zigbee removed; CI builds the `sketch.yaml` profiles on every push with a size check and host tests; button: pull-down, fault limit, setup on release, BOOT backup |
+Moved to [CHANGELOG.md](../CHANGELOG.md).

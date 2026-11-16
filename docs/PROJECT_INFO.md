@@ -1,7 +1,7 @@
 # Project info (fork: Whodatboy66/ESP32-eInk-Dashboard)
 
 Fork of [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard).
-The upstream README describes the features and setup page. This file covers our hardware,
+The user manual ([USER_GUIDE.md](USER_GUIDE.md), the upstream README) describes the features and setup page. This file covers our hardware,
 our workflow and what we found while bringing it up.
 
 Requirements: "Development Specification: Modular E-Ink Smart Dashboard Platform" (Google Doc, Jonas).
@@ -108,8 +108,8 @@ logs `took ~3400 ms -> DISPLAY RESPONDED`.
 | `sketch.yaml` profiles used the default 1.25 MB partition; Zigbee profiles never set `USE_ZIGBEE` (arduino-cli ignores `build.properties` in profiles) | Fixed (`daa506c`) |
 | Zigbee (smart plug following the Bambu aux fan) not needed on a dashboard | Removed completely (code, profiles, CI, README) |
 | Button GPIO2 uses `INPUT_PULLUP` but is active-HIGH (TTP223): with nothing connected the pin can read "held" and open setup mode by itself | Fixed in code (stage 0): pull-down (also in deep sleep), 15 s fault limit, BOOT backup. Not yet tested on hardware |
-| README's `upload.maximum_size=3604480` doesn't match `partitions.csv` (app0 = 0x360000 = 3538944) | Fixed in README |
-| Profiles ignore `build.properties` too: the `esp32_waveshare` profile built with the plain ESP32 pin preset, and `PartitionScheme=custom` sets the size limit to the whole flash (16 MB) | Blocks removed from `sketch.yaml`; CI passes the preset flag and the size limits; README shows the flag for `esp32_waveshare` |
+| README's `upload.maximum_size=3604480` doesn't match `partitions.csv` (app0 = 0x360000 = 3538944) | Fixed in the user guide |
+| Profiles ignore `build.properties` too: the `esp32_waveshare` profile built with the plain ESP32 pin preset, and `PartitionScheme=custom` sets the size limit to the whole flash (16 MB) | Blocks removed from `sketch.yaml`; CI passes the preset flag and the size limits; the user guide shows the flag for `esp32_waveshare` |
 | CI workflow uses core 3.3.12 / GxEPD2 1.6.9 / GFX 1.12.6, profiles use 3.3.7 / 1.6.8 / 1.12.5 | Fixed: CI builds the `sketch.yaml` profiles |
 | All HTTPS calls use `setInsecure()` (no certificate check) | Stage 2 (full security list: plan A.4) |
 | Upstream repo has no license; HighSpeed font is personal-use only | See plan A.5 |
