@@ -145,7 +145,7 @@ handed out. Every stage ends with a `FW_BUILD` bump, a line in [CHANGELOG.md](..
 - [x] Assessment (Part A)
 - [x] Remove Zigbee (smart-plug automation, unrelated to the dashboard): code, profiles, CI, README
 - [x] Align CI with `sketch.yaml`: CI builds the profiles (`--profile`), so core and library versions come from one place; library patches dropped (not needed for the pinned versions)
-- [ ] Enable Actions on the fork (GitHub: Settings → Actions → General); first green run on GitHub
+- [x] Enable Actions on the fork (Actions tab → "I understand my workflows, go ahead and enable them"); first green run on GitHub: 2026-11-16
 - [x] CI: compile on every push and pull request + size check (fails above the planned 1.875 MB OTA slot, flash/RAM table in the run summary); host tests (`tests/host/run.sh`); releases only from a manual run with "release" ticked
 - [x] Button input fix (A.6): pull-down (kept in deep sleep), 15 s fault limit (no gesture, no button wake while stuck), setup on release after 4 s; BOOT button backup (tap RST, then hold BOOT 1 s). Gesture logic in `src/input/ButtonGesture.h` with host tests. **Not yet tested on hardware**
 - [ ] License question to upstream (A.5): issue text drafted, to be posted by me
