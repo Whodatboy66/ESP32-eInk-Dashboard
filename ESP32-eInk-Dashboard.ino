@@ -18,6 +18,9 @@
 #include <cstdarg>
 #include <new>
 #include <esp32-hal-rgb-led.h>
+#include <driver/gpio.h>
+#include <driver/rtc_io.h>
+#include "src/input/ButtonGesture.h"
 
 static void copyToCfg(char* dest, size_t cap, const String& s) {
   if (!dest || cap == 0) return;
@@ -233,6 +236,9 @@ bool hasRequiredDisplayPins(const PinConfig& pins) {
 }
 
 void forceSuperMiniLedsOff() {
+  // GPIO8 / GPIO15 are the SuperMini's LEDs only: on other boards they are display pins
+  // (FireBeetle C6: GPIO8 = e-paper DC; ESP32: GPIO15 = CS), so leave them alone there.
+  if (activePinPreset != PinPreset::Esp32C6SuperMini) return;
   pinMode(15, OUTPUT);
   digitalWrite(15, LOW);
   rgbLedWrite(8, 0, 0, 0);
@@ -1368,83 +1374,153 @@ constexpr int BUTTON_ACTION_NONE = 0;
 constexpr int BUTTON_ACTION_AP = 2;
 constexpr int BUTTON_ACTION_REBOOT = 3;
 
+static constexpr ButtonTiming BUTTON_TIMING{
+  BUTTON_REBOOT_HOLD_MS, BUTTON_SETUP_HOLD_MS, BUTTON_FAULT_MS, BUTTON_DEBOUNCE_MS};
+
+// Set when the input read "pressed" for BUTTON_FAULT_MS (stuck, disconnected or recalibrating
+// sensor). Kept across deep sleep: while it is set and the input still reads HIGH, the input is
+// ignored and the board doesn't wake on it. Cleared as soon as the input reads LOW.
+RTC_DATA_ATTR volatile bool buttonFaulted = false;
+
+// Input with the internal pull-down: an unconnected pin reads LOW ("not pressed").
+static void configureButtonInput() {
+  // Before deep sleep the pad's pull-down is latched (pad hold) by the sleep code; release it so
+  // pinMode() takes effect.
+  gpio_hold_dis(getDemoWakeGpio());
+  pinMode(activePins.demoButton, INPUT_PULLDOWN);
+}
+
 int readWakeButtonAction() {
   if (!hasDemoButtonPin()) {
     return BUTTON_ACTION_NONE;
   }
 
-  pinMode(activePins.demoButton, INPUT_PULLUP);
-  DBGF("[Button] GPIO%d is %s at %lu ms", activePins.demoButton,
-       digitalRead(activePins.demoButton) == HIGH ? "HIGH (pressed)" : "LOW", millis());
-  if (digitalRead(activePins.demoButton) != HIGH) {
+  configureButtonInput();
+  bool high = digitalRead(activePins.demoButton) == HIGH;
+  DBGF("[Button] GPIO%d is %s at %lu ms%s", activePins.demoButton,
+       high ? "HIGH (pressed)" : "LOW", millis(), buttonFaulted ? " (sensor fault flagged)" : "");
+  if (!high) {
+    buttonFaulted = false;
+    return BUTTON_ACTION_NONE;
+  }
+  if (buttonFaulted) {
+    DBG(F("[Button] still HIGH since the fault: ignored"));
     return BUTTON_ACTION_NONE;
   }
 
   // After a button wake the press began at wake time, so count the boot time as held time.
-  unsigned long pressStart = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1 ? 0 : millis();
-  while (digitalRead(activePins.demoButton) == HIGH) {
-    unsigned long heldMs = millis() - pressStart;
-    updateSuperMiniHoldFeedback(heldMs);
-    if (heldMs >= BUTTON_SETUP_HOLD_MS) {
-      Serial.println("Button held -> AP config mode");
-      forceSuperMiniLedsOff();
-      flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
-      return BUTTON_ACTION_AP;
+  ButtonGesture gesture(BUTTON_TIMING);
+  gesture.beginPress(esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1 ? 0 : millis());
+  for (;;) {
+    uint32_t now = millis();
+    switch (gesture.update(digitalRead(activePins.demoButton) == HIGH, now)) {
+      case ButtonEvent::None:
+        updateSuperMiniHoldFeedback(gesture.heldMs(now));
+        delay(10);
+        break;
+      case ButtonEvent::Tap:
+        forceSuperMiniLedsOff();
+        return BUTTON_ACTION_NONE;
+      case ButtonEvent::Reboot:
+        forceSuperMiniLedsOff();
+        Serial.println("Button held -> reboot");
+        flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
+        return BUTTON_ACTION_REBOOT;
+      case ButtonEvent::Setup:
+        forceSuperMiniLedsOff();
+        Serial.println("Button held -> AP config mode");
+        flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
+        return BUTTON_ACTION_AP;
+      case ButtonEvent::Fault:
+        forceSuperMiniLedsOff();
+        Serial.printf("[Button] HIGH for %u s: sensor fault, ignored until it reads LOW\n",
+                      (unsigned)(BUTTON_FAULT_MS / 1000));
+        buttonFaulted = true;
+        return BUTTON_ACTION_NONE;
     }
-    delay(10);
   }
-
-  forceSuperMiniLedsOff();
-
-  if (millis() - pressStart >= BUTTON_REBOOT_HOLD_MS) {
-    Serial.println("Button held -> reboot");
-    flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
-    return BUTTON_ACTION_REBOOT;
-  }
-  return BUTTON_ACTION_NONE;
 }
 
-// A 4 s hold while awake restarts the board into setup mode. RTC_DATA_ATTR is reset by a
+// A setup hold while awake restarts the board into setup mode. RTC_DATA_ATTR is reset by a
 // restart, so the request lives in no-init RTC memory, guarded by a magic value.
 constexpr uint32_t SETUP_REQUEST_MAGIC = 0x5E7AB0A7;
 RTC_NOINIT_ATTR uint32_t setupRequest;
 
+// True while the watch task tracks a press (including the release debounce) or is acting on a
+// gesture (restarting). The sleep path waits for it, so a release just before sleep isn't lost.
+static volatile bool buttonBusy = false;
+
 // Watches the button while the dashboard is awake (WiFi, fetching, drawing), so a hold works at
 // any time, not only from deep sleep. A short tap is ignored: the dashboard is already refreshing.
 static void buttonWatchTask(void*) {
-  bool pressed = false;
-  unsigned long pressStart = 0;
-  int lowPolls = 0;
+  ButtonGesture gesture(BUTTON_TIMING, buttonFaulted);
   for (;;) {
-    bool high = digitalRead(activePins.demoButton) == HIGH;
+    uint32_t now = millis();
+    switch (gesture.update(digitalRead(activePins.demoButton) == HIGH, now)) {
+      case ButtonEvent::None:
+        if (gesture.isPressed()) updateSuperMiniHoldFeedback(gesture.heldMs(now));
+        break;
+      case ButtonEvent::Tap:
+        forceSuperMiniLedsOff();
+        break;
+      case ButtonEvent::Reboot:
+        buttonBusy = true;
+        forceSuperMiniLedsOff();
+        Serial.println("Button held -> reboot");
+        flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
+        ESP.restart();
+        break;
+      case ButtonEvent::Setup:
+        buttonBusy = true;
+        setupRequest = SETUP_REQUEST_MAGIC;
+        forceSuperMiniLedsOff();
+        Serial.println("Button held -> AP config mode");
+        flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
+        ESP.restart();
+        break;
+      case ButtonEvent::Fault:
+        forceSuperMiniLedsOff();
+        Serial.println("[Button] held past BUTTON_FAULT_MS: sensor fault, ignored until it reads LOW");
+        break;
+    }
+    buttonFaulted = gesture.isFaulted();
+    buttonBusy = gesture.isPressed();
+    vTaskDelay(pdMS_TO_TICKS(20));
+  }
+}
+
+#ifdef BOOT_BUTTON_PIN
+// Right after a reset: true when BOOT is pressed within BOOT_SETUP_WINDOW_MS and held for
+// BOOT_SETUP_HOLD_MS (backup way into setup mode without the touch sensor). Without a press
+// this waits the whole window, which also gives a USB serial monitor time to attach.
+static bool waitForBootButtonSetup() {
+  pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);  // BOOT pulls the pin LOW; boards have a pull-up too
+  unsigned long start = millis();
+  unsigned long pressStart = 0;
+  bool pressed = false;
+  for (;;) {
     unsigned long now = millis();
-    if (high) {
-      lowPolls = 0;
+    if (digitalRead(BOOT_BUTTON_PIN) == LOW) {
       if (!pressed) {
         pressed = true;
         pressStart = now;
       }
-      unsigned long heldMs = now - pressStart;
-      updateSuperMiniHoldFeedback(heldMs);
-      if (heldMs >= BUTTON_SETUP_HOLD_MS) {
-        Serial.println("Button held -> AP config mode");
-        forceSuperMiniLedsOff();
-        flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
-        setupRequest = SETUP_REQUEST_MAGIC;
-        ESP.restart();
-      }
-    } else if (pressed && ++lowPolls >= 3) {  // released for 60 ms (debounce)
+      if (now - pressStart >= BOOT_SETUP_HOLD_MS) return true;
+    } else {
       pressed = false;
-      forceSuperMiniLedsOff();
-      if (now - pressStart >= BUTTON_REBOOT_HOLD_MS) {
-        Serial.println("Button held -> reboot");
-        flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
-        ESP.restart();
-      }
+      if (now - start >= BOOT_SETUP_WINDOW_MS) return false;
     }
-    vTaskDelay(pdMS_TO_TICKS(20));
+    delay(10);
   }
 }
+
+static bool isPinInActiveConfig(int16_t pin) {
+  const PinConfig& p = activePins;
+  return pin == p.epdCs || pin == p.epdDc || pin == p.epdRst || pin == p.epdBusy ||
+         pin == p.epdSck || pin == p.epdMosi || pin == p.displayPower || pin == p.battery ||
+         pin == p.demoButton;
+}
+#endif
 
 // Access point of the last successful connection, kept across deep sleep. Connecting with a known
 // channel and BSSID skips the scan of every channel, which keeps the radio on for seconds.
@@ -1586,8 +1662,12 @@ void setup() {
 
   Serial.begin(115200);
   bool coldBoot = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED;
-#if DEBUG
-  // After a reset / flash (not a timer wake) give the USB serial monitor time to attach.
+  // After a reset / flash (not a timer wake): watch the BOOT button for a few seconds (backup
+  // way into setup mode). The wait also gives the USB serial monitor time to attach.
+  [[maybe_unused]] bool bootButtonSetup = false;
+#ifdef BOOT_BUTTON_PIN
+  if (coldBoot) bootButtonSetup = waitForBootButtonSetup();
+#elif DEBUG
   if (coldBoot) delay(3000);
 #endif
 #if CONFIG_IDF_TARGET_ESP32
@@ -1657,12 +1737,25 @@ void setup() {
 
   preferences.end();
 
-  // Setup mode asked by a 4 s hold while the board was awake.
+  // Setup mode asked by a setup hold while the board was awake.
   if (setupRequest == SETUP_REQUEST_MAGIC) {
     setupRequest = 0;
     startAP();
     return;
   }
+
+#ifdef BOOT_BUTTON_PIN
+  // Setup mode asked by holding BOOT right after a reset (works without the touch sensor).
+  if (bootButtonSetup) {
+    if (isPinInActiveConfig(BOOT_BUTTON_PIN)) {
+      Serial.printf("BOOT held, but GPIO%d is used by the pin map: ignored\n", BOOT_BUTTON_PIN);
+    } else {
+      Serial.println("BOOT held after reset -> AP config mode");
+      startAP();
+      return;
+    }
+  }
+#endif
 
   // Check the button as early as possible, so the hold time matches what the user feels.
   switch (readWakeButtonAction()) {
@@ -1980,16 +2073,32 @@ void setup() {
   }
 
   if (hasDemoButtonPin()) {
-    // A hold in progress: let the button task finish it, instead of waking right back up and
-    // restarting the count.
-    if (digitalRead(activePins.demoButton) == HIGH) {
-      while (digitalRead(activePins.demoButton) == HIGH) delay(10);
-      delay(500);  // the button task may be restarting the board
+    const gpio_num_t buttonGpio = getDemoWakeGpio();
+    // A press in progress: let the button task finish it (it restarts the board for a gesture, or
+    // flags a fault after BUTTON_FAULT_MS), instead of sleeping and losing it. The pin is checked
+    // too, for a press the task hasn't polled yet. Bounded in case the task isn't running.
+    unsigned long waitStart = millis();
+    while ((buttonBusy || digitalRead(activePins.demoButton) == HIGH) && !buttonFaulted &&
+           millis() - waitStart < BUTTON_FAULT_MS + 1000UL) {
+      delay(10);
     }
-    esp_sleep_enable_ext1_wakeup(
-      (1ULL << getDemoWakeGpio()),
-      ESP_EXT1_WAKEUP_ANY_HIGH  // Wake when pin goes HIGH
-    );
+    if (digitalRead(activePins.demoButton) == HIGH) {
+      // Stuck HIGH: a button wake would fire at once and keep the board awake. Timer wakes only,
+      // until the input reads LOW again.
+      DBG(F("[Button] input stuck HIGH: button wake off for this sleep"));
+    } else {
+      buttonFaulted = false;  // reads LOW: the sensor is fine again (the task may not have seen it yet)
+      esp_sleep_enable_ext1_wakeup(
+        (1ULL << buttonGpio),
+        ESP_EXT1_WAKEUP_ANY_HIGH  // Wake when pin goes HIGH
+      );
+      // Keep the pull-down during deep sleep, so a missing sensor can't float HIGH and wake the
+      // board. The sleep code latches it with the pad hold (released in configureButtonInput()).
+      if (rtc_gpio_is_valid_gpio(buttonGpio)) {
+        rtc_gpio_pullup_dis(buttonGpio);
+        rtc_gpio_pulldown_en(buttonGpio);
+      }
+    }
   }
 
   esp_sleep_enable_timer_wakeup(sleep_us);

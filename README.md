@@ -46,7 +46,7 @@ Minimum:
 Optional:
 
 - a LiPo battery (the battery widget reads it through a voltage divider)
-- a push button or `TTP223` touch module, to refresh, reboot or reopen setup mode
+- a push button (to 3V3) or `TTP223` touch module, to refresh, reboot or reopen setup mode
 - a Bambu Lab printer on the same network
 
 Boards used during development:
@@ -74,7 +74,7 @@ The firmware picks the matching preset for your board automatically. You can cho
 3. **Join the Wi-Fi network `Dashboard-Setup`** from your phone or computer. The setup page opens by itself (captive portal). If it doesn't, browse to `http://192.168.4.1`.
 4. **Fill in the setup page** (see below) and press **Save Configuration**. The device restarts and draws the dashboard.
 
-To change the settings later, hold the button for 4 seconds to reopen setup mode (see [Wake button](#wake-button)).
+To change the settings later, hold the button for 4 seconds and release it to reopen setup mode (see [Wake button](#wake-button)). Without a button: tap **RST**, then press and hold **BOOT** for 1 second.
 
 ## The setup page
 
@@ -249,13 +249,20 @@ If no MakerWorld ID is set, the panel shows the idle printer status instead.
 
 The button is optional. Without it, the device wakes on its timer only.
 
+It is an active-HIGH input with the internal pull-down: a `TTP223` module with its default settings (solder jumpers A and B open) or a push button between the pin and 3V3. An unconnected pin reads "not pressed". The `TTP223` calibrates itself at power-up, so don't touch it while powering on.
+
 | Action | Result |
 | --- | --- |
 | Short tap | Wakes the device and does a full refresh |
 | Hold 2 seconds, then release | Reboots the dashboard |
-| Hold 4 seconds | Setup mode: starts the `Dashboard-Setup` network and the setup page |
+| Hold 4 seconds, then release | Setup mode: starts the `Dashboard-Setup` network and the setup page |
+| Held 15 seconds or longer | Treated as a sensor fault and ignored (see below) |
 
-Releasing before 2 seconds counts as a short tap; releasing between 2 and 4 seconds reboots. The holds also work while the dashboard is awake and refreshing; a short tap then is ignored. On the ESP32-C6 SuperMini, the onboard LED shows the stage: green while holding, flashing cyan from 2 s (release to reboot), flashing white at 4 s (setup). Setup mode closes by itself after 5 minutes without activity (each time the setup page is opened, the 5 minutes start again) and the dashboard resumes normally. On a device that was never configured, setup mode stays open until you save.
+Releasing before 2 seconds counts as a short tap; releasing between 2 and 4 seconds reboots, between 4 and 15 seconds opens setup mode. The holds also work while the dashboard is awake and refreshing; a short tap then is ignored. On the ESP32-C6 SuperMini, the onboard LED shows the stage: green while holding, flashing cyan from 2 s (release to reboot), flashing white from 4 s (release for setup). Setup mode closes by itself after 5 minutes without activity (each time the setup page is opened, the 5 minutes start again) and the dashboard resumes normally. On a device that was never configured, setup mode stays open until you save.
+
+**Sensor fault:** if the input reads "pressed" for 15 seconds (a stuck, miswired or recalibrating sensor), the press is ignored, and the device stops waking on the button, using its timer only, until the input reads "not pressed" again. The dashboard keeps running.
+
+**Without a working button (BOOT backup):** tap **RST**, then within 3 seconds press and hold the board's **BOOT** button for 1 second: the device opens setup mode. Don't hold BOOT while tapping RST, which starts the chip's download mode instead. The BOOT pin is `GPIO9` on ESP32-C6 boards and `GPIO0` on ESP32 boards; this is skipped if a custom pin map uses that pin.
 
 ## Building the firmware
 
@@ -273,10 +280,12 @@ The repo includes [sketch.yaml](sketch.yaml) profiles:
 
 ```bash
 arduino-cli compile --profile esp32 .
-arduino-cli compile --profile esp32_waveshare .
+arduino-cli compile --profile esp32_waveshare --build-property "compiler.cpp.extra_flags=-DDEFAULT_PIN_PRESET_ESP32_WAVESHARE" .
 arduino-cli compile --profile esp32c6_firebeetle .
 arduino-cli compile --profile esp32c6_supermini .
 ```
+
+The profiles pin the core and library versions (CI uses the same profiles). arduino-cli ignores build properties in profiles, so the pin preset comes from the board; `esp32_waveshare` is the same board as `esp32`, hence the extra flag. Profile builds don't check the image size against [partitions.csv](partitions.csv); CI does.
 
 To build and upload without a profile, for example for a FireBeetle 2 ESP32-C6 with the serial log on USB:
 
@@ -284,7 +293,7 @@ To build and upload without a profile, for example for a FireBeetle 2 ESP32-C6 w
 arduino-cli compile -u -p /dev/cu.usbmodem101 \
   --fqbn esp32:esp32:dfrobot_firebeetle2_esp32c6:CDCOnBoot=cdc \
   --build-property "compiler.cpp.extra_flags=-DDEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE" \
-  --build-property "upload.maximum_size=3604480" .
+  --build-property "upload.maximum_size=3538944" .
 ```
 
 The Arduino IDE remembers board-menu options, but `arduino-cli` needs them in the FQBN (`CDCOnBoot`, `PartitionScheme`, …).
@@ -304,6 +313,8 @@ Timing constants you can adjust:
 | Constant | Default | File | Meaning |
 | --- | --- | --- | --- |
 | `BUTTON_REBOOT_HOLD_MS` / `BUTTON_SETUP_HOLD_MS` | 2 s / 4 s | [configure.h](configure.h) | Button hold times for reboot and setup mode |
+| `BUTTON_FAULT_MS` | 15 s | configure.h | A longer "press" is a sensor fault and is ignored |
+| `BOOT_SETUP_WINDOW_MS` / `BOOT_SETUP_HOLD_MS` | 3 s / 1 s | configure.h | BOOT backup: time after a reset to press BOOT, and how long to hold it |
 | `AP_TIMEOUT_MS` | 5 min | [ESP32-eInk-Dashboard.ino](ESP32-eInk-Dashboard.ino) | Setup mode closes after this long without activity |
 | `WAKE_AFTER_MINUTE_MS` | 500 ms | main sketch | Wake-up offset after each minute starts |
 | `NTP_RESYNC_S` | 1 h | main sketch | Maximum time between internet time syncs |
@@ -318,7 +329,7 @@ The refresh interval of each widget (in minutes) is the `refresh` column of the 
 
 ### CI builds
 
-The GitHub Actions workflow builds ESP32 and ESP32-C6 firmware with [partitions.csv](partitions.csv), and can inject the firmware version string.
+The GitHub Actions workflow ([compile.yml](.github/workflows/compile.yml)) runs on every push and pull request: it runs the host tests (`tests/host/run.sh`, plain C++ on the PC) and builds every `sketch.yaml` profile with [partitions.csv](partitions.csv). Each build reports its flash and RAM use in the run summary and fails if the app image is larger than the planned OTA slot (1.875 MB). A GitHub release is only published from a manual run on `main` with **release** ticked.
 
 ## Troubleshooting
 
@@ -372,6 +383,8 @@ Font tooling and conversion notes are in [fonts/README.md](fonts/README.md): con
 - [bambulab.cpp](bambulab.cpp): printer status over MQTT
 - [monthView.cpp](monthView.cpp): month calendar widget
 - [configure.h](configure.h): compile-time options, pin presets, icon constants
+- [src/input/ButtonGesture.h](src/input/ButtonGesture.h): button gestures (tap, reboot, setup, sensor fault), hardware independent
+- [tests/host/](tests/host/): tests that run on the PC (`tests/host/run.sh`)
 
 ## Licenses and attribution
 

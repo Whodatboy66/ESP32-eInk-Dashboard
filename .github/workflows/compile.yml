@@ -1,15 +1,36 @@
-name: Compile ESP32 Sketches
+name: Build firmware
 
+# Every push and pull request: host tests + firmware build for every sketch.yaml profile with a
+# size check. A GitHub release is only published when started by hand from main with "release".
 on:
+  push:
+  pull_request:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub release (main only; FW_VERSION must not be released yet)
+        type: boolean
+        default: false
+
+# A newer push cancels the older push build of the same branch. Manual runs (releases) have their
+# own group, so a push never cancels or replaces a release in progress.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && 'manual' || 'auto' }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 env:
-  ESP32_CORE_VERSION: 3.3.12
-  ARDUINO_CLI_VERSION: 1.5.1
+  # Same as the developer machines (docs/PROJECT_INFO.md). Core and library versions are NOT
+  # set here: every build uses the sketch.yaml profile, so CI and local builds always match.
+  ARDUINO_CLI_VERSION: 1.6.0
+  # app0 in partitions.csv (0x360000): the build fails if the image doesn't fit today's layout.
+  APP_PARTITION_BYTES: 3538944
+  # Planned OTA app slot (docs/IMPLEMENTATION_PLAN.md A.3, 0x1E0000 = 1.875 MB): the size check
+  # fails above it, so the firmware keeps fitting the A/B layout of stage 1.
+  OTA_SLOT_BYTES: 1966080
 
 jobs:
   # --------------------------------------------------
-  # Read FW_VERSION from configure.h, refuse a version already released
+  # Read FW_VERSION from configure.h; for a release, refuse a version already released
   # --------------------------------------------------
   version:
     runs-on: ubuntu-24.04
@@ -23,18 +44,30 @@ jobs:
 
       - name: Read firmware version
         id: read
+        env:
+          RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
         run: |
           VERSION=$(sed -n 's/^#define FW_VERSION *"\([^"]*\)".*/\1/p' configure.h)
           if ! [[ "$VERSION" =~ ^[0-9A-Za-z._-]+$ ]]; then
             echo "::error::Could not read FW_VERSION from configure.h (got '$VERSION')"
             exit 1
           fi
-          if git rev-parse -q --verify "refs/tags/firmware-$VERSION" >/dev/null; then
+          if [[ "$RELEASE" == "true" ]] && git rev-parse -q --verify "refs/tags/firmware-$VERSION" >/dev/null; then
             echo "::error::firmware-$VERSION is already released: bump FW_VERSION in configure.h"
             exit 1
           fi
           echo "Firmware version $VERSION"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+  # --------------------------------------------------
+  # Hardware-independent logic, compiled and run on the PC
+  # --------------------------------------------------
+  host-tests:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: Run host tests
+        run: tests/host/run.sh
 
   build:
     needs: version
@@ -44,49 +77,32 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          # arduino-cli ignores the build properties of sketch.yaml profiles, so the pin preset
+          # define is passed here. Locally the preset follows the board (configure.h), except
+          # esp32_waveshare, which needs the same flag (see README "arduino-cli").
           - name: ESP32
-            fqbn: esp32:esp32:esp32
-            board-options: PartitionScheme=custom
-            build-dir: build_esp32
-            extra-cpp-flags: -DUSE_COLORDISPLAY=0 -DDEFAULT_PIN_PRESET_ESP32
-
+            profile: esp32
+            preset: DEFAULT_PIN_PRESET_ESP32
           - name: ESP32-Waveshare
-            fqbn: esp32:esp32:esp32
-            board-options: PartitionScheme=custom
-            build-dir: build_esp32_waveshare
-            extra-cpp-flags: -DUSE_COLORDISPLAY=0 -DDEFAULT_PIN_PRESET_ESP32_WAVESHARE
-
+            profile: esp32_waveshare
+            preset: DEFAULT_PIN_PRESET_ESP32_WAVESHARE
           - name: ESP32C6-FireBeetle
-            fqbn: esp32:esp32:dfrobot_firebeetle2_esp32c6
-            board-options: PartitionScheme=custom,CDCOnBoot=cdc
-            build-dir: build_esp32c6_firebeetle
-            extra-cpp-flags: -DUSE_COLORDISPLAY=0 -DDEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE
-
+            profile: esp32c6_firebeetle
+            preset: DEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE
           - name: ESP32C6-SuperMini
-            fqbn: esp32:esp32:makergo_c6_supermini
-            board-options: PartitionScheme=custom,CDCOnBoot=cdc
-            build-dir: build_esp32c6_supermini
-            extra-cpp-flags: -DUSE_COLORDISPLAY=0 -DDEFAULT_PIN_PRESET_ESP32C6_SUPERMINI
+            profile: esp32c6_supermini
+            preset: DEFAULT_PIN_PRESET_ESP32C6_SUPERMINI
 
     steps:
       - uses: actions/checkout@v7
 
-      # ------------------------------
-      # Cache Arduino packages
-      # ------------------------------
-      - name: Cache Arduino packages
+      # Downloaded core, toolchain and library archives (the profile installs them from there).
+      - name: Cache Arduino downloads
         uses: actions/cache@v6
         with:
-          path: |
-            ~/.arduino15/packages
-            ~/.arduino15/staging
-            ~/Arduino/libraries
-          # Bump the version list here together with the installs below.
-          key: arduino-${{ runner.os }}-esp32-${{ env.ESP32_CORE_VERSION }}-gxepd2-1.6.9-gfx-1.12.6-busio-1.17.4-json-7.4.3-pubsub-2.8
+          path: ~/.arduino15/staging
+          key: arduino-dl-${{ runner.os }}-cli-${{ env.ARDUINO_CLI_VERSION }}-${{ hashFiles('sketch.yaml') }}
 
-      # ------------------------------
-      # Arduino CLI
-      # ------------------------------
       # arduino/setup-arduino-cli still runs on Node.js 20: use the official install script.
       - name: Setup Arduino CLI
         run: |
@@ -95,72 +111,47 @@ jobs:
             | BINDIR="$HOME/.local/bin" sh -s "$ARDUINO_CLI_VERSION"
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
-      - name: Install ESP32 Arduino Core
-        run: |
-          arduino-cli config init
-          arduino-cli config add board_manager.additional_urls \
-            https://espressif.github.io/arduino-esp32/package_esp32_index.json
-          arduino-cli core update-index
-          arduino-cli core install esp32:esp32@${{ env.ESP32_CORE_VERSION }}
-
-      # ------------------------------
-      # Libraries
-      # ------------------------------
-      - name: Install required libraries
-        run: |
-          arduino-cli lib install \
-            "Adafruit GFX Library@1.12.6" \
-            "Adafruit BusIO@1.17.4" \
-            "GxEPD2@1.6.9" \
-            "ArduinoJson@7.4.3" \
-            "PubSubClient@2.8"
-
-      # ------------------------------
-      # Patches
-      # ------------------------------
-      - name: Patch GxEPD2 for ESP32
-        run: |
-          sed -i 's|#include <avr/pgmspace.h>|#include <pgmspace.h>|' \
-            ~/Arduino/libraries/GxEPD2/src/GxEPD2_EPD.cpp
-
-      - name: Patch Adafruit_BusIO for ESP32 core 3.x
-        run: |
-          FILE="$HOME/Arduino/libraries/Adafruit_BusIO/Adafruit_SPIDevice.h"
-          sed -i 's/SPI_BITORDER_MSBFIRST = SPI_MSBFIRST/SPI_BITORDER_MSBFIRST = MSBFIRST/' "$FILE"
-          sed -i 's/SPI_BITORDER_LSBFIRST = SPI_LSBFIRST/SPI_BITORDER_LSBFIRST = LSBFIRST/' "$FILE"
-
-      # ------------------------------
-      # Compile
-      # ------------------------------
+      # The profile pins the core and library versions and installs them on first use.
       - name: Compile sketch
         run: |
-          # partitions.csv in the sketch folder is picked up by the core; the size limit
-          # must match its app0 partition (0x360000).
           arduino-cli compile \
-            --fqbn ${{ matrix.fqbn }} \
-            --board-options ${{ matrix.board-options }} \
-            --build-property "upload.maximum_size=3538944" \
-            --build-property "compiler.cpp.extra_flags=${{ matrix.extra-cpp-flags }}" \
+            --profile ${{ matrix.profile }} \
+            --build-property "compiler.cpp.extra_flags=-D${{ matrix.preset }}" \
+            --build-property "upload.maximum_size=$APP_PARTITION_BYTES" \
             --export-binaries \
-            --output-dir ${{ matrix.build-dir }} \
-            ./ESP32-eInk-Dashboard.ino
+            --output-dir build_out \
+            . 2>&1 | tee compile.log
+          exit "${PIPESTATUS[0]}"
 
-      # ------------------------------
-      # Rename firmware to clean names
-      # ------------------------------
+      - name: Firmware size check
+        run: |
+          APP=$(stat -c %s build_out/ESP32-eInk-Dashboard.ino.bin)
+          RAM=$(sed -n 's/^Global variables use \([0-9]*\) bytes.*/\1/p' compile.log)
+          RAM_MAX=$(sed -n 's/^Global variables use .* Maximum is \([0-9]*\) bytes\.$/\1/p' compile.log)
+          pct() { awk -v a="$1" -v b="$2" 'BEGIN { printf "%.1f %%", 100 * a / b }'; }
+          {
+            echo "### ${{ matrix.name }} (\`${{ matrix.profile }}\`)"
+            echo "| | Bytes | Limit | Used |"
+            echo "|---|---:|---:|---:|"
+            echo "| App image vs. planned OTA slot | $APP | $OTA_SLOT_BYTES | $(pct "$APP" "$OTA_SLOT_BYTES") |"
+            echo "| App image vs. current app0 | $APP | $APP_PARTITION_BYTES | $(pct "$APP" "$APP_PARTITION_BYTES") |"
+            echo "| Static RAM | $RAM | $RAM_MAX | $(pct "$RAM" "$RAM_MAX") |"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "App image $APP bytes, OTA slot $OTA_SLOT_BYTES bytes, static RAM $RAM of $RAM_MAX bytes"
+          if (( APP > OTA_SLOT_BYTES )); then
+            echo "::error::App image ($APP bytes) is larger than the planned OTA slot ($OTA_SLOT_BYTES bytes). See docs/IMPLEMENTATION_PLAN.md A.3."
+            exit 1
+          fi
+
       - name: Rename firmware
         run: |
           mkdir -p firmware
-          cp ${{ matrix.build-dir }}/*.bin firmware/
-
+          cp build_out/*.bin firmware/
           cd firmware
           for f in *.bin; do
             mv "$f" "${{ matrix.name }}-$f"
           done
 
-      # ------------------------------
-      # Upload artifact (still useful)
-      # ------------------------------
       - name: Upload firmware artifact
         uses: actions/upload-artifact@v7
         with:
@@ -169,12 +160,12 @@ jobs:
           retention-days: 90
 
   # --------------------------------------------------
-  # Create release only if ALL builds succeeded
+  # Release: manual run on main with "release" ticked, only if ALL builds and tests passed
   # --------------------------------------------------
   release:
-    needs: [version, build]
+    needs: [version, host-tests, build]
     runs-on: ubuntu-24.04
-    if: github.ref == 'refs/heads/main'
+    if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
     permissions:
       contents: write
 

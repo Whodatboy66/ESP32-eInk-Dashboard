@@ -144,10 +144,11 @@ handed out. Every stage ends with a `FW_BUILD` bump, a changelog line and, from 
 - [x] Display bring-up test `tools/epd_test`
 - [x] Assessment (Part A)
 - [x] Remove Zigbee (smart-plug automation, unrelated to the dashboard): code, profiles, CI, README
-- [ ] Align CI with `sketch.yaml` (core 3.3.7, same library versions); enable Actions on the fork
-- [ ] CI: compile on every push + firmware size check against the slot limit
-- [ ] Button input fix (A.6): pull-down + fault limit; BOOT button as backup setup trigger
-- [ ] License question to upstream (A.5)
+- [x] Align CI with `sketch.yaml`: CI builds the profiles (`--profile`), so core and library versions come from one place; library patches dropped (not needed for the pinned versions)
+- [ ] Enable Actions on the fork (GitHub: Settings → Actions → General); first green run on GitHub
+- [x] CI: compile on every push and pull request + size check (fails above the planned 1.875 MB OTA slot, flash/RAM table in the run summary); host tests (`tests/host/run.sh`); releases only from a manual run with "release" ticked
+- [x] Button input fix (A.6): pull-down (kept in deep sleep), 15 s fault limit (no gesture, no button wake while stuck), setup on release after 4 s; BOOT button backup (tap RST, then hold BOOT 1 s). Gesture logic in `src/input/ButtonGesture.h` with host tests. **Not yet tested on hardware**
+- [ ] License question to upstream (A.5): issue text drafted, to be posted by me
 
 **Done when:** a push builds in CI with a size report; the device boots into the dashboard with no sensor connected.
 
@@ -239,3 +240,4 @@ Only tests actually performed on the device go here.
 | Version | Stage | Change |
 |---|---|---|
 | .63 + fork | 0 | `sketch.yaml` profiles fixed; `tools/epd_test`; docs |
+| .63 + fork | 0 | Zigbee removed; CI builds the `sketch.yaml` profiles on every push with a size check and host tests; button: pull-down, fault limit, setup on release, BOOT backup |

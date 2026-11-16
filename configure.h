@@ -130,8 +130,23 @@ inline gpio_num_t getDemoWakeGpio() {
   return static_cast<gpio_num_t>(activePins.demoButton);
 }
 
+// The button input is active-HIGH (TTP223 default, or a push button to 3V3) with the internal
+// pull-down, so a missing or disconnected sensor reads "not pressed".
 #define BUTTON_REBOOT_HOLD_MS 2000    // hold 2 seconds (then release) to reboot the dashboard
-#define BUTTON_SETUP_HOLD_MS  4000    // hold 4 seconds to open setup mode
+#define BUTTON_SETUP_HOLD_MS  4000    // hold 4 seconds (then release) to open setup mode
+#define BUTTON_FAULT_MS       15000   // a "touch" this long is a sensor fault: ignored, no gesture
+#define BUTTON_DEBOUNCE_MS    60      // the input must read low this long to count as released
+
+// Backup way into setup mode when the touch sensor is missing or broken: tap RST, then within
+// BOOT_SETUP_WINDOW_MS press and hold the board's BOOT button for BOOT_SETUP_HOLD_MS.
+// (Holding BOOT *while* tapping RST starts the ROM download mode instead.)
+#if CONFIG_IDF_TARGET_ESP32C6
+  #define BOOT_BUTTON_PIN     9
+#elif CONFIG_IDF_TARGET_ESP32
+  #define BOOT_BUTTON_PIN     0
+#endif
+#define BOOT_SETUP_WINDOW_MS  3000
+#define BOOT_SETUP_HOLD_MS    1000
 
 inline constexpr uint32_t MDI_FAN_COOLING  = 0x000F1797;
 inline constexpr uint32_t MDI_FAN_EXHAUST  = 0x000F0D43;
