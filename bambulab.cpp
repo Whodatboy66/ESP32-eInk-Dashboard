@@ -335,7 +335,3 @@ bool fetchBambu(  LayoutItem* infoBambu  )
   return connected && gotReport;
 }
 
-bool isAuxFanOn() {
-  DBG("Test fan");
-  return printer.big_fan1_speed > 0;
-}

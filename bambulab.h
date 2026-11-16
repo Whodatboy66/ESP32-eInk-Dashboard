@@ -66,4 +66,3 @@ bool showPrintView();
 
 bool fetchBambu(  LayoutItem*  );
 void bambuWidget(LayoutItem* );
-bool isAuxFanOn();

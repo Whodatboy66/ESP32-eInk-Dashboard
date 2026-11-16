@@ -73,7 +73,6 @@ arduino-cli monitor -p COM3 --profile esp32c6_firebeetle -c baudrate=115200
 - `monitor` needs `--profile` (otherwise: "no monitor available for the port protocol serial").
 - The monitor disconnects when the board sleeps. Press RST to see a full boot log.
 - Settings (Wi-Fi, keys, location) live in NVS and survive firmware uploads.
-- Zigbee: use profile `esp32c6_firebeetle_zigbee`.
 
 ## Display test
 
@@ -89,6 +88,7 @@ logs `took ~3400 ms -> DISPLAY RESPONDED`.
 | Issue | Status |
 |---|---|
 | `sketch.yaml` profiles used the default 1.25 MB partition; Zigbee profiles never set `USE_ZIGBEE` (arduino-cli ignores `build.properties` in profiles) | Fixed (`daa506c`) |
+| Zigbee (smart plug following the Bambu aux fan) not needed on a dashboard | Removed completely (code, profiles, CI, README) |
 | Button GPIO2 uses `INPUT_PULLUP` but is active-HIGH (TTP223): with nothing connected the pin can read "held" and open setup mode by itself | Open (stage 0). Device currently boots normally |
 | README's `upload.maximum_size=3604480` doesn't match `partitions.csv` (app0 = 0x360000 = 3538944) | Note only |
 | CI workflow uses core 3.3.12 / GxEPD2 1.6.9 / GFX 1.12.6, profiles use 3.3.7 / 1.6.8 / 1.12.5 | To align before OTA releases |

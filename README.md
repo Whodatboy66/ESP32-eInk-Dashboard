@@ -96,7 +96,6 @@ To change the settings later, hold the button for 4 seconds to reopen setup mode
 | **PKGE API Key** | The API key of your PKGE Business account, for package tracking (see [Tracking your packages](#tracking-your-packages)). Leave empty to keep the saved key; enter `-` to remove it. |
 | **AeroDataBox API Key** | Optional: your RapidAPI key, for live flight status (see [Live flight status](#live-flight-status-optional)). Leave empty to keep the saved key; enter `-` to remove it. |
 | **Pin Preset** | Your board's wiring. Pick **Custom** to enter your own pins. |
-| **Zigbee** | Only in Zigbee builds, see [Zigbee](#zigbee-esp32-c6-only). |
 
 Settings are stored in the board's flash and survive firmware updates, unless you erase the flash when uploading.
 
@@ -215,7 +214,7 @@ The 800×480 screen is split like this:
 
 ### Top bar and problem indicator
 
-The top bar shows, from left to right: the battery voltage, any **current problems**, the firmware version, and icons for printing, Zigbee and the battery level.
+The top bar shows, from left to right: the battery voltage, any **current problems**, the firmware version, and icons for printing and the battery level.
 
 The battery level comes from a typical LiPo discharge curve (about 4.15 V = 100 %, 3.83 V = 50 %, 3.3 V = 0 %), not a straight line. The voltage is read with the chip's factory ADC calibration and averaged over 16 samples. While USB is plugged in, the charger holds the voltage high, so the icon reads full. If the voltage shown differs from a multimeter, set `BAT_CALIBRATION` in `ESP32-eInk-Dashboard.ino` to *multimeter ÷ displayed* (for example 4.12 ÷ 4.05 = 1.017). The debug log prints `[Battery] 4.05 V, 90%` on each status-bar refresh.
 
@@ -279,8 +278,6 @@ arduino-cli compile --profile esp32c6_firebeetle .
 arduino-cli compile --profile esp32c6_supermini .
 ```
 
-Zigbee variants (ESP32-C6 only): `esp32c6_firebeetle_zigbee` and `esp32c6_supermini_zigbee`.
-
 To build and upload without a profile, for example for a FireBeetle 2 ESP32-C6 with the serial log on USB:
 
 ```bash
@@ -290,7 +287,7 @@ arduino-cli compile -u -p /dev/cu.usbmodem101 \
   --build-property "upload.maximum_size=3604480" .
 ```
 
-The Arduino IDE remembers board-menu options, but `arduino-cli` needs them in the FQBN (`CDCOnBoot`, `PartitionScheme`, `ZigbeeMode`, …).
+The Arduino IDE remembers board-menu options, but `arduino-cli` needs them in the FQBN (`CDCOnBoot`, `PartitionScheme`, …).
 
 ### Compile-time options
 
@@ -300,7 +297,6 @@ In [configure.h](configure.h):
 | --- | --- | --- |
 | `FW_VERSION` | e.g. `".59"` | Shown next to the battery indicator. CI builds can override it. |
 | `DEBUG` | `1` | Serial debug log. Debug builds wait 3 s after a reset so a serial monitor can attach. |
-| `USE_ZIGBEE` | `0` | Zigbee support (ESP32-C6). |
 | `USE_COLORDISPLAY` | `0` | 4-color panel instead of black and white. |
 
 Timing constants you can adjust:
@@ -320,17 +316,9 @@ Timing constants you can adjust:
 
 The refresh interval of each widget (in minutes) is the `refresh` column of the built-in layout in [fetchAllInfo.cpp](fetchAllInfo.cpp) (`loadDefaultLayout`).
 
-### Zigbee (ESP32-C6 only)
-
-1. Set `USE_ZIGBEE` to `1` in [configure.h](configure.h), or use a `_zigbee` profile.
-2. Select a Zigbee-capable partition scheme and Zigbee mode.
-3. Enable Zigbee on the setup page and press the pairing button on your Zigbee switch.
-
-The switch follows the Bambu aux fan: on when the fan is on, off when it stops. Because the printer is polled periodically, the off action can come 1–5 minutes after the fan stops.
-
 ### CI builds
 
-The GitHub Actions workflow builds ESP32, ESP32-C6 and ESP32-C6 Zigbee firmware with [partitions.csv](partitions.csv), and can inject the firmware version string.
+The GitHub Actions workflow builds ESP32 and ESP32-C6 firmware with [partitions.csv](partitions.csv), and can inject the firmware version string.
 
 ## Troubleshooting
 
@@ -383,7 +371,6 @@ Font tooling and conversion notes are in [fonts/README.md](fonts/README.md): con
 - [fetchAllInfo.cpp](fetchAllInfo.cpp): screen layout and widget drawing
 - [bambulab.cpp](bambulab.cpp): printer status over MQTT
 - [monthView.cpp](monthView.cpp): month calendar widget
-- [dash_zigbee.cpp](dash_zigbee.cpp): Zigbee integration
 - [configure.h](configure.h): compile-time options, pin presets, icon constants
 
 ## Licenses and attribution

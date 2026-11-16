@@ -21,7 +21,7 @@ partition table. After that, every update can arrive over Wi-Fi.
 ## Partition table (4 MB flash)
 
 Keep `nvs` at the same offset, so the one-time USB flash **keeps existing settings**. Zigbee partitions
-are dropped (Zigbee is a non-goal in the spec); a small LittleFS area holds tasks/notes/layout (spec §7.4):
+are dropped (Zigbee support was removed from the firmware); a small LittleFS area holds tasks/notes/layout (spec §7.4):
 
 ```
 # Name,     Type, SubType,  Offset,   Size
@@ -39,7 +39,6 @@ User data in LittleFS isn't touched by app OTA, so it survives updates like NVS 
 | Build | Size today | Share of a 1.875 MB slot |
 |---|---|---|
 | esp32c6_firebeetle (target) | 1,354,854 B | 69 %, about 600 KB headroom |
-| esp32c6_firebeetle_zigbee (not planned) | 1,757,432 B | 89 % |
 
 **Risk:** future features grow the firmware. CI checks the size against the slot limit on every build.
 

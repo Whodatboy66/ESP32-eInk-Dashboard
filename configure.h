@@ -10,27 +10,6 @@
 #define FW_VERSION          ".63"
 #endif
 
-// Set to 1 to compile the optional Zigbee controller support.
-// For arduino-cli on ESP32-C6, this also requires Zigbee-specific board options:
-//   --fqbn esp32:esp32:esp32c6:PartitionScheme=zigbee_zczr,ZigbeeMode=zczr
-// When not set explicitly, it follows the board's Zigbee Mode menu (ZCZR), so
-// sketch.yaml profiles and the Arduino IDE work without extra compiler flags.
-#ifndef USE_ZIGBEE
-  #if defined(ZIGBEE_MODE_ZCZR)
-    #define USE_ZIGBEE      1
-  #else
-    #define USE_ZIGBEE      0
-  #endif
-#endif
-
-#if USE_ZIGBEE && !defined(CONFIG_IDF_TARGET_ESP32C6) && !defined(ARDUINO_ESP32C6_DEV)
-#error "USE_ZIGBEE currently supports the ESP32-C6 build in this project."
-#endif
-
-#if USE_ZIGBEE && (!defined(CONFIG_ZB_ENABLED) || !CONFIG_ZB_ENABLED)
-#error "USE_ZIGBEE=1 requires a Zigbee-enabled ESP32 core configuration. For arduino-cli use esp32:esp32:esp32c6:PartitionScheme=zigbee_zczr,ZigbeeMode=zczr."
-#endif
-
 #if DEBUG
   #define DBG(x)            Serial.println(x)
   #define DBGF(fmt, ...)    Serial.printf(fmt "\n", ##__VA_ARGS__)
@@ -164,7 +143,6 @@ inline constexpr uint32_t MDI_LAYERS       = 0x000F0328;
 inline constexpr uint32_t MDI_BED          = 0x000F0697;
 inline constexpr uint32_t MDI_NOZZLE       = 0x000F0E5B;
 inline constexpr uint32_t MDI_SPOOL        = 0x000F1294;
-inline constexpr uint32_t MDI_ZIGBEE       = 0x000F0D41;
 inline constexpr uint32_t MDI_ALERT        = 0x000F0026;
 inline constexpr uint32_t MDI_POWER_ON     = 0x000F06A5;
 inline constexpr uint32_t MDI_POWER_OFF    = 0x000F06A6;

@@ -10,7 +10,6 @@
 #define CFG_MQTT_PASS_MAX      65u
 #define CFG_MQTT_SN_MAX        65u
 #define CFG_MQTT_IP_MAX        64u   // IPv4 literal or short hostname
-#define CFG_ZIGBEE_STR_MAX     33u
 #define CFG_CAL_TITLE_MAX     128u
 #define CFG_TIMEZONE_MAX       65u
 #define CFG_WEATHER_LOC_MAX    65u   // "City, CC" or "lat,lon"

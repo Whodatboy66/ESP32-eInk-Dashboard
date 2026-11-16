@@ -17,12 +17,11 @@ Based on upstream commit `8d0a66b` (FW .63) plus our fork fixes.
 
 | File | Lines | Responsibility | Verdict |
 |---|---|---|---|
-| `ESP32-eInk-Dashboard.ino` | 2147 | Everything else: setup page HTML + handlers, pin presets, button logic, Wi-Fi, NTP, clock/status drawing, sparse-font renderer, wake/sleep scheduler, `setup()` | **Split up** (stage 2) |
+| `ESP32-eInk-Dashboard.ino` | 2012 | Everything else: setup page HTML + handlers, pin presets, button logic, Wi-Fi, NTP, clock/status drawing, sparse-font renderer, wake/sleep scheduler, `setup()` | **Split up** (stage 2) |
 | `directFetch.cpp/.h` | 1038 | HTTP + JSON fetchers: Open-Meteo, geocoding, stocks, MakerWorld, iCal parser (recurrence, exceptions), PKGE tracking, AeroDataBox flights | **Keep logic**, move behind a service interface, fix TLS |
 | `fetchAllInfo.cpp/.h` | 714 | `LayoutItem` table with fixed positions (`loadDefaultLayout`), widget draw functions (calendar events, stocks, tracking, weather, MakerWorld), RTC caches | **Basis for widget registry**; replace fixed coordinates with the layout engine |
 | `monthView.cpp` | 135 | Month calendar widget | Keep, wrap as widget |
-| `bambulab.cpp/.h` | 410 | Bambu printer over MQTT/TLS | Keep as optional widget |
-| `dash_zigbee.cpp/.h` | 204 | Zigbee switch follows Bambu aux fan | Keep behind `USE_ZIGBEE`, not built by default |
+| `bambulab.cpp/.h` | 405 | Bambu printer over MQTT/TLS | Keep as optional widget, developer device only (shown only when a printer is configured) |
 | `configure.h` | 171 | Compile options, pin presets, board detection | Becomes `BoardConfig` / `PinMapping` |
 | `fonts/` | 224 KB src | Sparse fonts + Material Design Icons | Keep |
 | `tools/epd_test/` | ours | Display bring-up test | Keep |
@@ -37,14 +36,13 @@ RTC-memory caches (calendar, tracking survive sleep), partial refresh per layout
 | Build | Flash (app) | Static RAM |
 |---|---|---|
 | esp32c6_firebeetle | 1,354,854 B | 106,884 B of 327,680 (32 %), about 220 KB left for heap |
-| esp32c6_firebeetle_zigbee | 1,757,432 B | n/a |
 
 Wi-Fi + TLS + HTTP make up most of the image, so new widgets cost relatively little. The full display
 frame buffer (800x480 1 bpp = 48 KB) is static.
 
 ### A.3 Flash budget on the 4 MB FireBeetle (spec §9.2)
 
-Proposed OTA layout (Zigbee partitions dropped; Zigbee is a non-goal, spec §18):
+Proposed OTA layout (Zigbee partitions dropped; Zigbee support removed, see stage 0):
 
 | Partition | Offset | Size | Purpose |
 |---|---|---|---|
@@ -117,7 +115,7 @@ on USB power ("USB Powered" profile) it stays reachable. Editing while the devic
 | Question | Answer |
 |---|---|
 | Keep unchanged? | iCal parser, Open-Meteo/geocoding, stocks/tracking/flight fetchers, Bambu MQTT, sparse-font renderer, battery curve, sleep/wake scheduler logic, GxEPD2 setup |
-| Refactor? | The 2,100-line `.ino` (setup page, buttons, Wi-Fi, scheduler, drawing all mixed), fixed-coordinate layout, global config variables, TLS handling |
+| Refactor? | The 2,000-line `.ino` (setup page, buttons, Wi-Fi, scheduler, drawing all mixed), fixed-coordinate layout, global config variables, TLS handling |
 | Modular widgets? | Static registry of `WidgetDef` structs (id, name, sizes, min size, refresh interval, config keys, `fetch()`, `render(ctx, bounds)`), with no heap allocation. Grows out of the existing `LayoutItem` table |
 | Layout engine? | Grid (e.g. 4 x 3 cells on 800x480) + named templates (Classic, Planner, Minimal, Technical); validation and fallback in pure C++ (unit-tested on the PC) |
 | Mobile UI? | Responsive single page (HTML/JS gzipped in firmware, so it updates with OTA) + small JSON API. **Preview = the device renders the real screen into an 800x480 bitmap** and serves it as an image. The same code draws the e-ink and the preview, so nothing can drift (spec §7.3) |
@@ -145,6 +143,7 @@ handed out. Every stage ends with a `FW_BUILD` bump, a changelog line and, from 
 - [x] Fix `sketch.yaml` profiles (partition, Zigbee flag): done `daa506c`
 - [x] Display bring-up test `tools/epd_test`
 - [x] Assessment (Part A)
+- [x] Remove Zigbee (smart-plug automation, unrelated to the dashboard): code, profiles, CI, README
 - [ ] Align CI with `sketch.yaml` (core 3.3.7, same library versions); enable Actions on the fork
 - [ ] CI: compile on every push + firmware size check against the slot limit
 - [ ] Button input fix (A.6): pull-down + fault limit; BOOT button as backup setup trigger
