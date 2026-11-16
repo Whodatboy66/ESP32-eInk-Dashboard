@@ -74,6 +74,16 @@ arduino-cli monitor -p COM3 --profile esp32c6_firebeetle -c baudrate=115200
 - The monitor disconnects when the board sleeps. Press RST to see a full boot log.
 - Settings (Wi-Fi, keys, location) live in NVS and survive firmware uploads.
 
+## VS Code IntelliSense (red squiggles on `#include`)
+
+The C/C++ extension doesn't know Arduino's include paths. Generate them from a real build
+(needs Python; re-run after changing versions in `sketch.yaml`):
+```bash
+python3 tools/vscode_intellisense.py            # Windows: py tools\vscode_intellisense.py
+```
+This writes `.vscode/c_cpp_properties.json` and `.vscode/settings.json` (`.ino` = C++). Both are
+local (gitignored) because the paths differ per machine. Then run "Developer: Reload Window" in VS Code.
+
 ## Display test
 
 `tools/epd_test` checks the display wiring on its own, with no Wi-Fi and no sleep:
