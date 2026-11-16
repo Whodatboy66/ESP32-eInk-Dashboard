@@ -4,7 +4,8 @@ Fork of [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk
 The upstream README describes the features and setup page. This file covers our hardware,
 our workflow and what we found while bringing it up.
 
-Related: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) (staged upgrades),
+Requirements: "Development Specification: Modular E-Ink Smart Dashboard Platform" (Google Doc, Jonas).
+Related: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) (assessment + staged upgrades),
 [OTA_UPDATES.md](OTA_UPDATES.md) (self-updating devices).
 
 ## Hardware
@@ -88,7 +89,8 @@ logs `took ~3400 ms -> DISPLAY RESPONDED`.
 | Issue | Status |
 |---|---|
 | `sketch.yaml` profiles used the default 1.25 MB partition; Zigbee profiles never set `USE_ZIGBEE` (arduino-cli ignores `build.properties` in profiles) | Fixed (`daa506c`) |
-| Button GPIO2 uses `INPUT_PULLUP` but is active-HIGH: with no button connected it reads "held" and every boot goes to setup mode | Open (stage 0 of the plan). Workaround: jumper GPIO2 to GND |
+| Button GPIO2 uses `INPUT_PULLUP` but is active-HIGH (TTP223): with nothing connected the pin can read "held" and open setup mode by itself | Open (stage 0). Device currently boots normally |
 | README's `upload.maximum_size=3604480` doesn't match `partitions.csv` (app0 = 0x360000 = 3538944) | Note only |
 | CI workflow uses core 3.3.12 / GxEPD2 1.6.9 / GFX 1.12.6, profiles use 3.3.7 / 1.6.8 / 1.12.5 | To align before OTA releases |
-| All HTTPS calls use `setInsecure()` (no certificate check) | To fix with the certificate bundle (OTA stage) |
+| All HTTPS calls use `setInsecure()` (no certificate check) | Stage 2 (full security list: plan A.4) |
+| Upstream repo has no license; HighSpeed font is personal-use only | See plan A.5 |

@@ -20,8 +20,8 @@ partition table. After that, every update can arrive over Wi-Fi.
 
 ## Partition table (4 MB flash)
 
-Keep `nvs` and everything after the app area at the same offsets, so the one-time USB flash
-**keeps existing settings** and Zigbee data:
+Keep `nvs` at the same offset, so the one-time USB flash **keeps existing settings**. Zigbee partitions
+are dropped (Zigbee is a non-goal in the spec); a small LittleFS area holds tasks/notes/layout (spec §7.4):
 
 ```
 # Name,     Type, SubType,  Offset,   Size
@@ -29,20 +29,19 @@ nvs,        data, nvs,      0x9000,   0x5000      # unchanged -> settings surviv
 otadata,    data, ota,      0xE000,   0x2000      # new: which slot boots
 app0,       app,  ota_0,    0x10000,  0x1E0000    # 1.875 MB
 app1,       app,  ota_1,    0x1F0000, 0x1E0000    # 1.875 MB
-zb_storage, data, fat,      0x3D0000, 0x4000      # unchanged
-zb_fct,     data, fat,      0x3D4000, 0x1000      # unchanged
-rcp_fw,     data, spiffs,   0x3D5000, 0x1000      # unchanged
-coredump,   data, coredump, 0x3D6000, 0x2A000     # unchanged
+userdata,   data, spiffs,   0x3D0000, 0x20000     # 128 KB LittleFS: tasks, notes, layout, caches
+coredump,   data, coredump, 0x3F0000, 0x10000     # 64 KB crash diagnostics
 ```
 
-The current `spiffs` partition (384 KB) isn't used by the code (no SPIFFS/LittleFS calls), so it can go.
+The current `spiffs` partition (384 KB) isn't used by the code (no SPIFFS/LittleFS calls).
+User data in LittleFS isn't touched by app OTA, so it survives updates like NVS does.
 
 | Build | Size today | Share of a 1.875 MB slot |
 |---|---|---|
-| esp32c6_firebeetle | 1,354,854 B | 69 % |
-| esp32c6_firebeetle_zigbee | 1,757,432 B | **89 %** (tight; dropping `coredump` gives each slot about 84 KB more) |
+| esp32c6_firebeetle (target) | 1,354,854 B | 69 %, about 600 KB headroom |
+| esp32c6_firebeetle_zigbee (not planned) | 1,757,432 B | 89 % |
 
-**Risk:** future features grow the firmware. Keep an eye on the Zigbee build size; it's the first to hit the limit.
+**Risk:** future features grow the firmware. CI checks the size against the slot limit on every build.
 
 ## Update flow (recommended design)
 
@@ -54,12 +53,14 @@ git push / tag v.64
   -> Release "firmware-.64" with:
        ESP32C6-FireBeetle.bin
        ...
-       manifest.json  {build: 64,
-                       files: {board: {name, sha256, size}}}
+       manifest.json  {build: 64, min_build, channel,
+                       files: {board+display: {name, sha256, size, schema}}}
+       manifest.sig   ECDSA P-256 signature of manifest.json
 
                                  once a day (e.g. 03:00, already awake for the clock):
                                    GET github.com/<owner>/<repo>/releases/latest/download/manifest.json
-                                   build > FW_BUILD and the board variant matches?
+                                   verify manifest.sig with the public key built into the firmware
+                                   build > FW_BUILD, board + display + schema compatible?
                                    -> download .bin over HTTPS (certificate bundle)
                                    -> write it to the inactive slot, check size + SHA-256
                                    -> reboot into the new slot (marked "pending verify")
@@ -94,7 +95,8 @@ Design details:
 | Corrupt download | SHA-256 / size mismatch -> not activated |
 | New firmware crashes on boot | Rollback to the previous slot (bootloader) |
 | New firmware runs but its update code is broken | **Can't fix itself remotely.** Mitigation: keep the update code small and stable, run it early in the wake cycle, and always test on my own device (beta channel) first |
-| Someone else publishes a release | Only the fork owner can create releases. Optional extra: sign the image (ECDSA) and verify the signature on the device |
+| Someone else publishes a release / GitHub account compromised | Device accepts only manifests signed with the private key (kept as a GitHub Actions secret or on the developer PC, **never in the repo or build artifacts**). The manifest pins the image SHA-256, so the image is covered too |
+| Downgrade to an old, vulnerable build | Rejected: build number must increase; `min_build` in the manifest |
 | Private repo | Not possible without putting a GitHub token on every device. **The repo must stay public** (firmware contains no secrets; user settings stay on the device) |
 
 ## GitHub side
@@ -103,7 +105,8 @@ The existing `.github/workflows/compile.yml` already builds every variant and cr
 named `firmware-<FW_VERSION>`. Changes needed:
 
 1. Build the **app-only `.bin`** (not just `merged.bin`) with the new OTA partition table.
-2. Compute SHA-256 and size and generate `manifest.json`; attach it to the release.
+2. Compute SHA-256 and size, generate `manifest.json`, sign it (`manifest.sig`) with the secret key; attach both.
+   Publish only on manual trigger; pre-release = beta channel.
 3. Align core and library versions with `sketch.yaml`, so OTA builds match local builds.
 4. Enable Actions on the fork (off by default for forks), and trigger it on a tag or manually.
 
@@ -112,7 +115,7 @@ named `firmware-<FW_VERSION>`. Changes needed:
 | Part | Effort |
 |---|---|
 | OTA partition table + USB migration flash | small |
-| Update client (manifest, download, verify, rollback marking) | medium (about 200-300 lines) |
+| Update client (manifest, signature check with mbedTLS, download, verify, rollback marking) | medium (about 300-400 lines) |
 | CI: manifest + app binaries + release channels | small-medium |
 | Display/setup-page integration (version, "check now", channel) | small |
 
