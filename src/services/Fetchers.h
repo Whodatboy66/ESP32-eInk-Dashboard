@@ -1,6 +1,6 @@
 #pragma once
 // Data services: each fetch fills the globals the widgets draw from. All over verified HTTPS.
-#include "../../fetchAllInfo.h"
+#include "../widgets/Widgets.h"
 
 // Widget data fetched directly by the ESP32. Each fetch fills the globals the widgets draw
 // from (weather, stocks, cal, makerworld).

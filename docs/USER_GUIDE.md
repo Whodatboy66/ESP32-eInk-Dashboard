@@ -100,6 +100,9 @@ To change the settings later, hold the button for 4 seconds and release it to re
 | **AeroDataBox API Key** | Optional: your RapidAPI key, for live flight status (see [Live flight status](#live-flight-status-optional)). Leave empty to keep the saved key; enter `-` to remove it. |
 | **Pin Preset** | Your board's wiring. Pick **Custom** to enter your own pins. |
 | **Update channel** | **Stable** (default) or **Beta**: beta also gets test releases first. Use beta only on a device you can reach. |
+| **Layout** | Classic (the original screen), Planner, Minimal or Technical. See [Layouts](#layouts). |
+| **Clock** | 24 hours (14:30) or 12 hours (2:30 PM). |
+| **Show** | Which widgets appear (each also needs its setting above). Clock and status bar are always shown. |
 | **Install updates automatically** | On (default): a new firmware version is installed at night by itself. Off: the top bar shows `Update available`; install it with a double tap or **Check for updates now**. See [Firmware updates](#firmware-updates). |
 
 Settings are stored in the board's flash and survive firmware updates, unless you erase the flash when uploading.
@@ -249,6 +252,36 @@ The bottom-left panel switches automatically:
 - **Otherwise:** MakerWorld totals: likes, downloads, prints, collections and boosts, summed over all your published models.
 
 If no MakerWorld ID is set, the panel shows the idle printer status instead.
+
+## Layouts
+
+Chosen on the setup page (**Layout**). The status bar is always at the top; below it the grid
+layouts use 4 × 3 cells. A widget that is switched off (**Show**) or not set up leaves no gap: its
+neighbor grows into the free space. Classic keeps the original fixed screen (there a missing widget
+leaves its place empty, as before).
+
+| Classic | Planner |
+| --- | --- |
+| ![Classic](images/layouts/classic.png) | ![Planner](images/layouts/planner.png) |
+| **Minimal** | **Technical** |
+| ![Minimal](images/layouts/minimal.png) | ![Technical](images/layouts/technical.png) |
+
+Examples of gap filling: [Planner without weather](images/layouts/planner-no-weather.png),
+[Minimal with only the clock](images/layouts/minimal-clock-only.png),
+[Technical without stocks and parcels](images/layouts/technical-no-stocks-tracking.png),
+[12-hour clock](images/layouts/minimal-12h.png).
+
+If a download fails, the widget keeps its last data and the device tries again after 2, 4, 8 and
+16 minutes (never later than its normal refresh); after that only at its normal refresh, so a
+permanent error (a misspelled city, a wrong key) doesn't keep Wi-Fi busy. When the data is older than
+two refresh intervals (at least 30 minutes), the widget shows a small **old** badge in its corner
+([example](images/layouts/planner-stale.png), [Classic](images/layouts/classic-stale.png)).
+A layout change is drawn with a full refresh. The 12-hour clock shows AM/PM where it fits; in a
+2-cell clock "12:58" fills the place, so there only the time is shown. Event times in the agenda
+stay in 24-hour format for now.
+
+These images are drawn on the PC with the firmware's own drawing code (`tools/render/render.sh`).
+Adding a widget: [ADD_A_WIDGET.md](ADD_A_WIDGET.md).
 
 ## Wake button
 

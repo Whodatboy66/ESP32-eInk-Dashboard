@@ -4,6 +4,8 @@
 #include "../../configure.h"
 #include "Widgets.h"
 #include "../services/Bambu.h"
+#include "Registry.h"
+#include "Dashboard.h"
 #include <Preferences.h>
 
 // Arrays to store the data
@@ -36,38 +38,9 @@ static void drawUnavailableMessage(LayoutItem* item) {
                              "at the moment", GxEPD_BLACK);
 }
 
-// Fixed dashboard layout (800x480). A widget is only added when its setting is filled in.
+// The dashboard layout: the configured template with the configured widgets (Registry.cpp).
 void loadDefaultLayout() {
-    struct DefaultItem { int id; const char* desc; int x, y, w, h, rowH, colW, refresh; const char* extra1; bool enabled; };
-    const DefaultItem defaults[] = {
-        // Clock Extra1 left empty: updateClock() then uses the Timezone from the setup page.
-        {   1, "Clock",      10,   0, 430, 155, 10,  10,   1, "", true },
-        { 128, "Battery",   440,   0, 360,  28,  0,   0,  60, "", true },
-        { 256, "Calendar",  440,  25, 360, 230, 28, 210,  60, "", true },
-        {   2, "Cal Events",440, 255, 360, 145, 22,  10,  60, "", hasIcsFeeds() },
-        {   4, "Stocks",     10, 155, 430, 130, 22,  10,  60, "", stock_symbols[0] != '\0' },
-        {   8, "OpenMeteo",  10, 285, 430, 105,  0, 100, 360, "", weather_location[0] != '\0' },
-        {  64, "Bambu",      10, 390, 430,  90, 22,  70,   4, printer_name[0] ? printer_name : "Bambu", mqtt_ip[0] != '\0' },
-        {  16, "Tracking",  440, 400, 360,  80, 22,   0, 120, "", pkge_api_key[0] != '\0' },
-    };
-
-    layoutCount = 0;
-    for (const DefaultItem& d : defaults) {
-        if (!d.enabled) continue;
-        LayoutItem& l = layout[layoutCount++];
-        memset(&l, 0, sizeof(l));
-        l.ID = d.id;
-        l.PosX = d.x;
-        l.PosY = d.y;
-        l.Width = d.w;
-        l.Height = d.h;
-        l.RowHeight = d.rowH;
-        l.ColWidth = d.colW;
-        l.Refresh = d.refresh;
-        l.Active = true;
-        snprintf(l.Description, sizeof(l.Description), "%s", d.desc);
-        snprintf(l.Extra1, sizeof(l.Extra1), "%s", d.extra1);
-    }
+    loadLayout();
 }
 
 #if DEBUG
@@ -326,11 +299,14 @@ void gCalWidget( LayoutItem* item )
 
     y += item->RowHeight;
   }
+    drawStaleMark(item, Service::Calendar);
 }
 
 // --- Draw stocks on e-ink using Material icons + text ---
 void stockWidget( LayoutItem* item ) 
 {
+  // Columns as in the original 430 px place, squeezed proportionally in a narrower one.
+  auto col = [item](int x) { return item->Width >= 430 ? x : x * item->Width / 430; };
   if (!item) return;
   if (stockCount <= 0) {
     drawUnavailableMessage(item);
@@ -360,17 +336,18 @@ void stockWidget( LayoutItem* item )
 
         snprintf(buf, sizeof(buf), "%7.2f",s.price );
         
-        drawSparseString(&epaperFont, item->PosX + 130, y, buf, GxEPD_BLACK);
+        drawSparseString(&epaperFont, item->PosX + col(130), y, buf, GxEPD_BLACK);
 
         snprintf(buf, sizeof(buf), "%7.2f / ",s.dayHigh );
-        drawSparseString(&epaperFont, item->PosX + 240, y, buf, GxEPD_BLACK);
+        drawSparseString(&epaperFont, item->PosX + col(240), y, buf, GxEPD_BLACK);
 
         snprintf(buf, sizeof(buf), "%7.2f",s.dayLow );
 
-        drawSparseString(&epaperFont, item->PosX + 330, y, buf, GxEPD_BLACK);
+        drawSparseString(&epaperFont, item->PosX + col(330), y, buf, GxEPD_BLACK);
 
         y += item->RowHeight; // spacing between rows
     }
+    drawStaleMark(item, Service::Stocks);
 }
 
 LayoutItem* getLayout(uint16_t id) {
@@ -426,6 +403,7 @@ void trackingWidget(LayoutItem* item) {
         drawSparseString(&epaperFont, item->PosX + 28, y, line, GxEPD_BLACK);
         y += item->RowHeight;
     }
+    drawStaleMark(item, Service::Tracking);
 }
 
 void weatherWidget(LayoutItem* item) {
@@ -436,11 +414,15 @@ void weatherWidget(LayoutItem* item) {
     }
 
     int x = item->PosX;
-    int y = item->PosY+63;
+    // Vertically centered: the original 105 px place had the icons 63 px down.
+    int y = item->PosY + 63 + (item->Height - 105) / 2;
+    // As many days as fit: one per ColWidth, the last one only needs its 80 px icon.
+    int days = layouts::weatherDaysFor(item->Width, item->ColWidth);
+    if (days > weather.count) days = weather.count;
 
     char buf[32];
 
-    for (int i = 0; i < weather.count; i++) {
+    for (int i = 0; i < days; i++) {
         WeatherDay &wd = weather.day[i];
 
         // Draw icon
@@ -455,6 +437,7 @@ void weatherWidget(LayoutItem* item) {
         // drawSparseStringCentered(&epaperFont, x + i*item->Width, y+60, buf, GxEPD_BLACK);
 
     }
+    drawStaleMark(item, Service::Weather, true);
 }
 
 // --- Convert Open-Meteo code to MDI icon ---

@@ -10,3 +10,8 @@ Adafruit_GFX& canvas();
 
 // nullptr = back to the default (the display).
 void setCanvas(Adafruit_GFX* target);
+
+// Each widget is clipped to its place: drawing outside this rectangle is dropped until
+// clearCanvasClip(). Text that is too long for a small place doesn't spill into the neighbor.
+void setCanvasClip(int16_t x, int16_t y, int16_t w, int16_t h);
+void clearCanvasClip();

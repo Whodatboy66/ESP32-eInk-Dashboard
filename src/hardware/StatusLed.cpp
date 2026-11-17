@@ -2,7 +2,7 @@
 
 #include <esp32-hal-rgb-led.h>
 
-#include "../../bambulab.h"
+#include "../services/Bambu.h"
 #include "PinMapping.h"
 
 void forceSuperMiniLedsOff() {

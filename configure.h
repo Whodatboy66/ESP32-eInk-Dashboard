@@ -9,7 +9,7 @@
 // Firmware build number: an integer that only goes up with each release. The update client only
 // installs a release with a higher build. FW_VERSION (status bar, release name) follows from it.
 #ifndef FW_BUILD
-#define FW_BUILD            67
+#define FW_BUILD            68
 #endif
 #define FW_STR_(x)          #x
 #define FW_STR(x)           FW_STR_(x)
@@ -57,7 +57,7 @@ void logPrintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 // Settings (NVS) schema version. Raise it when the stored settings change in a way older
 // firmware can't read; the new firmware migrates older schemas. The update client doesn't
 // install a release whose schema is lower than the device's (it couldn't read the settings).
-#define FW_CONFIG_SCHEMA      1
+#define FW_CONFIG_SCHEMA      2   // 2: layout template, shown widgets, clock format (stage 3)
 
 #define textSpace 14
 

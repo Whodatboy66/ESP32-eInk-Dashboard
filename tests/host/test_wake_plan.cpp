@@ -155,6 +155,31 @@ static void test_backoff_keeps_full_refresh_widgets() {
   CHECK(!p.bambu && !p.makerworld && !p.flightStatus);
 }
 
+static void test_retry_after_a_failed_fetch() {
+  WakeInputs in = base();  // nothing due by the wake counter
+  in.weatherRetry = true;
+  WakePlan p = planWake(in);
+  CHECK(p.weather && p.needWiFi);
+  CHECK(!p.stocks && !p.calendar && !p.tracking);
+  in.weatherRetry = false;
+  in.calendarRetry = true;   // agenda and month share one download
+  p = planWake(in);
+  CHECK(p.event && p.calendar && p.needWiFi);
+  in.calendarRetry = false;
+  in.stocksRetry = in.trackingRetry = true;
+  p = planWake(in);
+  CHECK(p.stocks && p.tracking);
+  // Not on the layout: no retry either.
+  in.stocksRefresh = 0;
+  CHECK(!planWake(in).stocks);
+  // Wi-Fi backoff wins: the retry waits too.
+  in = base();
+  in.weatherRetry = true;
+  in.wifiFailures = 1;
+  in.wifiRetryAfter = NOW + 60;
+  CHECK(!planWake(in).weather);
+}
+
 static void test_wifi_backoff_sequence() {
   CHECK_EQ(wifiBackoffSeconds(1), 120);
   CHECK_EQ(wifiBackoffSeconds(2), 240);
@@ -270,6 +295,7 @@ int main() {
   test_bambu_redraw_when_print_view_ends();
   test_wifi_backoff();
   test_backoff_keeps_full_refresh_widgets();
+  test_retry_after_a_failed_fetch();
   test_wifi_backoff_sequence();
   test_night_update_check_brings_wifi();
   test_flight_countdown_redraw_every_10_wakes();

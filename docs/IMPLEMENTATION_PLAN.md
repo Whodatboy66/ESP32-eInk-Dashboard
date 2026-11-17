@@ -206,12 +206,14 @@ Detailed plan and result: [plans/STAGE2_FOUNDATION.md](plans/STAGE2_FOUNDATION.m
 **Done when:** behavior is the same as before (side-by-side check on the device), CI is green, every HTTPS request is verified.
 
 ### Stage 3: Widget system + layout engine (spec §5, §6, Phase 3)
-- [ ] `WidgetDef` static registry; existing widgets moved over: clock (12/24 h, timezone, compact/large), weather (cached), calendar (agenda + month view, multiple feeds), status bar
-- [ ] Optional technical widgets as modules: Bambu, stocks, tracking, flights, MakerWorld
-- [ ] Grid layout engine + templates Classic / Planner / Minimal / Technical; validation, fallback to a known-good layout, disabled widgets leave no gaps
-- [ ] Render planning: data update vs. layout change vs. partial vs. full refresh; periodic full refresh against ghosting
-- [ ] Data cache per service with "stale" marker and backoff (spec §10.2)
-- [ ] Host tests: layout fitting, minimum sizes, empty/max layouts, invalid configs
+Detailed plan and result: [plans/STAGE3_WIDGETS_LAYOUT.md](plans/STAGE3_WIDGETS_LAYOUT.md). Done in code (build 68), **not yet checked on the device**; rendered on the PC: [docs/images/layouts/](images/layouts/).
+- [x] Static widget registry (`src/widgets/Registry.cpp`): clock (12/24 h, timezone; large, centered in any size), weather (days that fit), agenda + month view (multiple feeds), status bar, and the technical ones (printer / MakerWorld, stocks, tracking); flights inside the agenda. Compact 1×1 clock dropped (no medium font; see the plan result)
+- [x] Grid layout engine (4 × 3 cells, `src/layout/`) + templates Classic (today's exact pixels) / Planner / Minimal / Technical; validation, fallback to Classic, disabled widgets leave no gaps (neighbors grow)
+- [x] Render planning: one full-screen drawing for device and PC (`drawFullScreen`), every widget clipped to its place; full refresh on a layout change (signature in RTC), button wake, setup, daily; partial refreshes otherwise
+- [x] Per service retry after a failure (2, 4, 8, 16 min, capped at the interval, then the regular schedule) and an "old" badge on stale data (spec §10.2)
+- [x] Host tests: layout (every template × every widget combination), fitting, min/max sizes, invalid templates → fallback, service state, retries in the wake plan; PC renderer for the images
+- [x] Setup page: Layout, Clock (24 h / 12 h), Show (per widget); settings schema 2
+- [ ] On the device: all four templates and switching through the setup page
 
 **Done when:** widgets and the layout are switched through configuration only; all four templates render correctly on the device.
 

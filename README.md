@@ -10,6 +10,11 @@ This is a fork of [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/
 being turned step by step into a modular dashboard for family devices, with secure over-the-air updates
 and phone setup. Progress: [implementation plan](docs/IMPLEMENTATION_PLAN.md), [changelog](CHANGELOG.md).
 
+![Planner layout](docs/images/layouts/planner.png)
+
+Four layouts (Classic, Planner, Minimal, Technical) are chosen on the setup page; see the
+[user guide](docs/USER_GUIDE.md#layouts).
+
 ## Hardware
 
 | Part | Model |
@@ -56,10 +61,12 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 | `src/core/` | Wake cycle (`App`), wake decisions (`WakePlan`), settings (`ConfigManager`), log with secret masking |
 | `src/hardware/` | Pins, e-paper driver, battery, touch sensor / BOOT button, SuperMini LED |
 | `src/services/` | Weather, stocks, calendar (iCal), tracking, flights, MakerWorld, Bambu printer, Wi-Fi, time; verified HTTPS |
-| `src/widgets/`, `src/ui/` | Drawing of the dashboard; fonts (`src/ui/fonts/`, conversion notes there) and the canvas everything draws on |
+| `src/layout/` | Layout engine and templates (pure C++, tested on the PC) |
+| `src/widgets/`, `src/ui/` | Drawing of the dashboard (widget registry, full-screen drawing); fonts (`src/ui/fonts/`, conversion notes there) and the canvas everything draws on |
 | `src/web/`, `src/update/`, `src/input/` | Setup page; over-the-air updates; button gestures |
 | `tests/host/` | Tests that run on the PC (`tests/host/run.sh`) |
-| `app.h`, `display.h`, `fetchAllInfo.h`, … | Forwarding headers, removed in stage 3 |
+| `app.h` | Settings buffers shared by the firmware |
+| `tools/render/` | Renders the dashboard on the PC into PNG images (`render.sh`) |
 | `tools/` | Display bring-up test, font converter, VS Code IntelliSense setup, release manifest (`tools/ota/`) |
 | `docs/` | Documentation and images |
 | `.github/workflows/` | CI: builds every profile on each push, size check, manual releases |

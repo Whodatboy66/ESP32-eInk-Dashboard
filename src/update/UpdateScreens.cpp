@@ -1,6 +1,6 @@
 #include "UpdateScreens.h"
 
-#include "../../display.h"
+#include "../hardware/EpaperDriver.h"
 
 namespace ota {
 namespace {

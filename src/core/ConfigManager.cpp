@@ -10,6 +10,7 @@
 #include "ConfigValidation.h"
 #include "Timezone.h"
 #include "Logger.h"
+#include "../layout/Templates.h"
 
 char wifi_ssid[CFG_WIFI_SSID_MAX];
 char wifi_pass[CFG_WIFI_PASS_MAX];
@@ -27,6 +28,10 @@ char pkge_api_key[CFG_PKGE_KEY_MAX];
 char aerodatabox_key[CFG_ADB_KEY_MAX];
 
 // Preference keys for the calendar feeds (the first keeps the original single-feed key).
+char layout_template[CFG_LAYOUT_MAX] = "classic";
+uint16_t widget_show_mask = 0xFFFF;
+bool clock_24h = true;
+
 const char* const ICS_PREF_KEYS[ICS_MAX_FEEDS] = { "ics_url", "ics_url2", "ics_url3" };
 
 
@@ -81,6 +86,11 @@ void configLoad() {
   }
   otaAutoInstall = preferences.getBool("ota_auto", true);
   otaBeta = preferences.getBool("ota_beta", false);
+  // Layout (schema 2; missing on older setups = today's Classic layout, everything shown, 24 h).
+  preferences.getString("lay_tpl", layout_template, sizeof(layout_template));
+  if (layouts::templateIndex(layout_template) < 0) snprintf(layout_template, sizeof(layout_template), "classic");
+  widget_show_mask = preferences.getUShort("show_mask", 0xFFFF);
+  clock_24h = preferences.getBool("clk_24h", true);
   otaAvailBuild = preferences.getUInt("ota_avail", 0);
   preferences.getString("ota_availv", otaAvailVersion, sizeof(otaAvailVersion));
   if (otaAvailBuild <= FW_BUILD) otaAvailBuild = 0;  // already installed
@@ -106,8 +116,14 @@ void configLoad() {
   int schema = preferences.getInt("cfg_schema", 0);
   preferences.end();
   if (configNeedsMigration(schema, FW_CONFIG_SCHEMA)) {
-    // 0 -> 1: nothing to convert, only the key is stored.
+    // 0 -> 1: nothing to convert. 1 -> 2: the layout keys are new; their defaults (Classic,
+    // everything shown, 24 h) are today's screen. Only the key is stored.
     preferences.begin("config", false);
+    if (schema < 2) {  // the defaults, so they are found from now on
+      preferences.putString("lay_tpl", layout_template);
+      preferences.putUShort("show_mask", widget_show_mask);
+      preferences.putBool("clk_24h", clock_24h);
+    }
     preferences.putInt("cfg_schema", FW_CONFIG_SCHEMA);
     preferences.end();
     DBGF("Settings schema %d -> %d", schema, FW_CONFIG_SCHEMA);
@@ -137,6 +153,9 @@ void configSave() {
   saveCustomPinConfig(preferences, customPins);
   preferences.putBool("ota_auto", otaAutoInstall);
   preferences.putBool("ota_beta", otaBeta);
+  preferences.putString("lay_tpl", layout_template);
+  preferences.putUShort("show_mask", widget_show_mask);
+  preferences.putBool("clk_24h", clock_24h);
 
   preferences.putInt("cfg_schema", FW_CONFIG_SCHEMA);
   preferences.end();

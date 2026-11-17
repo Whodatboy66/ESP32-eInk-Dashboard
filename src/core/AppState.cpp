@@ -5,6 +5,8 @@
 Preferences preferences;
 bool forceUpdateStatusBar = false;
 bool apModeActive = false;
+RTC_DATA_ATTR ServiceState serviceStates[SERVICE_COUNT];  // per data service: last success, retries
+RTC_DATA_ATTR uint32_t layoutSignature = 0;  // layouts::signature() of the screen drawn last
 RTC_DATA_ATTR bool redrawAll = false;        // an update screen covered the dashboard: redraw all
 uint32_t cpuFullMhz = 240;  // the board's default CPU clock, restored for Wi-Fi work
 

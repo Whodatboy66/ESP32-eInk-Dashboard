@@ -8,7 +8,7 @@
 
 #include "HttpJson.h"
 #include "SecureClient.h"
-#include "../../monthView.h"
+#include "../widgets/MonthView.h"
 
 // ----------------------- Stocks (Yahoo Finance) -----------------------
 

@@ -4,9 +4,13 @@
 #include <stdint.h>
 #include <time.h>
 
+#include "ServiceState.h"
+
 extern Preferences preferences;       // NVS, namespace "config" (open only briefly)
 extern bool forceUpdateStatusBar;     // redraw the status bar in this wake
 extern bool apModeActive;             // setup mode (access point + web server) is running
+extern ServiceState serviceStates[SERVICE_COUNT];  // RTC: per data service (ServiceState.h)
+extern uint32_t layoutSignature;      // layout drawn last (RTC): a change means a full refresh
 extern bool redrawAll;                // an update screen covered the dashboard: redraw all (RTC)
 extern uint32_t cpuFullMhz;           // the board's default CPU clock, restored for Wi-Fi work
 

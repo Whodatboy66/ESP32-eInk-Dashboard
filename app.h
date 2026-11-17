@@ -1,6 +1,6 @@
 #pragma once
 #include "configure.h"
-#include "display.h"
+#include "src/hardware/EpaperDriver.h"
 #include <Arduino.h>
 #include <cstring>
 
@@ -33,6 +33,12 @@ extern char makerworld_uid[CFG_MW_UID_MAX];
 extern char printer_name[CFG_PRINTER_NAME_MAX];
 extern char pkge_api_key[CFG_PKGE_KEY_MAX];
 extern char aerodatabox_key[CFG_ADB_KEY_MAX];
+
+// Layout (stage 3): template key, which widgets are shown, clock format.
+#define CFG_LAYOUT_MAX         16u
+extern char layout_template[CFG_LAYOUT_MAX];   // "classic", "planner", "minimal", "technical"
+extern uint16_t widget_show_mask;              // widgetBit(layouts::WidgetId): switched on on the setup page
+extern bool clock_24h;
 
 #define ICS_MAX_FEEDS 3
 extern char ics_urls[ICS_MAX_FEEDS][CFG_ICS_URL_MAX];

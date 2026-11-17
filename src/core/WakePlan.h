@@ -49,6 +49,8 @@ struct WakeInputs {
   uint8_t wifiFailures = 0;
   time_t wifiRetryAfter = 0;
   bool otaNightDue = false;        // night-time update check due (OtaFlow)
+  // A failed fetch is due for its retry (ServiceState.h); calendar = agenda + month (one download).
+  bool weatherRetry = false, stocksRetry = false, calendarRetry = false, trackingRetry = false;
   bool otaPendingVerify = false;   // a new firmware must reach Wi-Fi to confirm itself
   FlightState flight;
 };
@@ -73,10 +75,10 @@ inline bool dueByWakes(int refresh, uint16_t bootCount) {
 inline WakePlan planWake(const WakeInputs& in) {
   WakePlan p;
   const time_t now = in.now;
-  p.event = dueByWakes(in.eventRefresh, in.bootCount);
-  p.stocks = dueByWakes(in.stocksRefresh, in.bootCount);
-  p.weather = dueByWakes(in.weatherRefresh, in.bootCount);
-  p.tracking = dueByWakes(in.trackingRefresh, in.bootCount);
+  p.event = dueByWakes(in.eventRefresh, in.bootCount) || (in.eventRefresh > 0 && in.calendarRetry);
+  p.stocks = dueByWakes(in.stocksRefresh, in.bootCount) || (in.stocksRefresh > 0 && in.stocksRetry);
+  p.weather = dueByWakes(in.weatherRefresh, in.bootCount) || (in.weatherRefresh > 0 && in.weatherRetry);
+  p.tracking = dueByWakes(in.trackingRefresh, in.bootCount) || (in.trackingRefresh > 0 && in.trackingRetry);
 
   // A flight departs within 24 hours: refresh its countdown every 10 minutes (no download).
   const FlightState& f = in.flight;
@@ -102,7 +104,7 @@ inline WakePlan planWake(const WakeInputs& in) {
   bool eventOnLayout = in.eventRefresh > 0;
   p.eventRedraw = eventOnLayout && (flightSoon || liveWindow) && !p.event && (in.bootCount % 10 == 0);
   p.battery = dueByWakes(in.batteryRefresh, in.bootCount);
-  p.calendar = dueByWakes(in.calendarRefresh, in.bootCount);
+  p.calendar = dueByWakes(in.calendarRefresh, in.bootCount) || (in.calendarRefresh > 0 && in.calendarRetry);
   bool bambuOnLayout = in.bambuRefresh > 0;
   p.bambu = (bambuOnLayout && (((in.isPrinting || in.previousIsPrinting) && (in.bootCount % in.bambuRefresh == 0)) ||
                                (in.bootCount % BAMBU_IDLE_REFRESH_MIN == 0))) ||

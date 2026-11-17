@@ -3,7 +3,7 @@
 #include <SPI.h>
 #include <new>
 
-#include "../../fetchAllInfo.h"
+#include "../widgets/Widgets.h"
 
 namespace {
 alignas(DashboardDisplay) uint8_t displayStorage[sizeof(DashboardDisplay)];
@@ -41,7 +41,9 @@ void updatePartial(LayoutItem* item, void (*drawFunc)(LayoutItem*)) {
   display.firstPage();
   do {
     canvas().fillRect(item->PosX, item->PosY, item->Width, item->Height, GxEPD_WHITE);
+    setCanvasClip(item->PosX, item->PosY, item->Width, item->Height);
     drawFunc(item);
+    clearCanvasClip();
   } while (display.nextPage());
 }
 

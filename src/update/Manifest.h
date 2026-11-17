@@ -40,7 +40,7 @@ struct Manifest {
 // What the running firmware is (FW_BUILD, FW_DISPLAY, FW_CONFIG_SCHEMA).
 struct DeviceIds {
   uint32_t build;
-  const char* displayId;  // not "display": display.h defines a macro of that name
+  const char* displayId;  // not "display": EpaperDriver.h defines a macro of that name
   uint32_t configSchema;
 };
 

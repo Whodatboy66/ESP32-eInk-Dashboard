@@ -18,6 +18,7 @@
 #include "../hardware/PinMapping.h"
 #include "../update/OtaFlow.h"
 #include "../update/UpdatePolicy.h"
+#include "../widgets/Registry.h"
 
 // Functions of this file, in the order they are defined below.
 void appendFormat(String& out, const char* fmt, ...);
@@ -534,6 +535,56 @@ html += R"rawliteral(
 html += R"rawliteral(
     <hr>
 
+    <label>Layout</label>
+    <select name="lay_tpl">)rawliteral";
+
+for (int i = 0; i < layouts::TEMPLATE_COUNT; i++) {
+  html += "<option value=\"";
+  html += layouts::TEMPLATES[i].key;
+  html += "\"";
+  if (strcmp(layouts::TEMPLATES[i].key, layout_template) == 0) html += " selected";
+  html += ">";
+  html += layouts::TEMPLATES[i].name;
+  html += "</option>";
+}
+
+html += R"rawliteral(</select>
+    <div class="note">Classic: the original screen. Planner: clock, weather, upcoming events and month. Minimal: a large clock with weather and events. Technical: clock, printer, stocks, parcels, weather and events. A widget that is switched off or not set up leaves no gap.</div>
+
+    <label>Clock</label>
+    <select name="clk_24h">
+      <option value="1")rawliteral";
+
+html += clock_24h ? " selected" : "";
+
+html += R"rawliteral(>24 hours (14:30)</option>
+      <option value="0")rawliteral";
+
+html += clock_24h ? "" : " selected";
+
+html += R"rawliteral(>12 hours (2:30 PM)</option>
+    </select>
+
+    <label>Show</label>
+)rawliteral";
+
+for (int w = 0; w < layouts::WIDGET_COUNT; w++) {
+  layouts::WidgetId id = static_cast<layouts::WidgetId>(w);
+  if (id == layouts::WidgetId::StatusBar || id == layouts::WidgetId::Clock) continue;
+  html += "    <label><input type=\"checkbox\" name=\"show_";
+  html += widgetInfo(id).key;
+  html += "\" value=\"1\" style=\"width:auto\"";
+  if (widget_show_mask & layouts::widgetBit(id)) html += " checked";
+  html += "> ";
+  html += widgetInfo(id).name;
+  html += "</label>\n";
+}
+
+html += R"rawliteral(
+    <div class="note">A widget only appears when its setting above is filled in (and when the layout has a place for it).</div>
+
+    <hr>
+
     <label>Firmware updates</label>
     <div class="note">)rawliteral";
 
@@ -717,6 +768,15 @@ void handleSave() {
   applyStoredPinSelection();
   otaAutoInstall = server.hasArg("ota_auto");  // an unticked checkbox isn't sent
   otaBeta = server.arg("ota_channel") == "beta";
+  if (layouts::templateIndex(server.arg("lay_tpl").c_str()) >= 0)
+    copyToCfg(layout_template, sizeof(layout_template), server.arg("lay_tpl"));
+  clock_24h = server.arg("clk_24h") != "0";
+  widget_show_mask = 0xFFFF;
+  for (int w = 0; w < layouts::WIDGET_COUNT; w++) {
+    layouts::WidgetId id = static_cast<layouts::WidgetId>(w);
+    if (id == layouts::WidgetId::StatusBar || id == layouts::WidgetId::Clock) continue;
+    if (!server.hasArg(String("show_") + widgetInfo(id).key)) widget_show_mask &= ~layouts::widgetBit(id);
+  }
 
   Serial.printf("MQTT P: %u SN: %s IP %s\n", mqtt_port, mqtt_sn, mqtt_ip);
   configSave();

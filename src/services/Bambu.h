@@ -1,6 +1,6 @@
 #pragma once
 #include "../../app.h"
-#include "../../fetchAllInfo.h"
+#include "../widgets/Widgets.h"
 
 #define MAX_AMS             4
 #define MAX_TRAYS           4
@@ -53,6 +53,7 @@ struct PrinterStatus {
 };
 
 
+extern PrinterStatus printer;    // last report received over MQTT
 extern bool isPrinting;          // RTC memory (attribute on the definition only)
 extern bool previousIsPrinting;  // RTC memory
 extern bool printViewOnScreen;

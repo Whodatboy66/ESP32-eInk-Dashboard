@@ -8,7 +8,8 @@
 
 #include "HttpJson.h"
 #include "SecureClient.h"
-#include "../../monthView.h"
+#include "../layout/LayoutEngine.h"
+#include "../widgets/MonthView.h"
 
 // Coordinates resolved from a city name survive deep sleep, so geocoding runs only once.
 RTC_DATA_ATTR static float cachedLat = 0.0f;
@@ -78,7 +79,8 @@ bool fetchWeatherDirect(LayoutItem* item) {
   if (!resolveLocation(lat, lon)) return false;
 
   int days = MAXWEATHERDAYS;
-  if (item && item->ColWidth > 0) days = constrain(item->Width / item->ColWidth, 1, MAXWEATHERDAYS);
+  // As many days as the widget shows (same rule as the drawing, src/layout/LayoutEngine.h).
+  if (item && item->ColWidth > 0) days = constrain(layouts::weatherDaysFor(item->Width, item->ColWidth), 1, MAXWEATHERDAYS);
 
   char url[320];
   snprintf(url, sizeof(url),

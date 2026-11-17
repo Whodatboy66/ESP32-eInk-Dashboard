@@ -24,6 +24,8 @@
 #include "../update/UpdatePolicy.h"
 #include "../web/SetupServer.h"
 #include "../widgets/Clock.h"
+#include "../widgets/Dashboard.h"
+#include "../widgets/Registry.h"
 #include "../widgets/MonthView.h"
 #include "../widgets/StatusBar.h"
 #include "../widgets/Widgets.h"
@@ -40,6 +42,19 @@ static long clockDrawnMinute = -1;
 // Minutes since the epoch: changes exactly when the displayed HH:MM changes.
 static long currentMinute() {
   return (long)(time(nullptr) / 60);
+}
+
+// Records a fetch result for the retry backoff and the "old data" mark (ServiceState.h).
+static void recordFetch(Service svc, bool ok, LayoutItem* item) {
+  time_t interval = item && item->Refresh > 0 ? (time_t)item->Refresh * 60 : 3600;
+  recordResult(serviceStates[(int)svc], ok, time(nullptr), interval);
+}
+
+// After a failed fetch the widget normally keeps its picture (no redraw). Once its data is old it
+// is redrawn anyway, so the "old data" mark appears (the failed fetch is what makes data old).
+static bool turnedStale(Service svc, LayoutItem* item) {
+  time_t interval = item && item->Refresh > 0 ? (time_t)item->Refresh * 60 : 3600;
+  return isStale(serviceStates[(int)svc], time(nullptr), interval);
 }
 
 // One wake: boot checks, button, update requests, plan (WakePlan), Wi-Fi + fetches, drawing, sleep.
@@ -177,7 +192,17 @@ void appSetup() {
 
   DBG(F("============= STARTING ============="));
 
-  loadDefaultLayout();
+  // The configured template with the configured widgets. A changed layout (template, a widget on
+  // or off) is drawn with a full refresh, everything fetched, so no ghosts of the old one stay.
+  layouts::Result lay = loadLayout();
+  if (lay.fellBack) DBGF("Layout \"%s\" not usable: Classic used", layout_template);
+  uint32_t laySig = layouts::signature(lay);
+  if (laySig != layoutSignature) {
+    if (layoutSignature != 0 && !fullRefresh) DBG(F("Layout changed: full refresh"));
+    fullRefresh = true;
+    bootCount = 0;
+    layoutSignature = laySig;
+  }
   LayoutItem* infoClock = getLayout(1);
   LayoutItem* infoEvent = getLayout(2);
   LayoutItem* infoStocks = getLayout(4);
@@ -231,6 +256,10 @@ void appSetup() {
   wake.wifiRetryAfter = wifiRetryAfter;
   wake.otaNightDue = otaNightDue;
   wake.otaPendingVerify = otaPendingVerify;
+  wake.weatherRetry = retryDue(serviceStates[(int)Service::Weather], nowTs);
+  wake.stocksRetry = retryDue(serviceStates[(int)Service::Stocks], nowTs);
+  wake.calendarRetry = retryDue(serviceStates[(int)Service::Calendar], nowTs);
+  wake.trackingRetry = retryDue(serviceStates[(int)Service::Tracking], nowTs);
   wake.flight.nextFlightStart = cal.nextFlight.start;
   wake.flight.calStart = liveFlight.calStart;
   wake.flight.calEnd = liveFlight.calEnd;
@@ -304,26 +333,31 @@ void appSetup() {
       // On a failed fetch keep the old content on screen instead of drawing "unavailable".
       if (openMeteoIf) {
         bool ok = fetchWeatherDirect(infoOpenMeteo);
+        recordFetch(Service::Weather, ok, infoOpenMeteo);
         setProblem(PROBLEM_WEATHER, !ok);
-        if (!ok && !fullRefresh) openMeteoIf = false;
+        if (!ok && !fullRefresh && !turnedStale(Service::Weather, infoOpenMeteo)) openMeteoIf = false;
       }
       if (stocksIf) {
         int failed = 0;
         bool ok = fetchStocksDirect(&failed);
+        recordFetch(Service::Stocks, ok, infoStocks);
         setProblem(PROBLEM_STOCKS, !ok || failed > 0);
-        if (!ok && !fullRefresh) stocksIf = false;
+        if (!ok && !fullRefresh && !turnedStale(Service::Stocks, infoStocks)) stocksIf = false;
       }
       if ((eventIf || calendarIf) && hasIcsFeeds()) {
         const char* tz = (infoClock && infoClock->Extra1[0]) ? infoClock->Extra1 : device_timezone;
         int failed = 0;
         bool ok = fetchCalendarIcs(tz, &failed);
+        recordFetch(Service::Calendar, ok, (infoEvent ? infoEvent : infoCalendar));
         setProblem(PROBLEM_CALENDAR, !ok || failed > 0);
-        if (!ok && !fullRefresh) eventIf = calendarIf = false;
+        if (!ok && !fullRefresh && !turnedStale(Service::Calendar, infoEvent ? infoEvent : infoCalendar))
+          eventIf = calendarIf = false;
       }
       if (trackingIf) {
         bool ok = fetchTrackingDirect();
+        recordFetch(Service::Tracking, ok, infoTracking);
         setProblem(PROBLEM_TRACKING, !ok);
-        if (!ok && !fullRefresh) trackingIf = false;
+        if (!ok && !fullRefresh && !turnedStale(Service::Tracking, infoTracking)) trackingIf = false;
       }
       if (flightStatusDue) {
         const char* tz = (infoClock && infoClock->Extra1[0]) ? infoClock->Extra1 : device_timezone;
@@ -387,25 +421,16 @@ void appSetup() {
     canvas().fillScreen(GxEPD_WHITE);
     display.firstPage();
 
+    FullScreenParts parts;
+    parts.printer = bambuIf || makerworldRedraw;
+    parts.printView = printView;
+    parts.weather = openMeteoIf;
+    parts.agenda = eventIf || eventRedraw;
+    parts.stocks = stocksIf;
+    parts.month = calendarIf;
+    parts.tracking = trackingIf || trackingRedraw;
     do {
-      if (bambuIf || makerworldRedraw)
-      {
-        if (printView) bambuWidget(infoBambu);
-        else           makerWorldWidget(infoBambu);
-      }
-
-      updateClock(infoClock);
-
-      if (openMeteoIf) weatherWidget(infoOpenMeteo);
-
-      if (infoBattery)
-        drawStatus(infoBattery);
-      DBG("HERE AFTER BATTERY");
-
-      if (eventIf || eventRedraw) gCalWidget(infoEvent);
-      if (stocksIf) stockWidget(infoStocks);
-      if (calendarIf) drawCalendar(infoCalendar);
-      if (trackingIf || trackingRedraw) trackingWidget(infoTracking);
+      drawFullScreen(parts);
     } while (display.nextPage());
 
     DBG(F("Finish full"));
