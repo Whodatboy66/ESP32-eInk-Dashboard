@@ -380,18 +380,35 @@ static void formatDate(uint32_t t, char* out, size_t cap);
 
 String buildPage()
 {
+  // The saved network is pre-selected: otherwise the first (strongest) network in the scan was
+  // selected, and saving the page for any other change silently switched the device to it (with
+  // the saved password), so Wi-Fi, internet time and all updates stopped working.
   String options;
   options.reserve(3072);
+  bool savedListed = false;
   int n = WiFi.scanNetworks();
   for (int i = 0; i < n && i < 48; i++)
   {
     String ssid = WiFi.SSID(i);
     if (ssid.length() == 0) continue;
-    options += "<option value='";
-    options += ssid;
-    options += "'>";
-    options += ssid;
+    bool dup = false;  // the same network from several access points: list it once
+    for (int j = 0; j < i && !dup; j++) dup = WiFi.SSID(j) == ssid;
+    if (dup) continue;
+    bool isSaved = wifi_ssid[0] && ssid == wifi_ssid;
+    savedListed = savedListed || isSaved;
+    options += "<option value=\"";
+    options += htmlAttr(ssid.c_str());
+    options += "\"";
+    if (isSaved) options += " selected";
+    options += ">";
+    options += htmlAttr(ssid.c_str());
     options += "</option>";
+  }
+  if (wifi_ssid[0] && !savedListed) {
+    // Saved network not in range right now: keep it selectable (and selected).
+    String saved = String("<option value=\"") + htmlAttr(wifi_ssid) + "\" selected>" + htmlAttr(wifi_ssid) +
+                   " (saved, not found now)</option>";
+    options = saved + options;
   }
 
   String pinPresetOptions;
@@ -1289,7 +1306,9 @@ void handleSave() {
                 "Europe/Berlin. Go back and correct it; nothing was saved.");
     return;
   }
-  copyToCfg(wifi_ssid, sizeof(wifi_ssid), server.arg("wifi_ssid"));
+  // Empty (no network found in the scan) keeps the saved network, like the empty password does.
+  if (server.arg("wifi_ssid").length() > 0)
+    copyToCfg(wifi_ssid, sizeof(wifi_ssid), server.arg("wifi_ssid"));
   // Empty password fields keep the saved value, so re-opening setup doesn't require retyping them.
   if (server.arg("wifi_pass").length() > 0)
     copyToCfg(wifi_pass, sizeof(wifi_pass), server.arg("wifi_pass"));

@@ -119,4 +119,5 @@ logs `took ~3400 ms -> DISPLAY RESPONDED`.
 | CI workflow uses core 3.3.12 / GxEPD2 1.6.9 / GFX 1.12.6, profiles use 3.3.7 / 1.6.8 / 1.12.5 | Fixed: CI builds the `sketch.yaml` profiles |
 | All HTTPS calls use `setInsecure()` (no certificate check) | Stage 2 (full security list: plan A.4) |
 | Upstream repo has no license; HighSpeed font is personal-use only | See plan A.5 |
+| Setup page Wi-Fi list never pre-selected the saved network: saving the page for any change (e.g. the timezone) stored the first scanned network with the saved password, so Wi-Fi, internet time (clock drifted ~50 min) and updates stopped. Upstream bug, seen 2026-11-16 | Fixed (build 66): saved network pre-selected (also when out of range), empty choice keeps it, duplicates listed once, names HTML-escaped |
 | Timezone `CET` (no offset) is treated as UTC by the C library: clock 1 h behind in German winter | Fixed (build 66): names like CET / Europe/Berlin are turned into `CET-1CEST,M3.5.0,M10.5.0/3`, invalid strings are refused on the setup page, a saved `CET` is corrected at boot |
