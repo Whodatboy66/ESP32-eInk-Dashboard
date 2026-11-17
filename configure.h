@@ -9,7 +9,7 @@
 // Firmware build number: an integer that only goes up with each release. The update client only
 // installs a release with a higher build. FW_VERSION (status bar, release name) follows from it.
 #ifndef FW_BUILD
-#define FW_BUILD            66
+#define FW_BUILD            67
 #endif
 #define FW_STR_(x)          #x
 #define FW_STR(x)           FW_STR_(x)
@@ -26,9 +26,12 @@
 #define OTA_CONFIRM_MS      15000   // "Tap to install" waits this long, then cancels
 #define OTA_DONE_SCREEN_MS  10000   // "Updated to ..." stays at least this long after the restart
 
+// Formatted log lines go through logPrintf (src/core/Logger.h), which masks secrets.
+void logPrintf(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
+
 #if DEBUG
   #define DBG(x)            Serial.println(x)
-  #define DBGF(fmt, ...)    Serial.printf(fmt "\n", ##__VA_ARGS__)
+  #define DBGF(fmt, ...)    logPrintf(fmt "\n", ##__VA_ARGS__)
   #define DBGV(label, val)  do { Serial.print(label "="); Serial.println(val); } while(0)
   #define DBG_SEP()         Serial.println(F("---"))
 #else

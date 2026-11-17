@@ -1,4 +1,4 @@
-#include "monthView.h"
+#include "MonthView.h"
 #include <time.h>
 
 #define COLS 7
@@ -103,16 +103,16 @@ void drawCalendar(LayoutItem* item)
             fillRadius = radius - 2;
           }
 
-          display.fillCircle(x, y - 5, fillRadius, GxEPD_BLACK);
+          canvas().fillCircle(x, y - 5, fillRadius, GxEPD_BLACK);
 
           if (isToday)
           {
             // Today + event: filled black center, visible white gap,
             // then the normal double black outline outside.
-            display.fillCircle(x, y - 5, radius - 1, GxEPD_WHITE);
-            display.fillCircle(x, y - 5, fillRadius, GxEPD_BLACK);
-            display.drawCircle(x, y - 5, radius, GxEPD_BLACK);
-            display.drawCircle(x, y - 5, radius + 1, GxEPD_BLACK);
+            canvas().fillCircle(x, y - 5, radius - 1, GxEPD_WHITE);
+            canvas().fillCircle(x, y - 5, fillRadius, GxEPD_BLACK);
+            canvas().drawCircle(x, y - 5, radius, GxEPD_BLACK);
+            canvas().drawCircle(x, y - 5, radius + 1, GxEPD_BLACK);
           }
 
           drawSparseStringCentered(&epaperFont, x, y, buf, GxEPD_WHITE);
@@ -123,8 +123,8 @@ void drawCalendar(LayoutItem* item)
 
           if (isToday)
           {
-            display.drawCircle(x, y - 5, radius, GxEPD_BLACK);
-            display.drawCircle(x, y - 5, radius + 1, GxEPD_BLACK);
+            canvas().drawCircle(x, y - 5, radius, GxEPD_BLACK);
+            canvas().drawCircle(x, y - 5, radius + 1, GxEPD_BLACK);
           }
         }
 

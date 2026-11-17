@@ -45,17 +45,21 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 | [Project info](docs/PROJECT_INFO.md) | Our hardware and wiring, build/flash workflow, host tests, findings |
 | [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Assessment, stages, hardware test log |
 | [OTA updates](docs/OTA_UPDATES.md) | Self-updating firmware: status, publishing a release, design |
-| [Fonts](fonts/README.md) | Font conversion (`tools/ListFontConvertV4.py`) |
+| [Fonts](src/ui/fonts/README.md) | Font conversion (`tools/ListFontConvertV4.py`) |
 
 ## Repository layout
 
 | Path | Contents |
 |---|---|
-| `ESP32-eInk-Dashboard.ino`, `*.cpp`, `*.h` | Firmware (moves into `src/` with stage 2) |
-| `sketch.yaml`, `partitions.csv` | Build profiles (core + library versions), flash layout |
-| `src/` | New firmware modules |
+| `ESP32-eInk-Dashboard.ino` | `setup()` / `loop()` only: the firmware is in `src/` |
+| `configure.h`, `sketch.yaml`, `partitions.csv` | Compile options and pin presets, build profiles (core + library versions), flash layout (must stay next to the sketch) |
+| `src/core/` | Wake cycle (`App`), wake decisions (`WakePlan`), settings (`ConfigManager`), log with secret masking |
+| `src/hardware/` | Pins, e-paper driver, battery, touch sensor / BOOT button, SuperMini LED |
+| `src/services/` | Weather, stocks, calendar (iCal), tracking, flights, MakerWorld, Bambu printer, Wi-Fi, time; verified HTTPS |
+| `src/widgets/`, `src/ui/` | Drawing of the dashboard; fonts (`src/ui/fonts/`, conversion notes there) and the canvas everything draws on |
+| `src/web/`, `src/update/`, `src/input/` | Setup page; over-the-air updates; button gestures |
 | `tests/host/` | Tests that run on the PC (`tests/host/run.sh`) |
-| `fonts/` | Font headers and conversion notes |
+| `app.h`, `display.h`, `fetchAllInfo.h`, … | Forwarding headers, removed in stage 3 |
 | `tools/` | Display bring-up test, font converter, VS Code IntelliSense setup, release manifest (`tools/ota/`) |
 | `docs/` | Documentation and images |
 | `.github/workflows/` | CI: builds every profile on each push, size check, manual releases |

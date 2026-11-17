@@ -12,10 +12,10 @@ constexpr int16_t LINE = 36;  // line spacing for the 16 px font
 template <typename Draw>
 void render(bool full, Draw draw) {
   if (full) display.setFullWindow();
-  else display.setPartialWindow(0, 0, display.width(), display.height());
+  else display.setPartialWindow(0, 0, canvas().width(), canvas().height());
   display.firstPage();
   do {
-    display.fillScreen(GxEPD_WHITE);
+    canvas().fillScreen(GxEPD_WHITE);
     draw();
   } while (display.nextPage());
 }
@@ -32,14 +32,14 @@ void title(int16_t y, const char* s) {
 
 void header(const char* s) {
   title(90, s);
-  display.drawFastHLine(160, 112, W - 320, GxEPD_BLACK);
+  canvas().drawFastHLine(160, 112, W - 320, GxEPD_BLACK);
 }
 
 // Check mark from thick lines (the font has no check glyph).
 void checkMark(int16_t cx, int16_t cy) {
   for (int d = -3; d <= 3; d++) {
-    display.drawLine(cx - 30, cy + d, cx - 10, cy + 20 + d, GxEPD_BLACK);
-    display.drawLine(cx - 10, cy + 20 + d, cx + 32, cy - 22 + d, GxEPD_BLACK);
+    canvas().drawLine(cx - 30, cy + d, cx - 10, cy + 20 + d, GxEPD_BLACK);
+    canvas().drawLine(cx - 10, cy + 20 + d, cx + 32, cy - 22 + d, GxEPD_BLACK);
   }
 }
 
@@ -55,10 +55,10 @@ void notesBlock(int16_t y, const char (*notes)[NOTE_LEN], int count) {
 
 void progressBar(int16_t y, int quarter) {
   constexpr int16_t BW = 520, BH = 28, BX = CX - BW / 2;
-  display.drawRect(BX, y, BW, BH, GxEPD_BLACK);
-  display.drawRect(BX + 1, y + 1, BW - 2, BH - 2, GxEPD_BLACK);
+  canvas().drawRect(BX, y, BW, BH, GxEPD_BLACK);
+  canvas().drawRect(BX + 1, y + 1, BW - 2, BH - 2, GxEPD_BLACK);
   int16_t fill = (int16_t)((BW - 8) * quarter / 4);
-  if (fill > 0) display.fillRect(BX + 4, y + 4, fill, BH - 8, GxEPD_BLACK);
+  if (fill > 0) canvas().fillRect(BX + 4, y + 4, fill, BH - 8, GxEPD_BLACK);
 }
 
 }  // namespace

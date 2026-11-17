@@ -1,7 +1,3 @@
 #pragma once
-#include "app.h"
-#include "fetchAllInfo.h"
-
-// Month grid widget (layout ID 256). The ICS calendar feeds are fetched in directFetch.cpp.
-int daysInMonth(int year, int month);
-void drawCalendar(LayoutItem* item);
+// Moved: src/widgets/MonthView.h (this forwarding header goes away in stage 3).
+#include "src/widgets/MonthView.h"

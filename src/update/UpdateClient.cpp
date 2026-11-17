@@ -11,6 +11,7 @@
 #include "../../configure.h"
 #include "OtaPublicKey.h"
 #include "Signature.h"
+#include "../services/SecureClient.h"
 
 // What this image is, as one string: CI reads it back out of the .bin to write the manifest entry
 // (tools/ota/make_manifest.py), so the manifest always matches what was compiled. Sent as the
@@ -18,9 +19,6 @@
 extern "C" const char OTA_FIRMWARE_ID[] =
     "OTA-ID:" FW_VARIANT ":" FW_DISPLAY ":" FW_STR(FW_CONFIG_SCHEMA) ":" FW_STR(FW_BUILD) ":END";
 
-// The ESP-IDF default certificate bundle (common CAs), linked into the core's mbedTLS library.
-extern const uint8_t x509_crt_bundle_start[] asm("_binary_x509_crt_bundle_start");
-extern const uint8_t x509_crt_bundle_end[] asm("_binary_x509_crt_bundle_end");
 
 namespace ota {
 namespace {
@@ -31,21 +29,18 @@ constexpr size_t MANIFEST_MAX_BYTES = 8192;
 constexpr size_t SIGNATURE_MAX_BYTES = 160;  // DER ECDSA P-256: at most 72 bytes
 constexpr int TOO_LARGE = -100;              // download(): the body didn't fit the buffer
 
-// TLS client that verifies every connection with the certificate bundle and only talks to GitHub.
-// The core clears the bundle setting whenever a connection is closed (stop_ssl_socket() wipes
-// the whole context), and HTTPClient reconnects for each redirect to another host (github.com ->
-// release-assets.githubusercontent.com). So the bundle is attached again before every connect.
-class GitHubClient : public NetworkClientSecure {
+// Verified TLS (SecureClient re-attaches the certificate bundle on every connect, so GitHub's
+// redirect to its file host works) and only to GitHub.
+class GitHubClient : public SecureClient {
 public:
   int connect(const char* host, uint16_t port, int32_t timeout) override {
     if (!isAllowedHost(host)) {
       Serial.printf("[OTA] refused connection to %s\n", host ? host : "?");
       return 0;
     }
-    setCACertBundle(x509_crt_bundle_start, x509_crt_bundle_end - x509_crt_bundle_start);
-    return NetworkClientSecure::connect(host, port, timeout);
+    return SecureClient::connect(host, port, timeout);
   }
-  using NetworkClientSecure::connect;
+  using SecureClient::connect;
 };
 
 void prepare(HTTPClient& http) {

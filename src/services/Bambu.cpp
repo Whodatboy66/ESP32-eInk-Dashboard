@@ -1,4 +1,5 @@
-#include "bambulab.h"
+#include "Bambu.h"
+#include "LanAddress.h"
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <HTTPClient.h>
@@ -8,7 +9,6 @@
 
 PrinterStatus printer;
 
-// int received=0;
 RTC_DATA_ATTR bool isPrinting=false;
 RTC_DATA_ATTR bool previousIsPrinting=false;
 RTC_DATA_ATTR time_t printFinishedAt = 0;     // when the last print ended (0 = no recent print)
@@ -31,7 +31,7 @@ bool bambuAuthRejected = false;
 
 void callback(char* topic, byte* payload, unsigned int length) {
 
-  StaticJsonDocument<4096> doc;
+  JsonDocument doc;  // ArduinoJson 7: StaticJsonDocument<N> was only an alias
   // doc clear();
 
   DeserializationError error = deserializeJson(doc, payload, length);
@@ -57,7 +57,6 @@ void callback(char* topic, byte* payload, unsigned int length) {
   
   copyJsonString(printer.gcode_state, sizeof(printer.gcode_state), print["gcode_state"]);
 
-  // Serial.printf("Perc %d isPrinting %d Prev %d  Status %s\n", printer.percent, isPrinting, previousIsPrinting, printer.gcode_state);
   // Persist printing state across deep sleep so we can refresh more frequently mid-print.
   Serial.println( printer.gcode_state );
   if( ( printer.gcode_state && (strcmp(printer.gcode_state,"RUNNING")==0||  strcmp(printer.gcode_state,"PREPARE")==0 ) || strcmp(printer.gcode_state,"PAUSE")   == 0 ) || ( printer.percent <100 && printer.percent >0 ) )
@@ -305,12 +304,25 @@ bool fetchBambu(  LayoutItem* infoBambu  )
   }
 
   previousIsPrinting=isPrinting;
-  // NOTE: setInsecure() disables certificate validation (MITM risk).
+  // The printer only has a self-signed certificate: TLS without a certificate check, and only
+  // inside the local network (the one documented exception, see LanAddress.h). A name from the
+  // router's DNS is resolved here and must give a local address; the connection then goes to that
+  // address (not to a second lookup of the name).
+  IPAddress printerIp;
+  if (!printerIp.fromString(mqtt_ip) && !WiFi.hostByName(mqtt_ip, printerIp)) {
+    DBGF("[Bambu] can't resolve %s", mqtt_ip);
+    return false;
+  }
+  if (!isPrivateIPv4(printerIp[0], printerIp[1], printerIp[2], printerIp[3])) {
+    DBGF("[Bambu] %s is %s, not in the local network: no connection without a certificate check",
+         mqtt_ip, printerIp.toString().c_str());
+    return false;
+  }
   wifiClient.setInsecure();
   client.setBufferSize(32768);  // a full pushall report can exceed 20 KB with an AMS attached
   gotReport = false;
   DBGF("[Bambu]: IP %s Port %d\n", mqtt_ip, mqtt_port );
-  client.setServer(mqtt_ip, mqtt_port);
+  client.setServer(printerIp, mqtt_port);
   client.setCallback(callback);
   connectMqtt( infoBambu );
 

@@ -89,9 +89,9 @@ To change the settings later, hold the button for 4 seconds and release it to re
 | **Timezone** | A POSIX timezone rule including summer time, used by the clock and the calendar: `CET-1CEST,M3.5.0,M10.5.0/3` (Germany and most of Central Europe), `GMT0BST,M3.5.0/1,M10.5.0` (UK), `EST5EDT,M3.2.0,M11.1.0` (US Eastern); the field suggests these. Common names (`CET`, `MEZ`, `Europe/Berlin`, `Europe/London`, `America/New_York`, …) are turned into their rule when you save. A bare `CET` used to be taken as UTC (1 hour behind in German winter); a saved one is corrected at the next start. Anything else is refused with a message. [List of rules](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv). |
 | **Weather Location** | A city, optionally with a 2-letter country code (`London, GB`), or `latitude,longitude` (`51.51,-0.13`). A city is looked up once with Open-Meteo's geocoding. |
 | **Stock Symbols** | Up to 5 Yahoo Finance symbols, comma separated: `AAPL,NVDA,^IXIC`. Indexes start with `^`. |
-| **Calendar iCal URLs** | Up to 3 `.ics` links, merged into one calendar. See [Getting your Google Calendar link](#getting-your-google-calendar-link). |
+| **Calendar iCal URLs** | Up to 3 `.ics` links (`https://`; `webcal://` and `http://` links are turned into `https://`), merged into one calendar. See [Getting your Google Calendar link](#getting-your-google-calendar-link). The server's certificate is checked: Google, iCloud, Outlook and servers with a normal certificate work; a self-hosted server with a self-signed certificate, or one that sends an incomplete certificate chain (`cert.pem` instead of `fullchain.pem`), doesn't. |
 | **Printer Name** | Title shown on the printer widget. |
-| **Bambu Printer IP** | The printer's local IP address. Leave empty to hide the printer widget. |
+| **Bambu Printer IP** | The printer's address in your home network (e.g. `192.168.1.100`) or its name there (`x1c.local`, or a name your router knows, like `printer.fritz.box`). Leave empty to hide the printer widget. Only local addresses are used: the printer's connection is the one without a certificate check (the printer only has a self-signed one), so a name that resolves to a public address is refused when connecting (serial log: `not in the local network`). |
 | **Bambu MQTT Port** | `8883` (the default; MQTT over TLS). |
 | **Bambu Printer Serial Number** | On the printer screen under Settings → Device, or in Bambu Studio. |
 | **Bambu LAN Access Code** | On the printer screen under Settings → WLAN / Network → Access Code. Leave empty to keep the saved code. |
@@ -350,21 +350,27 @@ Timing constants you can adjust:
 | `FW_BUILD` | e.g. `64` | configure.h | Firmware build number; `FW_VERSION` (".64") follows from it. Raise it for every release |
 | `OTA_REPO` | this fork | configure.h | GitHub repository whose releases the device installs |
 | `OTA_BATTERY_MIN_PCT` / `OTA_NIGHT_HOUR` / `OTA_CONFIRM_MS` | 30 % / 3 / 15 s | configure.h | Battery guard, hour of the night-time check, time for the confirm tap |
-| `AP_TIMEOUT_MS` | 5 min | [ESP32-eInk-Dashboard.ino](../ESP32-eInk-Dashboard.ino) | Setup mode closes after this long without activity |
-| `WAKE_AFTER_MINUTE_MS` | 500 ms | main sketch | Wake-up offset after each minute starts |
-| `NTP_RESYNC_S` | 1 h | main sketch | Maximum time between internet time syncs |
-| `MAKERWORLD_REFRESH_S` | 1 h | main sketch | MakerWorld stats refresh |
-| `FLIGHT_LIVE_BEFORE_S` / `FLIGHT_LIVE_REFRESH_S` / `FLIGHT_LIVE_FAST_S` | 6 h / 30 min / 10 min | main sketch | When live flight status starts, its normal refresh, and the refresh in the hour around departure and landing |
-| `FLIGHT_LIVE_AFTER_MAX_S` / `FLIGHT_LIVE_MAX_REQUESTS` | 3 h / 30 | main sketch | Safety limits: live tracking stops at the latest this long after the scheduled landing, or after this many requests for one flight |
-| `PRINT_FINISHED_HOLD_S` | 5 min | [bambulab.h](../bambulab.h) | Printer status stays on screen after a print ends |
-| `ICS_FLIGHT_LOOKAHEAD_S` | 7 days | [directFetch.cpp](../directFetch.cpp) | How far ahead a flight is pinned with a countdown |
-| `TRACKING_KEEP_DELIVERED_S` | 1 day | directFetch.cpp | How long delivered packages stay visible |
+| `AP_TIMEOUT_MS` | 5 min | [src/web/SetupServer.cpp](../src/web/SetupServer.cpp) | Setup mode closes after this long without activity |
+| `WAKE_AFTER_MINUTE_MS` | 500 ms | [src/core/WakePlan.h](../src/core/WakePlan.h) | Wake-up offset after each minute starts |
+| `NTP_RESYNC_S` | 1 h | WakePlan.h | Maximum time between internet time syncs |
+| `MAKERWORLD_REFRESH_S` | 1 h | WakePlan.h | MakerWorld stats refresh |
+| `FLIGHT_LIVE_BEFORE_S` / `FLIGHT_LIVE_REFRESH_S` / `FLIGHT_LIVE_FAST_S` | 6 h / 30 min / 10 min | WakePlan.h | When live flight status starts, its normal refresh, and the refresh in the hour around departure and landing |
+| `FLIGHT_LIVE_AFTER_MAX_S` / `FLIGHT_LIVE_MAX_REQUESTS` | 3 h / 30 | WakePlan.h | Safety limits: live tracking stops at the latest this long after the scheduled landing, or after this many requests for one flight |
+| `PRINT_FINISHED_HOLD_S` | 5 min | [src/services/Bambu.h](../src/services/Bambu.h) | Printer status stays on screen after a print ends |
+| `ICS_FLIGHT_LOOKAHEAD_S` | 7 days | [src/services/Calendar.cpp](../src/services/Calendar.cpp) | How far ahead a flight is pinned with a countdown |
+| `TRACKING_KEEP_DELIVERED_S` | 1 day | [src/services/Tracking.cpp](../src/services/Tracking.cpp) | How long delivered packages stay visible |
 
-The refresh interval of each widget (in minutes) is the `refresh` column of the built-in layout in [fetchAllInfo.cpp](../fetchAllInfo.cpp) (`loadDefaultLayout`).
+The refresh interval of each widget (in minutes) is the `refresh` column of the built-in layout in [src/widgets/Widgets.cpp](../src/widgets/Widgets.cpp) (`loadDefaultLayout`).
 
 ### CI builds
 
 The GitHub Actions workflow ([compile.yml](../.github/workflows/compile.yml)) runs on every push and pull request: it runs the host tests (`tests/host/run.sh`, plain C++ on the PC) and builds every `sketch.yaml` profile with [partitions.csv](../partitions.csv). Each build reports its flash and RAM use in the run summary and fails if the app image is larger than the planned OTA slot (1.875 MB). A GitHub release is only published from a manual run on `main` with **release** ticked.
+
+### Saving the setup page
+
+Every field is checked before anything is saved. If something can't work (an unknown timezone, a calendar link that isn't `https://`/`http://`/`webcal://`, characters a stock symbol can't have, a public printer address, an invalid printer port, incomplete custom pins), the page lists what to fix and **nothing is saved**: go back, correct it, save again. Stock symbols may be separated by commas or spaces; they are stored as `A,B,C` (at most 5, like before).
+
+**Factory reset** (button at the bottom of the setup page, with a confirmation) erases every setting, including Wi-Fi, and restarts into the first setup. Without the setup page: connect USB, open a serial monitor at 115200 baud, tap **RST** and type `factory-reset` within 3 seconds.
 
 ## Troubleshooting
 
@@ -404,7 +410,7 @@ The device only talks to: your Wi-Fi network, NTP time servers, `open-meteo.com`
 
 ## Fonts
 
-Font tooling and conversion notes are in [fonts/README.md](../fonts/README.md): conversion scripts, glyph lists, Material Design icon setup, and ePaper font optimization notes. Glyph order must stay consistent.
+Font tooling and conversion notes are in [fonts/README.md](../src/ui/fonts/README.md): conversion scripts, glyph lists, Material Design icon setup, and ePaper font optimization notes. Glyph order must stay consistent.
 
 ## 3D-printed case
 
@@ -412,11 +418,11 @@ Font tooling and conversion notes are in [fonts/README.md](../fonts/README.md): 
 
 ## Project structure
 
-- [ESP32-eInk-Dashboard.ino](../ESP32-eInk-Dashboard.ino): main sketch: setup page, wake/sleep cycle, refresh scheduling
-- [directFetch.cpp](../directFetch.cpp): data fetching: Open-Meteo, Yahoo Finance, iCal parser, MakerWorld, PKGE tracking, AeroDataBox flight status
-- [fetchAllInfo.cpp](../fetchAllInfo.cpp): screen layout and widget drawing
-- [bambulab.cpp](../bambulab.cpp): printer status over MQTT
-- [monthView.cpp](../monthView.cpp): month calendar widget
+- [ESP32-eInk-Dashboard.ino](../ESP32-eInk-Dashboard.ino): `setup()` / `loop()` only
+- [src/core/](../src/core/): the wake cycle (`App.cpp`), wake decisions (`WakePlan.h`), settings (`ConfigManager.cpp`, `ConfigValidation.h`), log with secret masking
+- [src/services/](../src/services/): data fetching (Open-Meteo, Yahoo Finance, iCal parser, MakerWorld, PKGE tracking, AeroDataBox flight status), printer over MQTT, Wi-Fi, time; verified HTTPS (`SecureClient`)
+- [src/widgets/](../src/widgets/): screen layout and widget drawing (month calendar in `MonthView.cpp`)
+- [src/web/SetupServer.cpp](../src/web/SetupServer.cpp): setup page; [src/update/](../src/update/): over-the-air updates
 - [configure.h](../configure.h): compile-time options, pin presets, icon constants
 - [src/input/ButtonGesture.h](../src/input/ButtonGesture.h): button gestures (tap, reboot, setup, sensor fault), hardware independent
 - [tests/host/](../tests/host/): tests that run on the PC (`tests/host/run.sh`)

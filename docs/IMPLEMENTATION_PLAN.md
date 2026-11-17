@@ -62,12 +62,12 @@ module with 8 MB flash (same chip, same code).
 
 | # | Finding | Where | Fix in stage |
 |---|---|---|---|
-| S1 | `setInsecure()`: no TLS certificate check on any HTTPS request | `directFetch.cpp` (5x), `bambulab.cpp` | 2 (certificate bundle; Bambu LAN uses a self-signed cert, so pin it or accept on LAN only) |
+| S1 | `setInsecure()`: no TLS certificate check on any HTTPS request | `directFetch.cpp` (5x), `bambulab.cpp` | 2: done (build 67), certificate bundle everywhere; Bambu LAN only to a local address |
 | S2 | Setup Wi-Fi `Dashboard-Setup` is **open** (no password) | `startAP()` | 5 (per-device WPA2 password, shown on the e-ink screen + QR code) |
 | S3 | Setup page **echoes saved calendar URLs** to anyone connected to the AP | `handleConfig` (`htmlAttr(ics_urls[i])`) | 5 (show "saved", never echo) |
 | S4 | Setup page has no authentication | web server | 5 (admin PIN / pairing) |
 | S5 | No firmware authenticity check (no OTA yet) | n/a | 1: done, signed manifest (build 66) |
-| S6 | Secrets partly redacted in logs already (recent upstream commit) | debug log | 2 (central logger with redaction) |
+| S6 | Secrets partly redacted in logs already (recent upstream commit) | debug log | 2: done (build 67), `DBGF` masks registered secrets |
 
 ### A.5 Licensing (spec §1: "review licensing")
 
@@ -167,7 +167,7 @@ All parts implemented; open are the remaining "Done when" tests on the device (s
 - [x] CI: release job publishes app binaries + `manifest.json` only when triggered manually; the "What's new" input (max. 3 lines) goes into the manifest and the release notes
 - [x] CI: signs the manifest with the `OTA_SIGNING_KEY` secret and checks it against the firmware's public key before publishing; channel input, beta = pre-release
 - [x] Host tests: manifest parsing, version and compatibility rules (incl. display, settings schema), signature check, channel URLs, battery-guard and auto/notify decisions, double tap
-- [ ] Secret `OTA_SIGNING_KEY` set on GitHub, offline backup of the private key (me)
+- [x] Secret `OTA_SIGNING_KEY` set on GitHub, offline backup of the private key (me)
 
 **Update triggers and settings (decided):**
 - [x] **Setup page checkbox "Install updates automatically"** (per device, default on). On: the night-time check installs by itself. Off (notify only): the night-time check only looks; a new version shows a small **"Update available"** mark in the status bar until it's installed
@@ -188,18 +188,20 @@ Wording follows the e-paper font, which has no ( ) ! ' and no ✓: "Tap to insta
 - ✔ settings survive (USB migration and update)
 - ✔ installs via double tap + confirm tap (auto off)
 - ☐ installs itself at night (auto on); ☐ notify-only shows the status-bar mark; ☐ battery refusal below 30 % without USB
-- ☐ corrupted image rejected; ☐ wrong-board image rejected; ☐ unsigned image rejected; ☐ release that crashes on boot rolls back (prepared: workflow "OTA test release", procedure in [OTA_TESTS.md](OTA_TESTS.md); extra: hang rolls back)
-- ☐ the same with a **beta** release (needs channels)
+- ✔ corrupted image rejected; ✔ wrong-board image rejected; ✔ unsigned image rejected; ✔ release that crashes on boot rolls back (workflow "OTA test release", procedure in [OTA_TESTS.md](OTA_TESTS.md))
+- ✔ the same with a **beta** release
 
 Original wording: a beta release installs itself on my device at night (auto on) and via double tap + confirm tap (auto off); notify-only shows the status-bar mark; below 30 % without USB it refuses with the battery message; a corrupted, unsigned or wrong-board image is rejected; a release that crashes on boot rolls back; settings survive.
 
 ### Stage 2: Firmware foundation (spec §4, Phase 2)
 No visible changes, only structure:
-- [ ] Split the `.ino` into `src/core` (App, Scheduler, ConfigManager, Logger), `src/hardware` (BoardConfig, PinMapping, BatteryMonitor, TouchController, EpaperDriver), `src/services` (Weather, Calendar, Time, Update), `src/web`
-- [ ] ConfigManager: versioned schema, validation, migration, factory reset; secrets in NVS
-- [ ] TLS: certificate bundle instead of `setInsecure()` (S1); Bambu LAN exception documented
-- [ ] Logger with secret redaction (S6)
-- [ ] Host test setup (g++ + doctest) in CI
+Detailed plan and result: [plans/STAGE2_FOUNDATION.md](plans/STAGE2_FOUNDATION.md). Done in code (build 67), **not yet checked on the device**.
+- [x] Split the `.ino` (2800 lines → 14) into `src/core` (App, WakePlan, ConfigManager, Logger, Problems), `src/hardware` (PinMapping, StatusLed, BatteryMonitor, TouchController, EpaperDriver), `src/services` (Weather, Stocks, Calendar, Tracking, Flight, MakerWorld, Bambu, Wi-Fi, Time, SecureClient), `src/widgets`, `src/ui` (canvas seam, sparse fonts), `src/web` (setup page), `src/update` (OTA flow); moved functions checked verbatim (`tools/dev/check_moves.py`)
+- [x] ConfigManager: schema version (`cfg_schema`), validation before saving (timezone, iCal links incl. `webcal://`, stock symbols, MQTT port, printer in the local network), migration hook, factory reset (setup page + serial `factory-reset`); secrets stay in NVS
+- [x] TLS: certificate bundle for every HTTPS request (S1); Bambu LAN MQTT the one exception, only to a local network address
+- [x] Logger: `DBGF` masks Wi-Fi password, access code, API keys and iCal links (S6)
+- [x] Host tests in CI (plain C++ checks, no doctest: ruling in the stage plan): wake plan, config validation, redaction, LAN rule, battery curve, plus stage 1's
+- [ ] Side-by-side check on the device (same screen, same boot log, every service still loads)
 
 **Done when:** behavior is the same as before (side-by-side check on the device), CI is green, every HTTPS request is verified.
 
@@ -265,6 +267,7 @@ Only tests actually performed on the device go here.
 | 2026-11-16 | .63 + fixes | Dashboard after setup, Wi-Fi, weather, NTP | Running (reported by user) |
 | 2026-11-16 | .64 → .65 | USB migration to the OTA partition table (build 64), then over-the-air update to build 65 | Settings kept after the USB flash and after the update (reported by user) |
 | 2026-11-16 | .64 → .65 | Double tap on the TTP223 → info screen → "New version .65" → confirm tap → download from the GitHub release, install, restart | Installed and running .65 (reported by user). Confirms the certificate bundle fix for GitHub's redirect |
+| 2026-11-17 | .66 | OTA tests on the beta channel: wrong board, bad checksum, unsigned, crash on boot, beta release | All as expected: rejected / rolled back (reported by user) |
 
 ## Changelog
 

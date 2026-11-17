@@ -1,9 +1,9 @@
-#include "app.h"
+#include "../../app.h"
 #include <ctype.h>
 #include <string.h>
-#include "configure.h"
-#include "fetchAllInfo.h"
-#include "bambulab.h"
+#include "../../configure.h"
+#include "Widgets.h"
+#include "../services/Bambu.h"
 #include <Preferences.h>
 
 // Arrays to store the data
@@ -186,11 +186,11 @@ bool isFlightTitle(const char* t) {
 // Small airplane (about 18x14 px) pointing right, vertically centered on a text line at baseline y.
 static void drawPlaneIcon(int16_t x, int16_t y) {
   int16_t cy = y - 6;
-  display.fillRect(x + 1, cy - 1, 15, 3, GxEPD_BLACK);                            // fuselage
-  display.fillTriangle(x + 16, cy - 1, x + 16, cy + 1, x + 18, cy, GxEPD_BLACK);   // nose
-  display.fillTriangle(x + 6, cy, x + 11, cy, x + 5, cy - 7, GxEPD_BLACK);         // upper wing
-  display.fillTriangle(x + 6, cy, x + 11, cy, x + 5, cy + 7, GxEPD_BLACK);         // lower wing
-  display.fillTriangle(x + 1, cy, x + 4, cy, x + 1, cy - 4, GxEPD_BLACK);          // tail
+  canvas().fillRect(x + 1, cy - 1, 15, 3, GxEPD_BLACK);                            // fuselage
+  canvas().fillTriangle(x + 16, cy - 1, x + 16, cy + 1, x + 18, cy, GxEPD_BLACK);   // nose
+  canvas().fillTriangle(x + 6, cy, x + 11, cy, x + 5, cy - 7, GxEPD_BLACK);         // upper wing
+  canvas().fillTriangle(x + 6, cy, x + 11, cy, x + 5, cy + 7, GxEPD_BLACK);         // lower wing
+  canvas().fillTriangle(x + 1, cy, x + 4, cy, x + 1, cy - 4, GxEPD_BLACK);          // tail
 }
 
 // "in 45m", "in 3h05m", "in 2d 4h".
