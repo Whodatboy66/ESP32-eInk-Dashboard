@@ -44,5 +44,5 @@ void otaBootCheck();
 // Before deep sleep: confirm the new image (Wi-Fi + display worked) or roll back.
 void otaConfirmIfPending();
 // The user is operating the device (a hold, setup mode, the update screen): the new firmware
-// clearly runs, so a restart now must not roll it back.
+// clearly runs, so a restart now must not roll it back. Ignored in test builds (90001+).
 void otaConfirmByUser(const char* why);

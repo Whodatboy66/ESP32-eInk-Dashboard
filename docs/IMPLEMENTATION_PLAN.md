@@ -162,7 +162,7 @@ All parts implemented; open are the remaining "Done when" tests on the device (s
 - [x] Update client (`src/update/`): daily night-time check (03:00-03:59), manifest download over verified HTTPS (certificate bundle), board-variant and min-build checks, no downgrades, SHA-256 check while writing, size check
 - [x] **ECDSA signature check** of the manifest (P-256, `manifest.sig`, public key in `src/update/OtaPublicKey.h`); unsigned or altered manifests are rejected
 - [x] **Battery guard (decided):** below 30 % battery no update is installed unless USB is connected; the device retries at the next check
-- [x] Rollback: new firmware is confirmed only after Wi-Fi + display refresh succeed; without Wi-Fi it rolls back right away (clean restart); a hang rolls back after 3 min (timer restart); using the button (hold, setup, update screen) confirms it, so a user restart doesn't roll back; a build that rolled back is not auto-installed again
+- [x] Rollback: new firmware is confirmed only after Wi-Fi + display refresh succeed; without Wi-Fi it rolls back right away (clean restart); a hang rolls back after 3 min (timer restart); using the button (hold, setup, update screen) confirms it, so a user restart doesn't roll back (not in test builds, 90001+, which also take any regular release again); a build that rolled back is not auto-installed again
 - [x] Channels stable/beta (setup page "Update channel"); beta reads the fixed `beta` pre-release, which every release refreshes
 - [x] CI: release job publishes app binaries + `manifest.json` only when triggered manually; the "What's new" input (max. 3 lines) goes into the manifest and the release notes
 - [x] CI: signs the manifest with the `OTA_SIGNING_KEY` secret and checks it against the firmware's public key before publishing; channel input, beta = pre-release
@@ -270,6 +270,7 @@ Only tests actually performed on the device go here.
 | 2026-11-16 | .64 → .65 | USB migration to the OTA partition table (build 64), then over-the-air update to build 65 | Settings kept after the USB flash and after the update (reported by user) |
 | 2026-11-16 | .64 → .65 | Double tap on the TTP223 → info screen → "New version .65" → confirm tap → download from the GitHub release, install, restart | Installed and running .65 (reported by user). Confirms the certificate bundle fix for GitHub's redirect |
 | 2026-11-17 | .66 | OTA tests on the beta channel: wrong board, bad checksum, unsigned, crash on boot, beta release | All as expected: rejected / rolled back (reported by user) |
+| 2026-11-17 | .66 → .90005 | OTA test "hang", then `restore` | Test build kept instead of rolled back (most likely confirmed by a button use during the hang); afterwards every release showed "Up to date: .90005" because test builds count as newer. Fixed in build 69 (see CHANGELOG); the device needs one USB flash (reported by user) |
 
 ## Changelog
 

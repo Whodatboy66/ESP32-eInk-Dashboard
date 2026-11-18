@@ -22,9 +22,16 @@ enum class Availability : uint8_t {
   IncompatibleSettings // newer, but it can't read this device's settings (config schema too new)
 };
 
+// Test builds of the "OTA test release" workflow (docs/OTA_TESTS.md) are numbered from 90001 on, so
+// they count as newer than any release. A device left on one (a test build that got confirmed)
+// must still get back to the regular releases: for it, every regular release counts as newer.
+constexpr uint32_t FIRST_TEST_BUILD = 90000;
+inline bool isTestBuild(uint32_t build) { return build >= FIRST_TEST_BUILD; }
+
 inline Availability availability(uint32_t remoteBuild, uint32_t minBuild, bool hasFileForVariant,
                                  uint32_t currentBuild) {
-  if (remoteBuild <= currentBuild) return Availability::UpToDate;  // never a downgrade
+  bool leaveTestBuild = isTestBuild(currentBuild) && !isTestBuild(remoteBuild) && remoteBuild > 0;
+  if (remoteBuild <= currentBuild && !leaveTestBuild) return Availability::UpToDate;  // never a downgrade
   if (!hasFileForVariant) return Availability::NotForThisBoard;
   if (currentBuild < minBuild) return Availability::NeedsNewerFirmware;
   return Availability::Newer;

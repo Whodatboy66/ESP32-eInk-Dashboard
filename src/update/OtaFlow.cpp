@@ -361,8 +361,14 @@ static void otaMarkValid(const char* why) {
 }
 
 // The user is operating the device (a hold, setup mode, the update screen): the new firmware
-// clearly runs, so a restart now must not roll it back.
+// clearly runs, so a restart now must not roll it back. Not for test builds (docs/OTA_TESTS.md):
+// the crash / hang tests must roll back even if the button is used meanwhile; a test build stays
+// only if it passes the automatic check (Wi-Fi and display).
 void otaConfirmByUser(const char* why) {
+  if (ota::isTestBuild(FW_BUILD)) {
+    if (otaPendingVerify) Serial.printf("[OTA] test build: not confirmed by %s\n", why);
+    return;
+  }
   otaMarkValid(why);
 }
 

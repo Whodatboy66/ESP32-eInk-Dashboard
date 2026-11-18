@@ -15,6 +15,22 @@ static void test_availability() {
   CHECK(availability(70, 64, true, 64) == Availability::Newer);    // min_build is inclusive
 }
 
+static void test_test_builds() {
+  // Test builds (90001-90005) count as newer than every release ...
+  CHECK(isTestBuild(90005));
+  CHECK(!isTestBuild(69));
+  CHECK(availability(90005, 0, true, 69) == Availability::Newer);
+  // ... and a device left on one gets back to any regular release (restore, the next release).
+  CHECK(availability(66, 0, true, 90005) == Availability::Newer);
+  CHECK(availability(69, 0, true, 90004) == Availability::Newer);
+  CHECK(availability(69, 0, false, 90005) == Availability::NotForThisBoard);
+  CHECK(availability(69, 70, true, 90005) == Availability::Newer);  // a test build is past any min_build
+  // Between test builds the normal rule applies.
+  CHECK(availability(90005, 0, true, 90005) == Availability::UpToDate);
+  CHECK(availability(90004, 0, true, 90005) == Availability::UpToDate);
+  CHECK(availability(0, 0, true, 90005) == Availability::UpToDate);  // no real build number
+}
+
 static void test_battery_guard() {
   // battery sensor, percent, USB, minimum
   CHECK(batteryAllowsInstall(true, 30, false, 30));
@@ -137,6 +153,7 @@ static void test_progress_steps() {
 
 int main() {
   test_availability();
+  test_test_builds();
   test_battery_guard();
   test_night_check_due();
   test_night_action();
