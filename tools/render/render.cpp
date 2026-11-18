@@ -39,6 +39,9 @@ char makerworld_uid[CFG_MW_UID_MAX] = "123";
 char printer_name[CFG_PRINTER_NAME_MAX] = "X1C";
 char pkge_api_key[CFG_PKGE_KEY_MAX] = "key";
 char aerodatabox_key[CFG_ADB_KEY_MAX] = "";
+char bday_url[CFG_ICS_URL_MAX] = "";
+uint8_t user_content = USER_HAS_TASKS | USER_HAS_NOTE | USER_HAS_BIRTHDAYS;
+extern int renderSample;  // tools/render/UserStoreSample.cpp
 char layout_template[CFG_LAYOUT_MAX] = "classic";
 uint16_t widget_show_mask = 0xFFFF;
 bool clock_24h = true;
@@ -152,6 +155,8 @@ int main(int argc, char** argv) {
     serviceStates[(int)Service::Calendar].lastOk = RENDER_TIME - 86400;
   }
   if (argc > 4 && std::string(argv[4]).rfind("12h", 0) == 0) clock_24h = false;
+  if (argc > 4 && std::string(argv[4]) == "empty") renderSample = 1;
+  if (argc > 4 && std::string(argv[4]) == "long") renderSample = 2;
   if (argc > 4 && std::string(argv[4]) == "12h1258") RENDER_TIME += 3 * 3600 + 17 * 60;  // 12:58, widest 12 h
   if (argc > 3) {
     std::string hide = argv[3];

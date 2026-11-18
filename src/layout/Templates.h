@@ -10,6 +10,15 @@
 //   |         |         |   | Weather | Agenda  |      | Weather | Agenda  |
 //   +---------+---------+   +---------+---------+      +---------+---------+
 //
+//   Personal (stage 4)
+//   +---------+---------+
+//   | Clock   | Note    |
+//   +---------+---------+
+//   | Tasks   |Birthdays|
+//   | (2x2)   +---------+
+//   |         | Weather |
+//   +---------+---------+
+//
 // Classic is today's fixed layout, in pixels (not grid-aligned), so existing devices look the same.
 #include "LayoutEngine.h"
 
@@ -47,6 +56,14 @@ inline const Placement TECHNICAL[] = {
     {WidgetId::Agenda, {2, 2, 2, 1}},
 };
 
+inline const Placement PERSONAL[] = {
+    {WidgetId::Clock, {0, 0, 2, 1}},
+    {WidgetId::Notes, {2, 0, 2, 1}},
+    {WidgetId::Tasks, {0, 1, 2, 2}},
+    {WidgetId::Birthdays, {2, 1, 2, 1}},
+    {WidgetId::Weather, {2, 2, 2, 1}},
+};
+
 }  // namespace templates
 
 inline const Template TEMPLATES[] = {
@@ -54,6 +71,7 @@ inline const Template TEMPLATES[] = {
     {"planner", "Planner", templates::PLANNER, sizeof(templates::PLANNER) / sizeof(Placement), nullptr, 0},
     {"minimal", "Minimal", templates::MINIMAL, sizeof(templates::MINIMAL) / sizeof(Placement), nullptr, 0},
     {"technical", "Technical", templates::TECHNICAL, sizeof(templates::TECHNICAL) / sizeof(Placement), nullptr, 0},
+    {"personal", "Personal", templates::PERSONAL, sizeof(templates::PERSONAL) / sizeof(Placement), nullptr, 0},
 };
 constexpr int TEMPLATE_COUNT = sizeof(TEMPLATES) / sizeof(TEMPLATES[0]);
 

@@ -218,10 +218,11 @@ Detailed plan and result: [plans/STAGE3_WIDGETS_LAYOUT.md](plans/STAGE3_WIDGETS_
 **Done when:** widgets and the layout are switched through configuration only; all four templates render correctly on the device.
 
 ### Stage 4: Personal widgets (spec §5.3)
-- [ ] LittleFS user-data partition; storage for tasks / notes / birthdays with size limits
-- [ ] Tasks (add, delete, done, due date, priority, show the top N)
-- [ ] Notes (multi-line, length limit)
-- [ ] Birthdays (from a chosen calendar feed or manual list; days remaining)
+Detailed plan: [plans/STAGE4_PERSONAL_WIDGETS.md](plans/STAGE4_PERSONAL_WIDGETS.md). Done in code (build 70), not yet checked on the device.
+- [x] LittleFS user-data partition; storage for tasks / notes / birthdays with size limits
+- [x] Tasks (add, delete, done, due date, priority, show the top N)
+- [x] Notes (multi-line, length limit)
+- [x] Birthdays (from a chosen calendar feed or manual list; days remaining)
 
 **Done when:** all three are editable (through a temporary JSON API at first) and survive restarts and OTA.
 

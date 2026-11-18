@@ -27,6 +27,8 @@
 #include "../widgets/Dashboard.h"
 #include "../widgets/Registry.h"
 #include "../widgets/MonthView.h"
+#include "../widgets/Personal.h"
+#include "../personal/UserStore.h"
 #include "../widgets/StatusBar.h"
 #include "../widgets/Widgets.h"
 #include "AppState.h"
@@ -38,6 +40,18 @@ bool fullRefresh;  // this wake redraws the whole screen
 
 // Minute the clock was drawn in this wake (redrawn if the minute changes during the network work).
 static long clockDrawnMinute = -1;
+// Personal widgets (stage 4): the day they were drawn for (due labels, "in 3 d"), and the birthday
+// calendar link: the day it was read, and when to try again after a failure.
+RTC_DATA_ATTR static long personalDrawnDay = 0;
+RTC_DATA_ATTR static long bdayFeedDay = 0;
+RTC_DATA_ATTR static time_t bdayFeedRetryAt = 0;
+RTC_DATA_ATTR static uint32_t bdayFeedUrlHash = 0;  // a changed link is read right away
+
+static uint32_t textHash(const char* s) {
+  uint32_t h = 2166136261u;  // FNV-1a
+  for (; *s; s++) h = (h ^ (uint8_t)*s) * 16777619u;
+  return h;
+}
 
 // Minutes since the epoch: changes exactly when the displayed HH:MM changes.
 static long currentMinute() {
@@ -105,6 +119,10 @@ void appSetup() {
   }
 
   configLoad();
+  // Local time for everything drawn (the clock widget used to be the only place that set it, and
+  // a layout may have no clock).
+  setenv("TZ", device_timezone[0] ? device_timezone : "UTC0", 1);
+  tzset();
   DBGF("Firmware %s (build %d, %s, %s, settings schema %d), auto update %s, channel %s", FW_VERSION,
        FW_BUILD, FW_VARIANT, FW_DISPLAY, FW_CONFIG_SCHEMA, otaAutoInstall ? "on" : "off",
        ota::channelName(otaBeta));
@@ -289,6 +307,19 @@ void appSetup() {
   bool ntpDue = plan.ntp;
   otaNightDue = plan.otaNight;
   bool needWiFi = plan.needWiFi;
+  // Personal widgets: redraw when the date changed; the birthday link is read once a day.
+  LayoutItem* infoTasks = getLayout(512);
+  LayoutItem* infoNote = getLayout(1024);
+  LayoutItem* infoBirthdays = getLayout(2048);
+  const personal::Date today = localToday();
+  const long todayNum = today.valid() ? personal::dayNumber(today) : 0;
+  bool personalRedraw = todayNum && todayNum != personalDrawnDay && (infoTasks || infoNote || infoBirthdays);
+  const uint32_t bdayHash = textHash(bday_url);
+  if (bdayHash != bdayFeedUrlHash) bdayFeedRetryAt = 0;
+  bool bdayFeedDue = infoBirthdays && bday_url[0] && todayNum &&
+                     (todayNum != bdayFeedDay || bdayHash != bdayFeedUrlHash) && nowTs >= bdayFeedRetryAt;
+  if (bdayFeedDue && !plan.wifiBackoff) needWiFi = true;
+  else bdayFeedDue = false;
   bool makerworldRedraw = false;
   // A parcel delivered more than a day ago is still on screen: remove it without a download
   // (decided on the interval alone, before a Wi-Fi backoff, as before).
@@ -352,6 +383,18 @@ void appSetup() {
         setProblem(PROBLEM_CALENDAR, !ok || failed > 0);
         if (!ok && !fullRefresh && !turnedStale(Service::Calendar, infoEvent ? infoEvent : infoCalendar))
           eventIf = calendarIf = false;
+      }
+      if (bdayFeedDue) {
+        bool ok = fetchBirthdayFeed(device_timezone);
+        setProblem(PROBLEM_BIRTHDAYS, !ok);
+        if (ok) {
+          bdayFeedDay = todayNum;
+          bdayFeedUrlHash = bdayHash;
+          bdayFeedRetryAt = 0;
+          personalRedraw = true;
+        } else {
+          bdayFeedRetryAt = time(nullptr) + 3600;  // a broken link: once an hour, not every minute
+        }
       }
       if (trackingIf) {
         bool ok = fetchTrackingDirect();
@@ -432,6 +475,7 @@ void appSetup() {
     do {
       drawFullScreen(parts);
     } while (display.nextPage());
+    personalDrawnDay = todayNum;
 
     DBG(F("Finish full"));
   }
@@ -463,6 +507,13 @@ void appSetup() {
 
     if (infoBattery && (batteryIf || forceUpdateStatusBar || problems != problemsShown))
       updatePartial(infoBattery, drawStatus);
+
+    if (personalRedraw) {
+      if (infoTasks) updatePartial(infoTasks, tasksWidget);
+      if (infoNote) updatePartial(infoNote, noteWidget);
+      if (infoBirthdays) updatePartial(infoBirthdays, birthdaysWidget);
+      personalDrawnDay = todayNum;
+    }
   }
   // A double tap while the dashboard was refreshing: open the update screen now. A tap may still
   // be waiting for its second tap.

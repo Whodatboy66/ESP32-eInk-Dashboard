@@ -42,6 +42,13 @@ extern bool clock_24h;
 
 #define ICS_MAX_FEEDS 3
 extern char ics_urls[ICS_MAX_FEEDS][CFG_ICS_URL_MAX];
+// Personal widgets (stage 4): birthday calendar link (iCal), and which ones have content
+// (USER_HAS_*, kept in NVS so a wake needn't open the file system to find out).
+extern char bday_url[CFG_ICS_URL_MAX];
+extern uint8_t user_content;
+#define USER_HAS_TASKS 0x01
+#define USER_HAS_NOTE 0x02
+#define USER_HAS_BIRTHDAYS 0x04
 
 inline bool hasIcsFeeds() {
     for (int i = 0; i < ICS_MAX_FEEDS; i++)

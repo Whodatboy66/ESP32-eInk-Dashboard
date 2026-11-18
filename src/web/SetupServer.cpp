@@ -19,6 +19,7 @@
 #include "../update/OtaFlow.h"
 #include "../update/UpdatePolicy.h"
 #include "../widgets/Registry.h"
+#include "Api.h"
 
 // Functions of this file, in the order they are defined below.
 void appendFormat(String& out, const char* fmt, ...);
@@ -454,6 +455,14 @@ for (int i = 0; i < ICS_MAX_FEEDS; i++) {
 html += R"rawliteral(
     <div class="note">Google Calendar: Settings &rarr; your calendar &rarr; Integrate calendar &rarr; public or secret address in iCal format.</div>
 
+    <label>Birthday calendar iCal URL (optional)</label>
+    <input name="bday_url" value=")rawliteral";
+
+html += htmlAttr(bday_url);
+
+html += R"rawliteral(" placeholder="https://calendar.google.com/calendar/ical/.../basic.ics">
+    <div class="note">Shown by the Birthdays widget (next 60 days), not in the agenda. Birthdays can also be typed in through the setup app.</div>
+
     <hr>
 
     <label>Printer Name</label>
@@ -709,6 +718,9 @@ void handleSave() {
   for (int i = 0; i < ICS_MAX_FEEDS; i++)
     if (!validateIcsUrl(server.arg(ICS_PREF_KEYS[i]).c_str(), icsClean[i], sizeof(icsClean[i])))
       errors += "Calendar link " + String(i + 1) + " is not an https://, http:// or webcal:// address.\n";
+  char bdayClean[CFG_ICS_URL_MAX];
+  if (!validateIcsUrl(server.arg("bday_url").c_str(), bdayClean, sizeof(bdayClean)))
+    errors += "Birthday calendar link is not an https://, http:// or webcal:// address.\n";
   char stocksClean[CFG_STOCKS_MAX];
   if (!normalizeStockSymbols(server.arg("stock_symbols").c_str(), stocksClean, sizeof(stocksClean)))
     errors += "Stock symbols: Yahoo Finance symbols (letters, digits, ^ . = -) separated by commas, e.g. AAPL,NVDA,^IXIC.\n";
@@ -749,6 +761,7 @@ void handleSave() {
   copyToCfg(stock_symbols, sizeof(stock_symbols), stocksClean);
   for (int i = 0; i < ICS_MAX_FEEDS; i++)
     copyToCfg(ics_urls[i], sizeof(ics_urls[i]), icsClean[i]);
+  copyToCfg(bday_url, sizeof(bday_url), bdayClean);
   copyToCfg(makerworld_uid, sizeof(makerworld_uid), server.arg("makerworld_uid"));
   copyToCfg(printer_name, sizeof(printer_name), server.arg("printer_name"));
   // Empty keeps the saved key; a single "-" removes it (hides the tracking widget).
@@ -900,6 +913,7 @@ void startAP() {
   dnsServer.start(53, "*", WiFi.softAPIP());
 
   server.on("/", handleConfig);
+  registerApiRoutes(server);
   server.on("/save", HTTP_POST, handleSave);
   server.on("/update", HTTP_POST, handleUpdateNow);
   server.on("/factory-reset", HTTP_POST, []() {

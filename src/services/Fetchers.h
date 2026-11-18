@@ -32,3 +32,5 @@ bool fetchMakerWorldDirect();
 // `tz` is the POSIX TZ string used to interpret floating / TZID times and day boundaries.
 // Returns true if at least one feed was read; `failed` (optional) gets the number of feeds that failed.
 bool fetchCalendarIcs(const char* tz, int* failed = nullptr);
+// Birthdays from the birthday calendar link (bday_url) into /bday_feed.json (stage 4).
+bool fetchBirthdayFeed(const char* tz);

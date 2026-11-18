@@ -9,8 +9,8 @@
 
 namespace layouts {
 
-enum class WidgetId : uint8_t { StatusBar, Clock, Weather, Agenda, Month, Stocks, Tracking, Printer };
-constexpr int WIDGET_COUNT = 8;
+enum class WidgetId : uint8_t { StatusBar, Clock, Weather, Agenda, Month, Stocks, Tracking, Printer, Tasks, Notes, Birthdays };
+constexpr int WIDGET_COUNT = 11;
 constexpr uint16_t widgetBit(WidgetId id) { return static_cast<uint16_t>(1u << static_cast<int>(id)); }
 constexpr uint16_t ALL_WIDGETS = static_cast<uint16_t>((1u << WIDGET_COUNT) - 1);
 
@@ -44,6 +44,9 @@ inline const Limits& limitsOf(WidgetId id) {
       {2, 1, 4, 3},  // Stocks: fixed columns up to 400 px
       {2, 1, 4, 3},  // Tracking
       {2, 1, 4, 3},  // Printer / MakerWorld: fixed columns up to 400 px
+      {2, 1, 4, 3},  // Tasks: checkbox, title, due date
+      {1, 1, 4, 3},  // Note: wrapped text
+      {2, 1, 4, 3},  // Birthdays: label, name, age
   };
   return table[static_cast<int>(id)];
 }

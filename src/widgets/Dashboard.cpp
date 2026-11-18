@@ -7,6 +7,7 @@
 #include "../ui/Canvas.h"
 #include "Clock.h"
 #include "MonthView.h"
+#include "Personal.h"
 #include "StatusBar.h"
 #include "Widgets.h"
 
@@ -40,4 +41,8 @@ void drawFullScreen(const FullScreenParts& p) {
   if (p.stocks) drawWidget(getLayout(4), stockWidget);
   if (p.month) drawWidget(getLayout(256), drawCalendar);
   if (p.tracking) drawWidget(getLayout(16), trackingWidget);
+  // Personal widgets: local data, always drawn (only those on the layout open the file system).
+  drawWidget(getLayout(512), tasksWidget);
+  drawWidget(getLayout(1024), noteWidget);
+  drawWidget(getLayout(2048), birthdaysWidget);
 }

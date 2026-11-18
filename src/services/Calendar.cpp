@@ -5,11 +5,13 @@
 #include <ArduinoJson.h>
 #include <ctype.h>
 #include <time.h>
+#include <new>
 
 #include "HttpJson.h"
 #include "SecureClient.h"
 #include "ServiceUtil.h"
 #include "../widgets/MonthView.h"
+#include "../personal/UserStore.h"
 
 // ----------------------- Calendar (.ics) -----------------------
 
@@ -46,6 +48,7 @@ struct IcsWindow {
   time_t monthEnd;
   int month;         // tm_mon of today
   bool days[32];
+  personal::BirthdayList* collect;  // birthday feed: occurrences go here, not into cal
 };
 
 static time_t makeLocal(int y, int mon, int d, int hh, int mm, int ss) {
@@ -173,6 +176,28 @@ static bool emitOccurrence(const IcsEvent& ev, IcsWindow& w, time_t s) {
 
   for (int i = 0; i < ev.exdateCount; i++)
     if (ev.exdates[i] == s) return true;
+
+  if (w.collect) {  // birthday feed: name and day of every occurrence in the window
+    personal::BirthdayList& l = *w.collect;
+    struct tm lt;
+    localtime_r(&s, &lt);
+    char name[personal::BDAY_NAME_BYTES];
+    personal::copyChars(name, sizeof(name), ev.summary, personal::BDAY_NAME_CHARS);
+    personal::filterText(name, screenFontHas, false);
+    personal::trimSpaces(name);
+    if (!name[0] || s < w.from) return true;
+    for (int i = 0; i < l.count; i++)
+      if (l.items[i].day == lt.tm_mday && l.items[i].month == lt.tm_mon + 1 && !strcmp(l.items[i].name, name))
+        return true;
+    if (l.count < personal::MAX_BIRTHDAYS) {
+      personal::Birthday& b = l.items[l.count++];
+      snprintf(b.name, sizeof(b.name), "%s", name);
+      b.day = lt.tm_mday;
+      b.month = lt.tm_mon + 1;
+      b.year = 0;  // feeds rarely say the year of birth reliably
+    }
+    return true;
+  }
 
   if (e > w.now && s < w.now + 86400) addUpcoming(ev, s, e);
   if (s < w.monthEnd) markDays(w, s, e > s ? e : s + 1);
@@ -415,6 +440,32 @@ static bool readIcsFeed(const char* url, IcsWindow& w) {
 
   DBGF("[ICS] %d events parsed in %lu ms", eventsSeen, millis() - t0);
   return true;
+}
+
+// Birthdays from the birthday calendar link (stage 4): every event in the next 60 days, yearly
+// repeats expanded. Kept in /bday_feed.json; on failure the last list stays.
+bool fetchBirthdayFeed(const char* tz) {
+  if (!bday_url[0]) return false;
+  setenv("TZ", (tz && tz[0]) ? tz : "UTC0", 1);
+  tzset();
+  struct tm nowTm;
+  if (!getLocalTime(&nowTm, 10000)) return false;
+  personal::BirthdayList* found = new (std::nothrow) personal::BirthdayList();  // heap: little static RAM
+  if (!found) return false;
+  IcsWindow w = {};
+  w.now = time(nullptr);
+  w.from = makeLocal(nowTm.tm_year + 1900, nowTm.tm_mon + 1, nowTm.tm_mday, 0, 0, 0);
+  w.monthEnd = w.from;  // no marked days
+  w.to = makeLocal(nowTm.tm_year + 1900, nowTm.tm_mon + 1, nowTm.tm_mday + personal::BDAY_HORIZON_DAYS + 1, 0, 0, 0);
+  w.month = nowTm.tm_mon;
+  w.collect = found;
+  bool ok = readIcsFeed(bday_url, w);
+  if (ok) {
+    DBGF("[ICS] %d birthdays in the next %d days", found->count, personal::BDAY_HORIZON_DAYS);
+    ok = saveUserFeedBirthdays(*found);
+  }
+  delete found;
+  return ok;
 }
 
 bool fetchCalendarIcs(const char* tz, int* failed) {

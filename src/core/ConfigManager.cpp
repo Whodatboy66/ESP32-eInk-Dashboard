@@ -1,6 +1,8 @@
 // Settings: the buffers the services read, loaded from and saved to NVS (namespace "config").
 #include "ConfigManager.h"
 
+#include "../personal/UserStore.h"
+
 #include <string.h>
 
 #include "../hardware/PinMapping.h"
@@ -26,6 +28,8 @@ char makerworld_uid[CFG_MW_UID_MAX];
 char printer_name[CFG_PRINTER_NAME_MAX];
 char pkge_api_key[CFG_PKGE_KEY_MAX];
 char aerodatabox_key[CFG_ADB_KEY_MAX];
+char bday_url[CFG_ICS_URL_MAX];
+uint8_t user_content = 0;
 
 // Preference keys for the calendar feeds (the first keeps the original single-feed key).
 char layout_template[CFG_LAYOUT_MAX] = "classic";
@@ -66,6 +70,9 @@ void configLoad() {
   preferences.getString("pkge_key", pkge_api_key, sizeof(pkge_api_key));
   memset(aerodatabox_key, 0, sizeof(aerodatabox_key));
   preferences.getString("adb_key", aerodatabox_key, sizeof(aerodatabox_key));
+  memset(bday_url, 0, sizeof(bday_url));
+  preferences.getString("bday_url", bday_url, sizeof(bday_url));
+  user_content = preferences.getUChar("user_flags", 0);
   // Older setups may have saved a bare name like "CET" (which the C library treats as UTC).
   char tzRule[CFG_TIMEZONE_MAX];
   if (!normalizeTimezone(device_timezone, tzRule, sizeof(tzRule))) {
@@ -106,7 +113,7 @@ void configLoad() {
 
   // Secrets never appear in the log (masked by logPrintf): pointers to the buffers themselves.
   static const char* const secrets[] = {wifi_pass, mqtt_pass, pkge_api_key, aerodatabox_key,
-                                        ics_urls[0], ics_urls[1], ics_urls[2]};
+                                        ics_urls[0], ics_urls[1], ics_urls[2], bday_url};
   static_assert(ICS_MAX_FEEDS == 3, "list every calendar feed in secrets[]");
   logRegisterSecrets(secrets, sizeof(secrets) / sizeof(secrets[0]));
 
@@ -144,6 +151,7 @@ void configSave() {
   preferences.putString("printer_name", printer_name);
   preferences.putString("pkge_key", pkge_api_key);
   preferences.putString("adb_key", aerodatabox_key);
+  preferences.putString("bday_url", bday_url);
 
   preferences.putString("mqtt_pass", mqtt_pass);
   preferences.putString("mqtt_sn", mqtt_sn);
@@ -170,6 +178,7 @@ void configFactoryReset() {
   // Keep the build that rolled back, so the night-time check doesn't auto-install it again.
   if (otaBadBuild) preferences.putUInt("ota_bad", otaBadBuild);
   preferences.end();
+  eraseUserData();  // tasks, note, birthdays: the device may be given away
   delay(200);
   ESP.restart();
 }

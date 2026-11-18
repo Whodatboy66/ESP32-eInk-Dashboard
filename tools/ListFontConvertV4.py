@@ -11,6 +11,7 @@ parser.add_argument("--threshold", type=int, default=70, help="Grayscale thresho
 parser.add_argument("--output", default="SparseFont", help="Output font name")
 parser.add_argument("--glyphs", help="Glyphs string (ex: abcd1234) or hex codes F0590,F0599")
 parser.add_argument("--glyph-file", help="File with one glyph per line (hex or char)")
+parser.add_argument("--weight", type=float, default=0, help="Variable fonts: weight axis value, e.g. 600 (default: the font's default instance)")
 
 args = parser.parse_args()
 
@@ -65,6 +66,8 @@ def parse_entry(entry):
 def convert_font():
     glyphs = load_glyphs()
     face = freetype.Face(args.font)
+    if args.weight:  # variable fonts: the weight axis (e.g. 600), else the font's default instance
+        face.set_var_design_coords((args.weight,))
     face.set_pixel_sizes(0, args.size)
 
     bitmap_data = []

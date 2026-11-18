@@ -19,6 +19,10 @@ const WidgetInfo WIDGETS[layouts::WIDGET_COUNT] = {
     {WidgetId::Stocks, "stocks", "Stocks", 4, "Stocks", 22, 10, 60},
     {WidgetId::Tracking, "tracking", "Package tracking", 16, "Tracking", 22, 0, 120},
     {WidgetId::Printer, "printer", "Printer / MakerWorld", 64, "Bambu", 22, 70, 4},
+    // Personal widgets (stage 4): local data, drawn on full refreshes and when the date changes.
+    {WidgetId::Tasks, "tasks", "Tasks", 512, "Tasks", 22, 0, 1440},
+    {WidgetId::Notes, "notes", "Note", 1024, "Note", 22, 0, 1440},
+    {WidgetId::Birthdays, "birthdays", "Birthdays", 2048, "Birthdays", 22, 0, 1440},
 };
 }  // namespace
 
@@ -33,6 +37,9 @@ uint16_t configuredWidgets() {
   if (stock_symbols[0]) m |= layouts::widgetBit(WidgetId::Stocks);
   if (pkge_api_key[0]) m |= layouts::widgetBit(WidgetId::Tracking);
   if (mqtt_ip[0]) m |= layouts::widgetBit(WidgetId::Printer);
+  if (user_content & USER_HAS_TASKS) m |= layouts::widgetBit(WidgetId::Tasks);
+  if (user_content & USER_HAS_NOTE) m |= layouts::widgetBit(WidgetId::Notes);
+  if ((user_content & USER_HAS_BIRTHDAYS) || bday_url[0]) m |= layouts::widgetBit(WidgetId::Birthdays);
   return m;
 }
 

@@ -15,9 +15,10 @@ enum : uint16_t {
   PROBLEM_MAKERWORLD   = 1 << 7,
   PROBLEM_TRACKING     = 1 << 8,
   PROBLEM_FLIGHT       = 1 << 9,
+  PROBLEM_BIRTHDAYS    = 1 << 10,
 };
 inline const char* const PROBLEM_LABELS[] = {
-  "WiFi", "Time", "Weather", "Stocks", "Calendar", "Printer", "Access code", "MakerWorld", "Tracking", "Flight"
+  "WiFi", "Time", "Weather", "Stocks", "Calendar", "Printer", "Access code", "MakerWorld", "Tracking", "Flight", "Birthdays"
 };
 extern uint16_t problems;       // RTC memory
 extern uint16_t problemsShown;  // what the status bar shows now (RTC memory)

@@ -16,7 +16,8 @@ mkdir -p "$OUT"
   tools/render/render.cpp "$GFX/Adafruit_GFX.cpp" \
   src/ui/SparseFont.cpp src/ui/Fonts.cpp src/widgets/Widgets.cpp src/widgets/MonthView.cpp \
   src/widgets/Clock.cpp src/widgets/StatusBar.cpp src/widgets/Printer.cpp src/widgets/Registry.cpp \
-  src/widgets/Dashboard.cpp src/ui/Canvas.cpp src/core/Problems.cpp \
+  src/widgets/Dashboard.cpp src/widgets/Personal.cpp tools/render/UserStoreSample.cpp \
+  src/ui/Canvas.cpp src/core/Problems.cpp \
   -Wl,--wrap=time -o "$BUILD/render"
 # name template hidden-widgets
 while read -r name tpl hide variant; do
@@ -38,4 +39,7 @@ minimal-12h minimal - 12h
 planner-12h-1258 planner - 12h1258
 technical-12h-1258 technical - 12h1258
 classic-stale classic - stale
+personal personal
+personal-empty personal - empty
+personal-long personal - long
 LIST

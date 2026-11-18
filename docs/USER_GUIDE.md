@@ -265,6 +265,8 @@ leaves its place empty, as before).
 | ![Classic](images/layouts/classic.png) | ![Planner](images/layouts/planner.png) |
 | **Minimal** | **Technical** |
 | ![Minimal](images/layouts/minimal.png) | ![Technical](images/layouts/technical.png) |
+| **Personal** | |
+| ![Personal](images/layouts/personal.png) | |
 
 Examples of gap filling: [Planner without weather](images/layouts/planner-no-weather.png),
 [Minimal with only the clock](images/layouts/minimal-clock-only.png),
@@ -282,6 +284,24 @@ stay in 24-hour format for now.
 
 These images are drawn on the PC with the firmware's own drawing code (`tools/render/render.sh`).
 Adding a widget: [ADD_A_WIDGET.md](ADD_A_WIDGET.md).
+
+## Tasks, note and birthdays
+
+Three widgets with your own data, stored on the device (they stay through restarts and updates; a
+factory reset erases them). They appear in the **Personal** layout, or in any layout where you place
+them, as soon as there is something to show.
+
+- **Tasks:** up to 30, each with an optional due date and a priority. The screen shows the open ones:
+  overdue first (date in a black box), then by due date ("today", "tomorrow", a weekday, or the
+  date), then by priority (a filled box = high). "+3 more" when they don't all fit.
+- **Note:** one note of up to 400 characters, line breaks kept; cut with "…" if it doesn't fit.
+- **Birthdays:** the next 60 days, from a list you type in (up to 50, with the year for the age) and
+  from a **birthday calendar link** (setup page, e.g. Google Calendar's birthdays as an iCal link,
+  read once a day). "Today" is shown in a black box.
+
+They are edited in the setup app (setup mode). The screen font shows German umlauts, ß, € and common
+punctuation; other characters (emoji, for example) are removed when saving.
+[Example with long texts](images/layouts/personal-long.png).
 
 ## Wake button
 

@@ -1,0 +1,154 @@
+# Setup app API
+
+The JSON interface between the setup app (`web/`, served at `/`) and the firmware
+(`src/web/`). Plans: [STAGE4_PERSONAL_WIDGETS.md](plans/STAGE4_PERSONAL_WIDGETS.md),
+[STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md).
+
+## Basics
+
+- All bodies are JSON (`Content-Type: application/json`, also required on every POST / PUT: a page
+  from another site can't send that without a preflight the device never answers). UTF-8.
+- Errors: HTTP 400 with `{"ok": false, "error": "text for people", "errors": {"field": "text"}}`
+  (`errors` only for field problems). HTTP 401 `{"ok": false, "login": true}` when a session is
+  needed (home network only). HTTP 413 when a body is larger than 8 KB.
+- **Secrets are never sent back.** In `GET` answers a secret is `{"set": true}` or `{"set": false}`
+  (calendar links also get `"hint": "calendar.google.com"`, the host only). In a `POST`, a secret
+  field: a string = new value, `null` = remove, missing = keep.
+- Modes: `"ap"` (setup hotspot, the phone has no internet) and `"home"` (edit mode on the home
+  network, needs the screen code). Everything works in both modes unless noted.
+
+## Session (home network only)
+
+`POST /api/login` `{"code": "123456"}` → `{"ok": true}` and a cookie `s=<token>` (HttpOnly,
+SameSite=Strict), valid until edit mode ends. Wrong code: 400 `{"ok": false, "error": "Wrong code"}`;
+after 5 wrong codes a new code is shown on the screen. In AP mode no login is needed (the hotspot has
+its own password).
+
+## State
+
+`GET /api/state`
+
+```json
+{
+  "device": {
+    "name": "Kitchen display", "version": ".71", "build": 71, "variant": "esp32c6_firebeetle",
+    "mode": "ap", "firstRun": false, "battery": 82, "usb": false,
+    "wifi": {"ssid": "Home", "connected": false, "rssi": 0},
+    "time": 1794904880,
+    "problems": [{"key": "calendar", "text": "A calendar can't be read", "fix": "Check the calendar links on the Data tab."}],
+    "lastUpdate": "Updated to .70", "updateAvailable": ".72",
+    "layoutFallback": null
+  },
+  "settings": {
+    "device_name": "Kitchen display",
+    "wifi_ssid": "Home", "wifi_pass": {"set": true},
+    "timezone": "CET-1CEST,M3.5.0,M10.5.0/3",
+    "weather_loc": "Berlin, DE",
+    "stocks": "AAPL,NVDA,^IXIC",
+    "ics": [{"set": true, "hint": "calendar.google.com"}, {"set": false}, {"set": false}],
+    "bday_url": {"set": false},
+    "pkge_key": {"set": false}, "adb_key": {"set": false},
+    "mqtt_ip": "192.168.1.50", "mqtt_sn": "01S00A123456789", "mqtt_pass": {"set": true},
+    "mqtt_port": 8883, "printer_name": "X1C", "makerworld_uid": "123",
+    "ota_auto": true, "ota_beta": false, "clock_24h": true,
+    "pin_preset": "esp32c6_default",
+    "pins": {"epd_cs": 1, "epd_dc": 8, "epd_rst": 14, "epd_busy": 7, "epd_sck": 23, "epd_mosi": 22,
+             "display_power": 4, "battery": 0, "demo_button": 2}
+  },
+  "pinPresets": [{"key": "esp32c6_default", "name": "ESP32-C6 FireBeetle"}, {"key": "custom", "name": "Custom pins"}],
+  "layout": {
+    "template": "custom", "statusBar": true,
+    "boxes": [{"c": 0, "r": 0, "w": 4, "h": 1, "widget": "agenda"}, {"c": 0, "r": 1, "w": 2, "h": 2, "widget": null}],
+    "show": ["weather", "agenda", "month"]
+  },
+  "widgets": [
+    {"key": "clock", "name": "Clock", "minW": 2, "minH": 1, "configured": true, "hint": ""},
+    {"key": "weather", "name": "Weather", "minW": 1, "minH": 1, "configured": false, "hint": "Set a place on the Data tab"}
+  ],
+  "structures": [{"key": "planner", "name": "Planner", "boxes": [{"c": 0, "r": 0, "w": 2, "h": 1, "widget": "clock"}]}],
+  "grid": {"cols": 4, "rows": 3, "cellW": 200, "cellH": 150, "statusH": 28}
+}
+```
+
+- `device.mode`: `"ap"` or `"home"`. `firstRun`: no Wi-Fi saved yet (the app shows the guided setup).
+- `battery`: percent, `-1` without a sensor. `time`: Unix time, `0` when the clock isn't set.
+- `layout.template`: `"custom"` (boxes) or a built-in key (`"classic"`, `"planner"`, `"minimal"`,
+  `"technical"`, `"personal"`). For a built-in grid template, `boxes` is its current result (after gap
+  filling), so the editor can start from it. `show` is the list of widget keys switched on (used by
+  Classic). `widget: null` = empty box.
+- `widgets`: every widget except the status bar, with its minimum size in cells and whether its
+  settings are filled in (`hint` says what's missing).
+- `structures`: starting points for the editor (built-in templates as boxes, plus Full, Halves, …).
+- `pinPresets`: board presets for the Device tab (advanced).
+
+## Settings
+
+`POST /api/settings`: only the changed fields, names as in `settings` above; `ics` is an array of up
+to three entries: a string = new link, `null` = remove, anything else (`{}`) = keep, e.g.
+`[{}, "https://…"]` changes only the second link. `pins` is sent whole when a pin changed (`-1` =
+not used). Field errors use the keys of the request (`ics.1`, `pins`). Validation as on the old page (timezone
+names, calendar links, stock symbols, printer address, port, custom pins).
+→ `{"ok": true, "restart": true}`; the device restarts about 2 s later (the app shows a "Saved,
+restarting" screen). In AP mode the phone loses the hotspot while the device restarts.
+
+`GET /api/networks` → `{"networks": [{"ssid": "Home", "rssi": -52, "secure": true}]}` (sorted by
+signal, duplicates removed; takes 2-4 s).
+
+`POST /api/wifi-test` `{"ssid": "Home", "pass": "..."}` (no `pass` = the saved password of that
+network, `""` = an open network) → `{"ok": true}` or `{"ok": false, "error":
+"Wrong password"}` (reasons: not found, wrong password, no answer). Doesn't save anything. Keeps the
+connection for the checks below until setup mode ends (AP + station).
+
+`POST /api/check-calendar` `{"url": "https://..."}` (or `{"index": 0}` for a saved agenda link,
+`{"bday": true}` for the saved birthday link) →
+`{"ok": true, "events": 12}` or `{"ok": false, "error": "..."}`; `{"ok": false, "offline": true}` when
+the device has no internet connection (no saved or tested Wi-Fi).
+
+`GET /api/places?q=Berlin` → `{"places": [{"name": "Berlin, DE", "detail": "Berlin, Germany"}]}`
+(up to 5; `offline` as above). The app puts `name` into `weather_loc`.
+
+## Layout
+
+`POST /api/layout`
+
+```json
+{"template": "custom", "statusBar": true,
+ "boxes": [{"c": 0, "r": 0, "w": 4, "h": 1, "widget": "agenda"}, {"c": 0, "r": 1, "w": 4, "h": 2, "widget": "clock"}]}
+```
+
+or `{"template": "classic", "show": ["weather", "agenda"]}`, or another built-in key. Checked by the
+layout engine (inside the grid, no overlaps, the whole grid covered by boxes, every widget at most once
+and within its minimum size, at most 12 boxes). → `{"ok": true}`, stored and drawn on the display at
+once, **no restart**; or 400 with `error`.
+
+`POST /api/preview.bmp`: same body as `/api/layout` → `image/bmp`, 800 × 480, 1 bit per pixel, drawn
+by the device with the data it has (a widget without data shows its empty text). 503 `{"ok": false, "error": "..."}`
+when there's not enough memory.
+
+## Personal data
+
+`GET /api/tasks` → `{"tasks": [{"title": "Buy milk", "due": "2026-11-20", "prio": 2, "done": false}]}`
+(`due`: `""` or `YYYY-MM-DD`; `prio`: 1 high, 2 normal, 3 low). `PUT /api/tasks` with the same shape
+replaces the list (at most 30, titles up to 60 characters).
+
+`GET /api/notes` → `{"note": "text\nsecond line"}`; `PUT` the same (up to 400 characters).
+
+`GET /api/birthdays` →
+`{"manual": [{"name": "Anna", "day": 17, "month": 11, "year": 1990}], "upcoming": [{"name": "Anna", "date": "2026-11-17", "days": 0, "age": 36, "fromFeed": false}]}`
+(`year` 0 = unknown; `upcoming` is read-only: the next 60 days incl. the calendar link's).
+`PUT /api/birthdays` `{"manual": [...]}` replaces the hand-entered list (at most 50).
+
+Characters the screen font can't show are removed when saving; the answer says so:
+`{"ok": true, "removed": "✓"}`.
+
+## Device
+
+`POST /api/update` → `{"ok": true}`, then the device restarts and runs the update check (as the
+old "Check for updates now").
+
+`POST /api/factory-reset` → `{"ok": true}`, then everything is erased (settings and personal data)
+and the device restarts into setup mode.
+
+`POST /api/finish` → `{"ok": true}`, leaves setup / edit mode: the device restarts into the
+dashboard. With `{"ap": true}` ("Change Wi-Fi" on the home network) it restarts into the setup
+hotspot instead.
