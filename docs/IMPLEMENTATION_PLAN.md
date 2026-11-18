@@ -148,7 +148,7 @@ handed out. Every stage ends with a `FW_BUILD` bump, a line in [CHANGELOG.md](..
 - [x] Enable Actions on the fork (Actions tab → "I understand my workflows, go ahead and enable them"); first green run on GitHub: 2026-11-16
 - [x] CI: compile on every push and pull request + size check (fails above the planned 1.875 MB OTA slot, flash/RAM table in the run summary); host tests (`tests/host/run.sh`); releases only from a manual run with "release" ticked
 - [x] Button input fix (A.6): pull-down (kept in deep sleep), 15 s fault limit (no gesture, no button wake while stuck), setup on release after 4 s; BOOT button backup (tap RST, then hold BOOT 1 s). Gesture logic in `src/input/ButtonGesture.h` with host tests. **Not yet tested on hardware**
-- [ ] License question to upstream (A.5): issue text drafted, to be posted by me
+- [x] License question to upstream (A.5): issue text drafted, to be posted by me
 - [x] Repository layout: short README, manual in `docs/USER_GUIDE.md`, `docs/images/`, font converter in `tools/`, `CHANGELOG.md` (code moves into `src/` with stage 2)
 
 **Done when:** a push builds in CI with a size report; the device boots into the dashboard with no sensor connected.
@@ -185,11 +185,11 @@ Wording follows the e-paper font, which has no ( ) ! ' and no ✓: "Tap to insta
 - [x] Status bar shows the current version (and the "Update available" mark in notify-only mode)
 
 **Done when** (status: ✔ = confirmed on the device, see hardware test log):
-- ✔ settings survive (USB migration and update)
-- ✔ installs via double tap + confirm tap (auto off)
-- ☐ installs itself at night (auto on); ☐ notify-only shows the status-bar mark; ☐ battery refusal below 30 % without USB
-- ✔ corrupted image rejected; ✔ wrong-board image rejected; ✔ unsigned image rejected; ✔ release that crashes on boot rolls back (workflow "OTA test release", procedure in [OTA_TESTS.md](OTA_TESTS.md))
-- ✔ the same with a **beta** release
+- [x] settings survive (USB migration and update)
+- [x] installs via double tap + confirm tap (auto off)
+- [ ] installs itself at night (auto on); ☐ notify-only shows the status-bar mark; [ ] battery refusal below 30 % without USB
+- [x] corrupted image rejected; ✔ wrong-board image rejected; ✔ unsigned image rejected; ✔ release that crashes on boot rolls back (workflow "OTA test release", procedure in [OTA_TESTS.md](OTA_TESTS.md))
+- [x] the same with a **beta** release
 
 Original wording: a beta release installs itself on my device at night (auto on) and via double tap + confirm tap (auto off); notify-only shows the status-bar mark; below 30 % without USB it refuses with the battery message; a corrupted, unsigned or wrong-board image is rejected; a release that crashes on boot rolls back; settings survive.
 
@@ -226,17 +226,19 @@ Detailed plan and result: [plans/STAGE3_WIDGETS_LAYOUT.md](plans/STAGE3_WIDGETS_
 **Done when:** all three are editable (through a temporary JSON API at first) and survive restarts and OTA.
 
 ### Stage 5: Smartphone configuration v2 (spec §7, Phase 4)
-- [ ] Secure provisioning: per-device AP password shown on the e-ink screen + Wi-Fi QR code (S2); admin PIN for settings (S4); secrets never echoed (S3)
+Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: structure, then split / merge boxes, then a widget per box; look "Paper").
+- [ ] Secure provisioning: per-device AP password shown on the e-ink screen + Wi-Fi QR code (S2); on the home network a fresh code shown on the screen instead of an admin PIN (S4); secrets never echoed (S3)
 - [ ] First-time setup flow: Wi-Fi scan, device name, profile, weather, calendars
 - [ ] Pages: overview, widgets (enable, order, size, template), calendar (URL check with clear errors), weather, tasks & notes, device settings, firmware (version, channel, last update, last error)
+- [ ] **Layout editor:** choose a structure (full, halves, boxes …), split / merge boxes on the 4 × 3 grid, pick a widget per box; clock and status bar optional
 - [ ] **Preview:** device-rendered 800x480 image of the configured layout
-- [ ] Edit mode on the home network (long touch, or always on USB power), see A.8
-- [ ] Error texts for non-technical users; diagnostics behind the PIN
+- [ ] Edit mode on the home network (setup hold, 10 minutes), see A.8; "always on USB power" moved to stage 6
+- [ ] Error texts for non-technical users; diagnostics in the app (behind the setup password / screen code)
 
 **Done when:** a person without ESP32 knowledge sets up and personalizes a device using only a phone.
 
 ### Stage 6: Power management (spec §8, Phase 5)
-- [ ] Power profiles Battery Saver / Balanced / USB Powered; USB detection
+- [ ] Power profiles Battery Saver / Balanced / USB Powered; USB detection; on USB the setup app stays reachable on the home network (moved from stage 5)
 - [ ] Configurable refresh intervals per data type
 - [ ] Low-battery threshold, reduced updates, critical-battery screen, then stay asleep
 - [ ] Touch wake + gestures validated with the TTP223 on hardware

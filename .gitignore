@@ -1,3 +1,4 @@
 # Local editor settings and build output
 .vscode/
 build/
+.superpowers/
