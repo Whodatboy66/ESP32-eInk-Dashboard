@@ -1,5 +1,7 @@
 #include "EpaperDriver.h"
 
+#include "../widgets/StatusBar.h"
+
 #include <SPI.h>
 #include <new>
 
@@ -43,6 +45,9 @@ void updatePartial(LayoutItem* item, void (*drawFunc)(LayoutItem*)) {
     canvas().fillRect(item->PosX, item->PosY, item->Width, item->Height, GxEPD_WHITE);
     setCanvasClip(item->PosX, item->PosY, item->Width, item->Height);
     drawFunc(item);
+    // Without a status bar the problem mark sits in the bottom-right corner, over a widget:
+    // redrawing that widget must keep the mark (clipped to this window).
+    if (!getLayout(128)) drawProblemCorner();
     clearCanvasClip();
   } while (display.nextPage());
 }

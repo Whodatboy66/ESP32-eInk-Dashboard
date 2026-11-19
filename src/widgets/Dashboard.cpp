@@ -8,6 +8,7 @@
 #include "Clock.h"
 #include "MonthView.h"
 #include "Personal.h"
+#include "Registry.h"
 #include "StatusBar.h"
 #include "Widgets.h"
 
@@ -45,4 +46,12 @@ void drawFullScreen(const FullScreenParts& p) {
   drawWidget(getLayout(512), tasksWidget);
   drawWidget(getLayout(1024), noteWidget);
   drawWidget(getLayout(2048), birthdaysWidget);
+  // Box layouts: a widget without its settings shows what to set up, in its box.
+  for (int i = 0; i < missingHintCount; i++) {
+    const MissingHint& h = missingHints[i];
+    setCanvasClip(h.rect.x, h.rect.y, h.rect.w, h.rect.h);
+    drawFittedString(h.rect.x + 8, h.rect.y + 22, h.rect.w - 16, widgetInfo(h.id).hint, GxEPD_BLACK);
+    clearCanvasClip();
+  }
+  if (!getLayout(128)) drawProblemCorner();  // no status bar
 }

@@ -11,6 +11,9 @@ namespace layouts {
 
 enum class WidgetId : uint8_t { StatusBar, Clock, Weather, Agenda, Month, Stocks, Tracking, Printer, Tasks, Notes, Birthdays };
 constexpr int WIDGET_COUNT = 11;
+// Keys used by the setup app, NVS (lay_box) and the registry, indexed by WidgetId.
+constexpr const char* WIDGET_KEYS[WIDGET_COUNT] = {"status", "clock", "weather", "agenda", "month", "stocks",
+                                                  "tracking", "printer", "tasks", "notes", "birthdays"};
 constexpr uint16_t widgetBit(WidgetId id) { return static_cast<uint16_t>(1u << static_cast<int>(id)); }
 constexpr uint16_t ALL_WIDGETS = static_cast<uint16_t>((1u << WIDGET_COUNT) - 1);
 

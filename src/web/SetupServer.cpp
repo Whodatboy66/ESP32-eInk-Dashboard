@@ -4,6 +4,8 @@
 
 #include <Arduino.h>
 #include <DNSServer.h>
+#include <ESPmDNS.h>
+#include <Preferences.h>
 #include <SPI.h>
 #include <WebServer.h>
 #include <WiFi.h>
@@ -18,8 +20,15 @@
 #include "../hardware/PinMapping.h"
 #include "../update/OtaFlow.h"
 #include "../update/UpdatePolicy.h"
+#include "../services/TimeService.h"
+#include "../services/WifiService.h"
+#include "../ui/Canvas.h"
+#include "../widgets/Dashboard.h"
 #include "../widgets/Registry.h"
 #include "Api.h"
+#include "SetupMode.h"
+#include "SetupScreen.h"
+#include "generated/WebApp.h"
 
 // Functions of this file, in the order they are defined below.
 void appendFormat(String& out, const char* fmt, ...);
@@ -44,6 +53,189 @@ static unsigned long apLastActivity = 0;     // millis() of AP start / last setu
 
 WebServer server(80);
 DNSServer dnsServer;
+
+// ---- Setup mode state (stage 5, src/web/SetupMode.h) ----
+SetupKind setupKind = SetupKind::Off;
+static uint32_t restartAt = 0;        // millis() of a scheduled restart, 0 = none
+static bool dashboardPending = false;  // draw the dashboard after the answer (layout / data saved)
+static bool homeScreenPending = false; // new code: redraw the edit-mode screen
+static char apPassword[12] = "";
+static char hostName[40] = "dashboard";
+static char sessionToken[33] = "";
+static char loginCode[7] = "";
+static uint8_t wrongCodes = 0;
+static uint8_t codeRotations = 0;
+static bool codeOnScreen = false;  // edit mode: the code screen is shown (not the dashboard)
+#define EDIT_TIMEOUT_MS (10UL * 60UL * 1000UL)  // edit mode on the home network: 10 min without use
+
+void setupNoteActivity() { apLastActivity = millis(); }
+void setupScheduleRestart(uint32_t delayMs) { restartAt = millis() + delayMs; if (!restartAt) restartAt = 1; }
+void setupScheduleDashboard() { dashboardPending = true; }
+const char* setupHostName() { return hostName; }
+
+static void randomText(char* out, size_t len, const char* alphabet) {
+  size_t n = strlen(alphabet);
+  for (size_t i = 0; i < len; i++) out[i] = alphabet[esp_random() % n];
+  out[len] = '\0';
+}
+
+// The hotspot password: made once per device (and after a factory reset), shown on the screen.
+static void loadApPassword() {
+  Preferences p;
+  p.begin("config", false);
+  String saved = p.getString("ap_pass", "");
+  if (saved.length() >= 8 && saved.length() < sizeof(apPassword)) {
+    snprintf(apPassword, sizeof(apPassword), "%s", saved.c_str());
+  } else {
+    randomText(apPassword, 8, "abcdefghjkmnpqrstuvwxyz23456789");  // no 0/o, 1/l/i
+    p.putString("ap_pass", apPassword);
+  }
+  p.end();
+}
+
+// "Kitchen display" -> "kitchen-display" (the .local address).
+static void makeHostName() {
+  size_t n = 0;
+  bool dash = false;
+  for (const char* s = device_name; *s && n < sizeof(hostName) - 8; s++) {
+    char c = *s;
+    if (c >= 'A' && c <= 'Z') c = c - 'A' + 'a';
+    if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9')) {
+      hostName[n++] = c;
+      dash = false;
+    } else if (n && !dash) {
+      hostName[n++] = '-';
+      dash = true;
+    }
+  }
+  while (n && hostName[n - 1] == '-') n--;
+  hostName[n] = '\0';
+  if (!n) snprintf(hostName, sizeof(hostName), "dashboard");
+}
+
+static void newLoginCode() {
+  randomText(loginCode, 6, "0123456789");
+  wrongCodes = 0;
+}
+
+bool setupLogin(const char* code, String& cookie) {
+  if (!codeOnScreen) {  // the dashboard covers the code: show it again, don't count this one
+    homeScreenPending = true;
+    return false;
+  }
+  if (!loginCode[0] || strcmp(code, loginCode) != 0) {
+    delay(1000);  // slows guessing down
+    if (++wrongCodes >= 5) {  // guessing: a new code on the screen; after 3 new codes, stop
+      newLoginCode();
+      homeScreenPending = true;
+      if (++codeRotations >= 3) {
+        Serial.println("Edit mode: too many wrong codes -> leaving");
+        setupScheduleRestart(500);
+      }
+    }
+    return false;
+  }
+  randomText(sessionToken, 32, "0123456789abcdef");
+  cookie = String("s=") + sessionToken + "; Path=/; HttpOnly; SameSite=Strict";
+  return true;
+}
+
+bool setupSessionOk() {
+  if (!sessionToken[0]) return false;
+  String c = server.header("Cookie");
+  String want = String("s=") + sessionToken;
+  int at = c.indexOf(want);
+  if (at < 0) return false;
+  int end = at + want.length();
+  return (at == 0 || c[at - 1] == ' ' || c[at - 1] == ';') && (end == (int)c.length() || c[end] == ';');
+}
+
+bool setupHostOk() {
+  String host = server.header("Host");
+  int colon = host.indexOf(':');
+  if (colon >= 0) host = host.substring(0, colon);
+  host.toLowerCase();
+  return host == WiFi.localIP().toString() || host == String(hostName) + ".local";
+}
+
+bool setupFromHotspot() {
+  IPAddress ap = WiFi.softAPIP();
+  if (server.client().localIP() != ap) return false;
+  String host = server.header("Host");
+  int colon = host.indexOf(':');
+  if (colon >= 0) host = host.substring(0, colon);
+  return host == ap.toString();
+}
+
+bool setupOnline() { return WiFi.status() == WL_CONNECTED; }
+
+bool setupStaConnect(const char* ssid, const char* pass, char* err, size_t cap) {
+  if (setupOnline() && WiFi.SSID() == ssid && !pass) return true;
+  if (!pass) pass = strcmp(ssid, wifi_ssid) == 0 ? wifi_pass : "";
+  if (setupKind == SetupKind::Ap) WiFi.mode(WIFI_AP_STA);  // the hotspot stays up
+  WiFi.disconnect(false);
+  delay(200);
+  WiFi.begin(ssid, pass);
+  unsigned long t0 = millis();
+  wl_status_t st = WL_IDLE_STATUS;
+  while (millis() - t0 < 15000) {
+    st = WiFi.status();
+    if (st == WL_CONNECTED) break;
+    // A failed earlier attempt leaves its status for a moment: trust a failure only after 1.5 s.
+    if ((st == WL_NO_SSID_AVAIL || st == WL_CONNECT_FAILED) && millis() - t0 > 1500) break;
+    delay(200);
+    dnsServer.processNextRequest();
+  }
+  if (st == WL_CONNECTED) {
+    initTime();  // for the birthdays' "today" and dates in the checks
+    return true;
+  }
+  if (st == WL_NO_SSID_AVAIL) snprintf(err, cap, "Network not found: is it in range?");
+  else if (st == WL_CONNECT_FAILED) snprintf(err, cap, "Wrong password");
+  else snprintf(err, cap, "No connection: check the password and that the network is in range.");
+  WiFi.disconnect(false);
+  return false;
+}
+
+bool setupEnsureOnline() {
+  if (setupOnline()) return true;
+  if (!wifi_ssid[0]) return false;
+  char err[80];
+  return setupStaConnect(wifi_ssid, nullptr, err, sizeof(err));
+}
+
+// The setup app (web/, compiled in by tools/web/build.py), gzipped.
+static void handleApp() {
+  setupNoteActivity();
+  server.sendHeader("Content-Encoding", "gzip");
+  server.sendHeader("Cache-Control", "no-store");
+  server.send_P(200, "text/html; charset=utf-8", reinterpret_cast<const char*>(WEB_APP_GZ), WEB_APP_GZ_LEN);
+}
+
+// The dashboard with the saved layout, drawn in setup mode (no restart after a layout change).
+static void drawDashboardNow() {
+  loadLayout();
+  if (hasDisplayPowerPin()) {
+    pinMode(activePins.displayPower, OUTPUT);
+    digitalWrite(activePins.displayPower, HIGH);
+    delay(50);
+  }
+  SPI.begin(activePins.epdSck, -1, activePins.epdMosi, activePins.epdCs);
+  display.init(115200, true, 2, false);
+  display.setRotation(0);
+  display.setFullWindow();
+  FullScreenParts parts;
+  parts.printer = parts.weather = parts.agenda = parts.stocks = parts.month = parts.tracking = true;
+  display.firstPage();
+  do {
+    canvas().fillScreen(GxEPD_WHITE);
+    drawFullScreen(parts);
+  } while (display.nextPage());
+  display.hibernate();
+  redrawAll = true;  // the next normal wake draws everything fresh
+  codeOnScreen = false;  // edit mode: the next login attempt brings the code back
+}
+
 
 void appendFormat(String& out, const char* fmt, ...) {
   va_list args;
@@ -556,6 +748,8 @@ for (int i = 0; i < layouts::TEMPLATE_COUNT; i++) {
   html += layouts::TEMPLATES[i].name;
   html += "</option>";
 }
+// A layout made in the setup app: kept when this page is saved (handleSave ignores "custom").
+if (strcmp(layout_template, "custom") == 0) html += "<option value=\"custom\" selected>Own layout (setup app)</option>";
 
 html += R"rawliteral(</select>
     <div class="note">Classic: the original screen. Planner: clock, weather, upcoming events and month. Minimal: a large clock with weather and events. Technical: clock, printer, stocks, parcels, weather and events. A widget that is switched off or not set up leaves no gap.</div>
@@ -890,73 +1084,100 @@ ESP.restart();
 }
 
 
+static bool hotspotOnly() {
+  if (setupFromHotspot()) return true;
+  server.send(403, "text/plain", "Only from the setup hotspot");
+  return false;
+}
+
+// Routes of both modes. The old page (/basic) has no session check: hotspot only.
+static void registerRoutes(bool hotspot) {
+  server.on("/", HTTP_GET, handleApp);
+  registerApiRoutes(server);
+  if (hotspot) {
+    // The old page: only over the hotspot (after a Wi-Fi test the device is in the home network too).
+    server.on("/basic", []() { if (hotspotOnly()) handleConfig(); });
+    server.on("/save", HTTP_POST, []() { if (hotspotOnly()) handleSave(); });
+    server.on("/update", HTTP_POST, []() { if (hotspotOnly()) handleUpdateNow(); });
+    server.on("/factory-reset", HTTP_POST, []() {
+      if (!hotspotOnly()) return;
+      server.send(200, "text/html",
+        "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+        "<title>Factory reset</title></head><body style=\"font-family:Arial,Helvetica,sans-serif;text-align:center;padding:30px\">"
+        "<h2>Factory reset</h2><p>All settings are erased. The device restarts into setup mode: join "
+        AP_SSID " again with the new password shown on the display.</p></body></html>");
+      delay(1500);
+      configFactoryReset();
+    });
+    // OS connectivity checks (Android /generate_204, Apple /hotspot-detect.html, Windows
+    // /connecttest.txt) and any other URL get redirected to the app.
+    server.onNotFound([]() {
+      server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/", true);
+      server.send(302, "text/plain", "");
+    });
+  } else {
+    server.onNotFound([]() { server.send(404, "text/plain", "Not found"); });
+  }
+  server.begin();
+}
+
+// Setup hold: the app on the home network when Wi-Fi works (edit mode), else the hotspot.
+void startSetup() {
+  if (wifi_ssid[0] && wifi_pass[0]) startEditMode();
+  else startAP();
+}
+
 void startAP() {
   otaConfirmByUser("setup mode");
   setCpuFrequencyMhz(cpuFullMhz);
   apModeActive = true;
+  setupKind = SetupKind::Ap;
   apLastActivity = millis();
+  loadApPassword();
 
   Serial.println("Start AP");
-
-  bool result = WiFi.softAP(AP_SSID);
-
-  if (result) {
-    Serial.println("AP started OK");
-    Serial.println(WiFi.softAPIP());
+  // WPA2 with the per-device password shown on the display (the hotspot was open before stage 5).
+  if (WiFi.softAP(AP_SSID, apPassword)) {
+    Serial.printf("AP started OK: %s\n", WiFi.softAPIP().toString().c_str());
   } else {
     Serial.println("AP failed!");
   }
 
-  Serial.println("AP Started. Connect and go to 192.168.4.1");
-
-  // Captive portal: answer every DNS lookup with our IP so phones/laptops pop up the setup page.
+  // Captive portal: answer every DNS lookup with our IP so phones/laptops pop up the setup app.
   dnsServer.start(53, "*", WiFi.softAPIP());
+  registerRoutes(true);
+  DBG(F("AP and setup app started"));
 
-  server.on("/", handleConfig);
-  registerApiRoutes(server);
-  server.on("/save", HTTP_POST, handleSave);
-  server.on("/update", HTTP_POST, handleUpdateNow);
-  server.on("/factory-reset", HTTP_POST, []() {
-    server.send(200, "text/html",
-      "<!DOCTYPE html><html><head><meta charset=\"UTF-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-      "<title>Factory reset</title></head><body style=\"font-family:Arial,Helvetica,sans-serif;text-align:center;padding:30px\">"
-      "<h2>Factory reset</h2><p>All settings are erased. The device restarts into setup mode: join "
-      AP_SSID " again.</p></body></html>");
-    delay(1500);
-    configFactoryReset();
-  });
-  // OS connectivity checks (Android /generate_204, Apple /hotspot-detect.html, Windows /connecttest.txt)
-  // and any other URL get redirected to the setup page.
-  server.onNotFound([]() {
-    server.sendHeader("Location", String("http://") + WiFi.softAPIP().toString() + "/", true);
-    server.send(302, "text/plain", "");
-  });
-  server.begin();
-
-  DBG(F("AP and config server started"));
-
-  if (hasDisplayPowerPin()) {
-    pinMode(activePins.displayPower, OUTPUT);
-    digitalWrite(activePins.displayPower, HIGH);
-    delay(50);
-  }
-
-  SPI.begin(activePins.epdSck, -1, activePins.epdMosi, activePins.epdCs);
-  display.init(115200, true, 2, false);  // Full refresh
-  display.setRotation(0);
-  display.setFullWindow();
-  canvas().fillScreen(GxEPD_WHITE);
-
-  display.firstPage();
-  do {
-    drawSparseStringCentered(&epaperFont, 400, 175, "ESP32 AP Mode", GxEPD_BLACK);
-    drawSparseStringCentered(&epaperFont, 400, 275, "Connect to " AP_SSID " and go to", GxEPD_BLACK);
-    drawSparseStringCentered(&epaperFont, 400, 325, "http://192.168.4.1", GxEPD_BLACK);
-    drawSparseStringCentered(&epaperFont, 400, 375, "For the first configuration!", GxEPD_BLACK);
-  } while (display.nextPage());
-
+  drawSetupScreenAp(AP_SSID, apPassword);
   DBG(F("Display configured"));
-  display.hibernate();
+}
+
+// Edit mode (stage 5, plan A.8): the app on the home network for 10 minutes, behind the code shown
+// on the screen. Without a connection: the hotspot instead.
+void startEditMode() {
+  otaConfirmByUser("edit mode");
+  setCpuFrequencyMhz(cpuFullMhz);
+  Serial.println("Edit mode: connecting to Wi-Fi");
+  if (!startWiFiReliable(wifi_ssid, wifi_pass)) {
+    Serial.println("Edit mode: no Wi-Fi -> setup hotspot");
+    WiFi.disconnect(true);
+    startAP();
+    return;
+  }
+  apModeActive = true;
+  setupKind = SetupKind::Home;
+  apLastActivity = millis();
+  initTime();
+  makeHostName();
+  if (MDNS.begin(hostName)) MDNS.addService("http", "tcp", 80);
+  newLoginCode();
+  registerRoutes(false);
+  String ip = WiFi.localIP().toString();
+  Serial.printf("Edit mode: http://%s.local or http://%s\n", hostName, ip.c_str());
+  char host[48];
+  snprintf(host, sizeof(host), "%s.local", hostName);
+  drawSetupScreenHome(host, ip.c_str(), loginCode);
+  codeOnScreen = true;
 }
 
 
@@ -969,17 +1190,33 @@ int16_t readPinField(const String& name) {
 }
 
 
-// Serves the setup page while setup mode is on (called from loop()).
+// Serves the setup app while setup or edit mode is on (called from loop()).
 void setupModeLoop() {
-  if (apModeActive || wifi_ssid[0] == '\0' || wifi_pass[0] == '\0') {
-    dnsServer.processNextRequest();
-    server.handleClient();
+  if (!apModeActive && wifi_ssid[0] != '\0' && wifi_pass[0] != '\0') return;
+  if (setupKind == SetupKind::Ap) dnsServer.processNextRequest();
+  server.handleClient();
 
-    // Setup mode opened by mistake (already configured): go back to the dashboard after a while
-    // instead of keeping the radio on and draining the battery.
-    if (wifi_ssid[0] != '\0' && wifi_pass[0] != '\0' && millis() - apLastActivity > AP_TIMEOUT_MS) {
-      Serial.println("Setup mode timed out -> restarting");
-      ESP.restart();
-    }
+  if (dashboardPending) {  // a layout or personal data was saved: show it (no restart)
+    dashboardPending = false;
+    drawDashboardNow();
+  }
+  if (homeScreenPending) {  // too many wrong codes: a new code on the screen
+    homeScreenPending = false;
+    char host[48];
+    snprintf(host, sizeof(host), "%s.local", hostName);
+    drawSetupScreenHome(host, WiFi.localIP().toString().c_str(), loginCode);
+    codeOnScreen = true;
+  }
+  if (restartAt && (long)(millis() - restartAt) >= 0) {
+    Serial.println("Setup: restarting");
+    delay(100);
+    ESP.restart();
+  }
+  // Opened by mistake or forgotten (already configured): back to the dashboard after a while
+  // instead of keeping the radio on and draining the battery.
+  unsigned long timeout = setupKind == SetupKind::Home ? EDIT_TIMEOUT_MS : AP_TIMEOUT_MS;
+  if (wifi_ssid[0] != '\0' && wifi_pass[0] != '\0' && millis() - apLastActivity > timeout) {
+    Serial.println("Setup mode timed out -> restarting");
+    ESP.restart();
   }
 }

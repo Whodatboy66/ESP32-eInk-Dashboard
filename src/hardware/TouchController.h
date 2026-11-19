@@ -13,6 +13,8 @@ constexpr int BUTTON_ACTION_UPDATE = 4;  // double tap: info and update screen
 
 // A setup hold while awake restarts into setup mode: the request survives the restart.
 constexpr uint32_t SETUP_REQUEST_MAGIC = 0x5E7AB0A7;
+// "Change Wi-Fi" in the setup app: restart into the setup hotspot even when Wi-Fi works.
+constexpr uint32_t SETUP_REQUEST_AP_MAGIC = 0x5E7AB0A8;
 extern uint32_t setupRequest;
 
 extern volatile bool buttonFaulted;   // sensor reported "pressed" too long (RTC memory)

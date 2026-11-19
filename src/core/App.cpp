@@ -138,10 +138,16 @@ void appSetup() {
   }
 #endif
 
-  // Setup mode asked by a setup hold while the board was awake.
-  if (setupRequest == SETUP_REQUEST_MAGIC) {
+  // Setup hold while the board was awake: edit mode on the home network if Wi-Fi works, else the setup hotspot (startSetup).
+  // "Change Wi-Fi" in the app asks for the hotspot directly.
+  if (setupRequest == SETUP_REQUEST_AP_MAGIC) {
     setupRequest = 0;
     startAP();
+    return;
+  }
+  if (setupRequest == SETUP_REQUEST_MAGIC) {
+    setupRequest = 0;
+    startSetup();
     return;
   }
 
@@ -162,7 +168,7 @@ void appSetup() {
   bool updateScreenRequested = false;
   switch (readWakeButtonAction()) {
     case BUTTON_ACTION_AP:
-      startAP();
+      startSetup();
       return;
     case BUTTON_ACTION_REBOOT:
       otaConfirmByUser("reboot hold");
@@ -448,6 +454,15 @@ void appSetup() {
   // Printer status while printing and for 5 minutes after; MakerWorld stats otherwise.
   bool printView = showPrintView();
   if (bambuIf || makerworldRedraw) printViewOnScreen = printView;
+
+  // Without a status bar the problems are a mark in a corner, drawn over a widget: a change of
+  // them is drawn with a full refresh (rare), not as a partial window.
+  if (!infoBattery && problems != problemsShown && !fullRefresh) {
+    fullRefresh = true;
+    // Widgets that weren't fetched this wake are drawn from their kept data (a full refresh
+    // clears the whole screen; only the drawn parts come back).
+    openMeteoIf = stocksIf = eventIf = calendarIf = trackingIf = makerworldRedraw = true;
+  }
 
   // Start SPI and initialize display after deciding refresh mode (no-op if the early clock did it).
   initDisplay(fullRefresh);

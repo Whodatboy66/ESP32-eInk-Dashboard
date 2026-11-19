@@ -34,7 +34,7 @@ Wiring and switch settings: [docs/PROJECT_INFO.md](docs/PROJECT_INFO.md#hardware
    ```
    Other boards: `esp32c6_supermini`, `esp32`, `esp32_waveshare` (see the [user guide](docs/USER_GUIDE.md#arduino-cli)).
 2. **Power on.** The screen shows "ESP32 AP Mode".
-3. **Join the Wi-Fi `Dashboard-Setup`**, fill in the setup page (opens by itself, or `http://192.168.4.1`) and save.
+3. **Scan the QR code on the screen** (Wi-Fi `Dashboard-Setup`, password on the screen) and follow the setup app (opens by itself, or `http://192.168.4.1`).
 
 To change the settings later: hold the touch button for 4 s and release, or tap **RST** and then hold **BOOT** for 1 s.
 

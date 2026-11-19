@@ -23,3 +23,10 @@ inline int batteryPercent(float v) {
   return 0;
 }
 
+// A LiPo that runs the board reads 3.0-4.3 V. Anything else means no battery is connected (or the
+// pin can't measure it: wiring, a different board), so the board runs on USB power. Below 3.0 V
+// the board couldn't be running from the battery at all.
+constexpr float BATTERY_MIN_RUNNING_V = 3.0f;
+constexpr float BATTERY_MAX_V = 4.4f;
+inline bool batteryReadingPlausible(float v) { return v >= BATTERY_MIN_RUNNING_V && v <= BATTERY_MAX_V; }
+

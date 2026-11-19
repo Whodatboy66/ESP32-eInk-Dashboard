@@ -110,3 +110,27 @@ bool fetchWeatherDirect(LayoutItem* item) {
   return weather.count > 0;
 }
 
+// Place search for the setup app (stage 5): Open-Meteo's geocoding, up to `max` places.
+int searchPlaces(const char* query, PlaceResult* out, int max) {
+  char encoded[CFG_WEATHER_LOC_MAX * 3];
+  urlEncode(query, encoded, sizeof(encoded));
+  char url[320];
+  snprintf(url, sizeof(url), "https://geocoding-api.open-meteo.com/v1/search?name=%s&count=%d&format=json",
+           encoded, max);
+  JsonDocument doc;
+  if (!httpGetJson(url, doc)) return -1;
+  int n = 0;
+  for (JsonObjectConst r : doc["results"].as<JsonArrayConst>()) {
+    if (n >= max) break;
+    const char* name = r["name"] | "";
+    const char* cc = r["country_code"] | "";
+    if (!name[0]) continue;
+    snprintf(out[n].name, sizeof(out[n].name), cc[0] ? "%s, %s" : "%s", name, cc);
+    const char* admin = r["admin1"] | "";
+    const char* country = r["country"] | "";
+    snprintf(out[n].detail, sizeof(out[n].detail), "%s%s%s%s%s", name, admin[0] ? ", " : "", admin,
+             country[0] ? ", " : "", country);
+    n++;
+  }
+  return n;
+}

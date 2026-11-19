@@ -8,6 +8,7 @@
 
 #include <cstdarg>
 #include <cstdio>
+#include <cstring>
 #include <ctime>
 #include <string>
 
@@ -43,6 +44,8 @@ char bday_url[CFG_ICS_URL_MAX] = "";
 uint8_t user_content = USER_HAS_TASKS | USER_HAS_NOTE | USER_HAS_BIRTHDAYS;
 extern int renderSample;  // tools/render/UserStoreSample.cpp
 char layout_template[CFG_LAYOUT_MAX] = "classic";
+char layout_boxes[CFG_LAYOUT_BOXES_MAX] = "";
+char device_name[CFG_DEVICE_NAME_MAX] = "";
 uint16_t widget_show_mask = 0xFFFF;
 bool clock_24h = true;
 ServiceState serviceStates[SERVICE_COUNT];
@@ -149,13 +152,22 @@ static void sampleData() {
 // render <out.pbm> [template] [hide]   hide: comma-separated widget keys switched off (Registry.cpp)
 int main(int argc, char** argv) {
   const char* out = argc > 1 ? argv[1] : "classic.pbm";
-  if (argc > 2) snprintf(layout_template, sizeof(layout_template), "%s", argv[2]);
+  if (argc > 2 && std::strncmp(argv[2], "v1;", 3) == 0) {  // a custom layout (box string)
+    snprintf(layout_template, sizeof(layout_template), "custom");
+    snprintf(layout_boxes, sizeof(layout_boxes), "%s", argv[2]);
+  } else if (argc > 2) {
+    snprintf(layout_template, sizeof(layout_template), "%s", argv[2]);
+  }
   if (argc > 4 && std::string(argv[4]) == "stale") {  // weather and calendar not updated for a day
     serviceStates[(int)Service::Weather].lastOk = RENDER_TIME - 86400;
     serviceStates[(int)Service::Calendar].lastOk = RENDER_TIME - 86400;
   }
   if (argc > 4 && std::string(argv[4]).rfind("12h", 0) == 0) clock_24h = false;
   if (argc > 4 && std::string(argv[4]) == "empty") renderSample = 1;
+  if (argc > 4 && std::string(argv[4]) == "problems") {  // weather place missing, calendar failing
+    weather_location[0] = '\0';
+    problems = PROBLEM_CALENDAR | PROBLEM_WEATHER;
+  }
   if (argc > 4 && std::string(argv[4]) == "long") renderSample = 2;
   if (argc > 4 && std::string(argv[4]) == "12h1258") RENDER_TIME += 3 * 3600 + 17 * 60;  // 12:58, widest 12 h
   if (argc > 3) {

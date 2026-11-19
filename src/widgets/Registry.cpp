@@ -4,6 +4,7 @@
 #include <string.h>
 
 #include "../../app.h"
+#include "../layout/BoxLayout.h"
 #include "Widgets.h"
 
 using layouts::WidgetId;
@@ -11,18 +12,18 @@ using layouts::WidgetId;
 namespace {
 // Indexed by WidgetId. Metrics and refresh as in the original fixed layout.
 const WidgetInfo WIDGETS[layouts::WIDGET_COUNT] = {
-    {WidgetId::StatusBar, "status", "Status bar", 128, "Battery", 0, 0, 60},
-    {WidgetId::Clock, "clock", "Clock", 1, "Clock", 10, 10, 1},
-    {WidgetId::Weather, "weather", "Weather", 8, "OpenMeteo", 0, 100, 360},
-    {WidgetId::Agenda, "agenda", "Upcoming events", 2, "Cal Events", 22, 10, 60},
-    {WidgetId::Month, "month", "Month calendar", 256, "Calendar", 28, 210, 60},
-    {WidgetId::Stocks, "stocks", "Stocks", 4, "Stocks", 22, 10, 60},
-    {WidgetId::Tracking, "tracking", "Package tracking", 16, "Tracking", 22, 0, 120},
-    {WidgetId::Printer, "printer", "Printer / MakerWorld", 64, "Bambu", 22, 70, 4},
+    {WidgetId::StatusBar, layouts::WIDGET_KEYS[0], "Status bar", 128, "Battery", 0, 0, 60, ""},
+    {WidgetId::Clock, layouts::WIDGET_KEYS[1], "Clock", 1, "Clock", 10, 10, 1, ""},
+    {WidgetId::Weather, layouts::WIDGET_KEYS[2], "Weather", 8, "OpenMeteo", 0, 100, 360, "Weather: set a place in the app"},
+    {WidgetId::Agenda, layouts::WIDGET_KEYS[3], "Upcoming events", 2, "Cal Events", 22, 10, 60, "Agenda: add a calendar link in the app"},
+    {WidgetId::Month, layouts::WIDGET_KEYS[4], "Month calendar", 256, "Calendar", 28, 210, 60, ""},
+    {WidgetId::Stocks, layouts::WIDGET_KEYS[5], "Stocks", 4, "Stocks", 22, 10, 60, "Stocks: add symbols in the app"},
+    {WidgetId::Tracking, layouts::WIDGET_KEYS[6], "Package tracking", 16, "Tracking", 22, 0, 120, "Parcels: add the tracking key in the app"},
+    {WidgetId::Printer, layouts::WIDGET_KEYS[7], "Printer / MakerWorld", 64, "Bambu", 22, 70, 4, "Printer: set its address in the app"},
     // Personal widgets (stage 4): local data, drawn on full refreshes and when the date changes.
-    {WidgetId::Tasks, "tasks", "Tasks", 512, "Tasks", 22, 0, 1440},
-    {WidgetId::Notes, "notes", "Note", 1024, "Note", 22, 0, 1440},
-    {WidgetId::Birthdays, "birthdays", "Birthdays", 2048, "Birthdays", 22, 0, 1440},
+    {WidgetId::Tasks, layouts::WIDGET_KEYS[8], "Tasks", 512, "Tasks", 22, 0, 1440, "Tasks: add tasks in the app"},
+    {WidgetId::Notes, layouts::WIDGET_KEYS[9], "Note", 1024, "Note", 22, 0, 1440, "Note: write a note in the app"},
+    {WidgetId::Birthdays, layouts::WIDGET_KEYS[10], "Birthdays", 2048, "Birthdays", 22, 0, 1440, "Birthdays: add birthdays in the app"},
 };
 }  // namespace
 
@@ -48,8 +49,11 @@ uint16_t enabledWidgets() {
   return configuredWidgets() & (widget_show_mask | always);
 }
 
-layouts::Result loadLayout() {
-  layouts::Result r = layouts::buildLayout(layouts::templateByKey(layout_template), enabledWidgets());
+MissingHint missingHints[layouts::WIDGET_COUNT];
+int missingHintCount = 0;
+
+// Fills the layout table from an engine result.
+static void fillTable(const layouts::Result& r) {
   layoutCount = 0;
   for (int i = 0; i < r.count && layoutCount < MAXLAYOUTS; i++) {
     const WidgetInfo& w = widgetInfo(r.items[i].id);
@@ -80,5 +84,37 @@ layouts::Result loadLayout() {
     if (r.items[i].id == WidgetId::Printer)
       snprintf(l.Extra1, sizeof(l.Extra1), "%s", printer_name[0] ? printer_name : "Bambu");
   }
+}
+
+layouts::Result loadLayoutFrom(const char* tpl, const char* boxes, uint16_t showMask) {
+  missingHintCount = 0;
+  layouts::Result r;
+  layouts::BoxLayout box;
+  if (tpl && strcmp(tpl, "custom") == 0) {
+    // The setup app's boxes: what the user placed, no gap filling; clock and status bar optional.
+    // A widget without its settings keeps its box and shows a hint there.
+    if (layouts::parseBoxes(boxes, box)) {
+      uint16_t missing = 0;
+      r = layouts::buildBoxes(box, configuredWidgets(), &missing);
+      for (int w = 0; w < layouts::WIDGET_COUNT && !r.fellBack; w++) {
+        WidgetId id = static_cast<WidgetId>(w);
+        const layouts::Box* b = layouts::boxOf(box, id);
+        if (!(missing & layouts::widgetBit(id)) || !b) continue;
+        missingHints[missingHintCount++] = MissingHint{id, layouts::boxRect(*b, box.statusBar)};
+      }
+    } else {
+      uint16_t always = layouts::widgetBit(WidgetId::StatusBar) | layouts::widgetBit(WidgetId::Clock);
+      r = layouts::buildLayout(layouts::classicTemplate(), configuredWidgets() & (showMask | always));
+      r.fellBack = true;
+    }
+  } else {
+    uint16_t always = layouts::widgetBit(WidgetId::StatusBar) | layouts::widgetBit(WidgetId::Clock);
+    r = layouts::buildLayout(layouts::templateByKey(tpl), configuredWidgets() & (showMask | always));
+  }
+  fillTable(r);
   return r;
+}
+
+layouts::Result loadLayout() {
+  return loadLayoutFrom(layout_template, layout_boxes, widget_show_mask);
 }

@@ -34,3 +34,11 @@ bool fetchMakerWorldDirect();
 bool fetchCalendarIcs(const char* tz, int* failed = nullptr);
 // Birthdays from the birthday calendar link (bday_url) into /bday_feed.json (stage 4).
 bool fetchBirthdayFeed(const char* tz);
+// Setup app checks (stage 5): a calendar link's number of events (-1 + reason), places for a
+// weather search (-1 if the search didn't answer).
+int checkIcsLink(const char* url, char* err, size_t cap);
+struct PlaceResult {
+  char name[65];    // "Berlin, DE": what goes into the weather setting
+  char detail[96];  // "Berlin, Germany"
+};
+int searchPlaces(const char* query, PlaceResult* out, int max);

@@ -2,10 +2,12 @@
 
 #include "../../app.h"
 #include "../core/Problems.h"
+#include "../hardware/BatteryCurve.h"
 #include "../hardware/BatteryMonitor.h"
 #include "../services/Bambu.h"
 #include "../update/OtaFlow.h"
 #include "Widgets.h"
+#include "../ui/Canvas.h"
 
 // Alert icon followed by the names of the failing sources, e.g. "[!] WiFi Weather".
 // Names that don't fit before maxX are summarized as "+N".
@@ -42,7 +44,9 @@ void drawStatus(LayoutItem* item) {
   char buf[20] = "";
   if (hasBatteryPin()) {
     voltage = readBattery();
-    snprintf(buf, sizeof(buf), "%.2f V", voltage);
+    // No battery measured: the board runs on USB (a voltage there would only confuse).
+    if (batteryReadingPlausible(voltage)) snprintf(buf, sizeof(buf), "%.2f V", voltage);
+    else snprintf(buf, sizeof(buf), "USB");
   }
 
   char versionBuf[48];
@@ -94,3 +98,25 @@ void drawStatus(LayoutItem* item) {
   }
 }
 
+// Without a status bar (box layouts): a small black mark in the bottom-right corner, "! Weather +1",
+// only while there is a problem.
+void drawProblemCorner() {
+  problemsShown = problems;
+  if (!problems) return;
+  const int count = sizeof(PROBLEM_LABELS) / sizeof(PROBLEM_LABELS[0]);
+  const char* first = "";
+  for (int i = 0; i < count; i++)
+    if (problems & (1 << i)) {
+      first = PROBLEM_LABELS[i];
+      break;
+    }
+  char text[32];
+  int n = __builtin_popcount(problems);
+  if (n > 1) snprintf(text, sizeof(text), "%s +%d", first, n - 1);
+  else snprintf(text, sizeof(text), "%s", first);
+  int16_t w = getSparseStringWidth(&epaperFont, text) + 26;
+  int16_t x = 800 - w - 6, y = 480 - 6;
+  canvas().fillRect(x - 4, y - 19, w + 8, 23, GxEPD_BLACK);
+  drawSparseChar(&MDI_22_Sparse, x, y + 2, MDI_ALERT, GxEPD_WHITE);
+  drawSparseString(&epaperFont, x + 24, y, text, GxEPD_WHITE);
+}

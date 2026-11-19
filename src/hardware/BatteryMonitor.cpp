@@ -31,8 +31,11 @@ bool usbPowered() {
 #endif
 }
 
-// Battery charge in percent, -1 without a battery sensor.
+// Battery charge in percent; -1 without a battery sensor, or when no battery is measured there
+// (the board then runs on USB power, see batteryReadingPlausible).
 int batteryPercentNow() {
-  return hasBatteryPin() ? batteryPercent(readBattery()) : -1;
+  if (!hasBatteryPin()) return -1;
+  float v = readBattery();
+  return batteryReadingPlausible(v) ? batteryPercent(v) : -1;
 }
 

@@ -11,7 +11,7 @@ A low-power desk dashboard for ESP32 boards and 7.5" ePaper displays. It shows t
 - [What it shows](#what-it-shows)
 - [Hardware](#hardware)
 - [Quick start](#quick-start)
-- [The setup page](#the-setup-page)
+- [The setup app](#the-setup-app)
 - [How the screen behaves](#how-the-screen-behaves)
 - [Wake button](#wake-button)
 - [Firmware updates](#firmware-updates)
@@ -73,13 +73,58 @@ The firmware picks the matching preset for your board automatically. You can cho
 ## Quick start
 
 1. **Flash the firmware.** Use a [prebuilt release](https://github.com/Whodatboy66/ESP32-eInk-Dashboard/releases) (flash the `*.merged.bin` image at address `0x0000`, for example with the [espboards.dev programmer](https://www.espboards.dev/tools/program/); it erases all settings, which is fine on a new device), or [build it yourself](#building-the-firmware).
-2. **Power on the board.** The screen shows "ESP32 AP Mode".
-3. **Join the Wi-Fi network `Dashboard-Setup`** from your phone or computer. The setup page opens by itself (captive portal). If it doesn't, browse to `http://192.168.4.1`.
-4. **Fill in the setup page** (see below) and press **Save Configuration**. The device restarts and draws the dashboard.
+2. **Power on the board.** The screen shows **Setup mode** with a Wi-Fi name, a password and a QR code.
+3. **Scan the QR code with your phone's camera** (or join the Wi-Fi `Dashboard-Setup` with the password on the screen). The setup app opens by itself (captive portal). If it doesn't, browse to `http://192.168.4.1`.
+4. **Follow the guided setup** in the app (Wi-Fi, name and place, calendars, screen). At the end the device restarts and draws the dashboard.
 
-To change the settings later, hold the button for 4 seconds and release it to reopen setup mode (see [Wake button](#wake-button)). Without a button: tap **RST**, then press and hold **BOOT** for 1 second.
+To change the settings later, hold the button for 4 seconds and release it: with working Wi-Fi the app opens on your home network (**edit mode**, see [The setup app](#the-setup-app)), otherwise setup mode starts again. Without a button: tap **RST**, then press and hold **BOOT** for 1 second (always setup mode).
 
-## The setup page
+## The setup app
+
+The device serves its own app (no internet needed, nothing to install). Two ways to open it:
+
+- **Setup mode** (first start, BOOT after a reset, or a 4-second hold without working Wi-Fi): the
+  device opens the hotspot `Dashboard-Setup`. Its password is made once per device and shown on the
+  screen with a QR code; a factory reset makes a new one. The app opens by itself after joining.
+- **Edit mode** (4-second hold with working Wi-Fi): the app is reachable on your home network for
+  10 minutes. The screen shows the address (`http://<name>.local`, e.g. `kitchen-display.local`, and
+  the IP address), a QR code and a **6-digit code** to type in. After 5 wrong codes a new one appears.
+  **Change Wi-Fi** (Device tab) switches to setup mode.
+
+Both close after a few minutes without use and the dashboard comes back.
+
+| Tab | What's there |
+| --- | --- |
+| **Home** | Preview, battery, Wi-Fi, version, problems with what to do about them, "Update available", **Done** |
+| **Screen** | The layout editor (below), 12 / 24-hour clock |
+| **Data** | Calendar links (with **Check**), birthday calendar link, weather place (search), stocks, parcels, flights, printer, MakerWorld; tasks, note and birthdays |
+| **Device** | Name, Wi-Fi (scan, **Test**), time zone, updates (automatic, channel, check now), board pins (advanced), factory reset |
+
+Passwords, keys and calendar links are never shown again once saved ("Saved: type to replace").
+Saving settings restarts the device; layouts, tasks, the note and birthdays are shown right away
+without a restart.
+
+### Layout editor
+
+1. Pick a **structure** (Full, Halves, Top + main, Top + 2, Four, Main + side, Six, Big + 2 small,
+   or the built-in Planner / Minimal / Technical / Personal as a start).
+2. Tap a box and choose what it shows. Widgets that need more room are greyed out ("needs 2 × 2").
+3. **Split** a box in two or **merge** it with a neighbor. A 2 × 2 box splits into two 2 × 1 boxes.
+4. Optional: switch the **status bar** off (the boxes get the full height; problems then appear as a
+   small mark in the bottom-right corner).
+5. **Show on the display**. **Exact preview** asks the device for the exact picture first.
+
+There is no clock unless you place one. A box can stay empty. A widget whose settings are missing
+shows what to set up in its box ("Weather: set a place in the app"). Classic stays available
+unchanged (with its Show switches).
+
+| Top row agenda, no clock | Without status bar |
+| --- | --- |
+| ![Top agenda](images/layouts/custom-top-agenda.png) | ![No status bar](images/layouts/custom-no-status-bar.png) |
+
+## The basic setup page (fallback)
+
+The previous setup page is still there for now, in setup mode only: `http://192.168.4.1/basic`.
 
 ![Setup page](images/WebConfig.png)
 
@@ -224,7 +269,7 @@ The 800×480 screen is split like this:
 
 The top bar shows, from left to right: the battery voltage, any **current problems**, the firmware version, and icons for printing and the battery level.
 
-The battery level comes from a typical LiPo discharge curve (about 4.15 V = 100 %, 3.83 V = 50 %, 3.3 V = 0 %), not a straight line. The voltage is read with the chip's factory ADC calibration and averaged over 16 samples. While USB is plugged in, the charger holds the voltage high, so the icon reads full. If the voltage shown differs from a multimeter, set `BAT_CALIBRATION` in `ESP32-eInk-Dashboard.ino` to *multimeter ÷ displayed* (for example 4.12 ÷ 4.05 = 1.017). The debug log prints `[Battery] 4.05 V, 90%` on each status-bar refresh.
+The battery level comes from a typical LiPo discharge curve (about 4.15 V = 100 %, 3.83 V = 50 %, 3.3 V = 0 %), not a straight line. The voltage is read with the chip's factory ADC calibration and averaged over 16 samples. While USB is plugged in, the charger holds the voltage high, so the icon reads full. If the voltage shown differs from a multimeter, set `BAT_CALIBRATION` in `ESP32-eInk-Dashboard.ino` to *multimeter ÷ displayed* (for example 4.12 ÷ 4.05 = 1.017). The debug log prints `[Battery] 4.05 V, 90%` on each status-bar refresh. A reading below 3.0 V (or above 4.4 V) can't be a LiPo running the board: the top bar then shows `USB` (no battery connected, or the battery pin can't measure it).
 
 When a data source fails, a ⚠ icon appears next to the voltage, followed by the names of what is failing:
 
@@ -314,7 +359,7 @@ It is an active-HIGH input with the internal pull-down: a `TTP223` module with i
 | Short tap | Wakes the device and does a full refresh |
 | Double tap | Device info and update check (see [Firmware updates](#firmware-updates)) |
 | Hold 2 seconds, then release | Reboots the dashboard |
-| Hold 4 seconds, then release | Setup mode: starts the `Dashboard-Setup` network and the setup page |
+| Hold 4 seconds, then release | Edit mode on the home network (code on the screen); setup mode (`Dashboard-Setup`) when Wi-Fi doesn't work |
 | Held 15 seconds or longer | Treated as a sensor fault and ignored (see below) |
 
 Releasing before 2 seconds counts as a short tap; a second tap within 0.4 seconds makes it a double tap (so a single tap's refresh starts 0.4 seconds later). From deep sleep, the first tap wakes the device and the second is caught after it starts: tap twice at a calm pace rather than very fast. Releasing between 2 and 4 seconds reboots, between 4 and 15 seconds opens setup mode. The holds also work while the dashboard is awake and refreshing; a short tap then is ignored. On the ESP32-C6 SuperMini, the onboard LED shows the stage: green while holding, flashing cyan from 2 s (release to reboot), flashing white from 4 s (release for setup). Setup mode closes by itself after 5 minutes without activity (each time the setup page is opened, the 5 minutes start again) and the dashboard resumes normally. On a device that was never configured, setup mode stays open until you save.
@@ -340,7 +385,7 @@ An install shows its steps on the screen (Downloading, Verifying, Installing, Re
 | `No Wi-Fi: try again later` | The device couldn't connect |
 | `No update for this device` | The release has no file for this board or display, or can't read this device's settings |
 | `Update check failed: try again later` | GitHub couldn't be reached, there is no release yet, or the release signature isn't valid (then it is never installed) |
-| `Battery too low for an update: please charge` | Below 30 % and no USB: charge it, the next check tries again |
+| `Battery too low for an update: please charge` | Below 30 % and no USB seen: charge it, the next check tries again. USB is seen only when a computer is connected; on a USB charger the battery reading decides. If no battery is connected (or it can't be measured, below 3.0 V), the top bar shows `USB` instead of a voltage and updates are allowed |
 | `Update failed: previous version kept` | The download or install failed, or the new version didn't start or couldn't reach Wi-Fi (it rolls back by itself) |
 | `Update needs a USB install` | The new version can't be installed over the air from this one |
 
@@ -487,6 +532,8 @@ Material Design Icons: [materialdesignicons.com](https://materialdesignicons.com
 Montserrat: [Google Fonts](https://fonts.google.com/specimen/Montserrat), SIL Open Font License 1.1.
 
 HighSpeed: [dafont.com/high-speed.font](https://www.dafont.com/high-speed.font), free for personal use; commercial use requires permission.
+
+QR Code generator library: [Project Nayuki](https://www.nayuki.io/page/qr-code-generator-library), MIT License (`src/ui/qr/`, setup screens).
 
 ## Contributing
 

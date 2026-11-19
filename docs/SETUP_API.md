@@ -6,14 +6,19 @@ The JSON interface between the setup app (`web/`, served at `/`) and the firmwar
 
 ## Basics
 
-- All bodies are JSON (`Content-Type: application/json`, also required on every POST / PUT: a page
-  from another site can't send that without a preflight the device never answers). UTF-8.
+- All bodies are JSON (`Content-Type: application/json`, required on every POST / PUT, also the ones
+  without a body (`{}`): a page from another site can't send that without a preflight the device
+  never answers). UTF-8.
+- In the hotspot, the API answers only requests that come in over the hotspot for `192.168.4.1`
+  (403 otherwise: after a Wi-Fi test the device is also in the home network).
 - Errors: HTTP 400 with `{"ok": false, "error": "text for people", "errors": {"field": "text"}}`
   (`errors` only for field problems). HTTP 401 `{"ok": false, "login": true}` when a session is
   needed (home network only). HTTP 413 when a body is larger than 8 KB.
 - **Secrets are never sent back.** In `GET` answers a secret is `{"set": true}` or `{"set": false}`
   (calendar links also get `"hint": "calendar.google.com"`, the host only). In a `POST`, a secret
-  field: a string = new value, `null` = remove, missing = keep.
+  field: a non-empty string = new value, `null` = remove, missing or `""` = keep (like the old page:
+  an empty password field keeps the saved one). Calendar links are not secrets in this sense: `""`
+  removes a link.
 - Modes: `"ap"` (setup hotspot, the phone has no internet) and `"home"` (edit mode on the home
   network, needs the screen code). Everything works in both modes unless noted.
 
@@ -21,7 +26,9 @@ The JSON interface between the setup app (`web/`, served at `/`) and the firmwar
 
 `POST /api/login` `{"code": "123456"}` → `{"ok": true}` and a cookie `s=<token>` (HttpOnly,
 SameSite=Strict), valid until edit mode ends. Wrong code: 400 `{"ok": false, "error": "Wrong code"}`;
-after 5 wrong codes a new code is shown on the screen. In AP mode no login is needed (the hotspot has
+after 5 wrong codes a new code is shown on the screen, after 3 new codes edit mode ends. A wrong code
+answers after a second. While the dashboard covers the code (after saving a layout or personal data),
+a login attempt shows the code screen again. In AP mode no login is needed (the hotspot has
 its own password).
 
 ## State
@@ -51,11 +58,11 @@ its own password).
     "mqtt_ip": "192.168.1.50", "mqtt_sn": "01S00A123456789", "mqtt_pass": {"set": true},
     "mqtt_port": 8883, "printer_name": "X1C", "makerworld_uid": "123",
     "ota_auto": true, "ota_beta": false, "clock_24h": true,
-    "pin_preset": "esp32c6_default",
+    "pin_preset": "esp32_c6",
     "pins": {"epd_cs": 1, "epd_dc": 8, "epd_rst": 14, "epd_busy": 7, "epd_sck": 23, "epd_mosi": 22,
              "display_power": 4, "battery": 0, "demo_button": 2}
   },
-  "pinPresets": [{"key": "esp32c6_default", "name": "ESP32-C6 FireBeetle"}, {"key": "custom", "name": "Custom pins"}],
+  "pinPresets": [{"key": "esp32_c6", "name": "ESP32 C6"}, {"key": "custom", "name": "Custom"}],
   "layout": {
     "template": "custom", "statusBar": true,
     "boxes": [{"c": 0, "r": 0, "w": 4, "h": 1, "widget": "agenda"}, {"c": 0, "r": 1, "w": 2, "h": 2, "widget": null}],
@@ -88,7 +95,8 @@ to three entries: a string = new link, `null` = remove, anything else (`{}`) = k
 `[{}, "https://…"]` changes only the second link. `pins` is sent whole when a pin changed (`-1` =
 not used). Field errors use the keys of the request (`ics.1`, `pins`). Validation as on the old page (timezone
 names, calendar links, stock symbols, printer address, port, custom pins).
-→ `{"ok": true, "restart": true}`; the device restarts about 2 s later (the app shows a "Saved,
+→ `{"ok": true, "restart": true}`; the device restarts about 3 s later (time for a following
+`/api/layout` in the first-start guide) (the app shows a "Saved,
 restarting" screen). In AP mode the phone loses the hotspot while the device restarts.
 
 `GET /api/networks` → `{"networks": [{"ssid": "Home", "rssi": -52, "secure": true}]}` (sorted by

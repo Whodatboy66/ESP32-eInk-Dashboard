@@ -207,3 +207,56 @@ Part 5b: the rest of the stage list:
 - Split rule: across the side with more cells, 2 × 2 → two 2 × 1, larger part first.
 - New "device name": app header and `<name>.local`, not on the e-paper.
 - Part 5a first (replaces today's page), part 5b after it, each with its own beta release.
+
+## Result (build 71)
+
+Parts 5a and 5b done in code, not yet checked on a device or a phone (list:
+[DEVICE_TESTS.md](../DEVICE_TESTS.md)). The app was checked with a mock device (`web/dev/`,
+open `web/dev/index.html`) and a DOM stand-in, not in a real browser. Decisions taken during the work:
+
+- **The app** (`web/`, plain JavaScript, ES2017 for the iOS captive-portal browser) is 95 KB, 30 KB
+  gzipped; compiled in as `src/web/generated/WebApp.h` by `tools/web/build.py`; CI checks that the
+  header matches `web/` (hash of the unpacked bundle, so different zlib versions don't matter) and the
+  60 KB limit, and runs the editor tests (`node --test tests/web/`).
+- **One set of layout rules, tested twice:** `tests/vectors/layouts.json` (20 cases) runs through the
+  app's `validate()` and the firmware's `validateBoxes()`; every built-in template converted to boxes
+  draws the same rectangles as the template (host test, every widget combination).
+- **Custom layouts** are stored as `v1;sb1;c,r,w,h,key;…` (`src/layout/BoxLayout.h`); the widget keys
+  moved into the engine (`WIDGET_KEYS`), so registry, storage and app use one list.
+- **No gap filling in box layouts;** a widget without settings is left out of the layout table (nothing
+  is fetched) and its box shows a hint from the registry. Without a status bar a change of the problems
+  is drawn with a full refresh (the corner mark sits over a widget).
+- **The exact preview** draws with the device's data; widgets without data show their empty text
+  (no sample data, unlike the plan said).
+- **Saving a layout or personal data redraws the dashboard in setup mode** (no restart); the setup
+  screen with the password is gone then, the password stays the same.
+- **The hotspot password** (8 characters without look-alikes, `ap_pass` in NVS) is new with this
+  build: existing devices show it on the setup screen the first time.
+- **Edit mode:** session cookie after the code (HttpOnly, SameSite=Strict), every API call checks the
+  `Host` header (no DNS rebinding) and requires JSON (no form posts from other sites); the old page
+  `/basic` exists only in the hotspot. mDNS name from the device name.
+- **The calendar link check** counts the events of a link without touching the calendar on screen;
+  **the place search** uses Open-Meteo's geocoding (the same service as the weather).
+- Agreed between app and firmware beyond the first API draft (now in `docs/SETUP_API.md`): `{}` keeps
+  a calendar link, the saved birthday link can be checked, "Change Wi-Fi" = `/api/finish {"ap": true}`.
+
+Review (fresh context) found, all fixed: the request body was read after it was freed
+(`WebServer::arg()` returns a copy; every save would have failed at random on the device); in the
+hotspot, after a Wi-Fi test, the home network could reach the setup without the hotspot password
+(now only requests over the hotspot for 192.168.4.1, also the old `/basic`); a problem change without
+status bar blanked the widgets that weren't fetched in that wake; partial refreshes erased the
+problem mark; unlimited code guessing and rejected requests kept edit mode open (now 1 s per wrong
+code, edit mode ends after 3 new codes, only accepted requests count as activity); a Wi-Fi test in
+edit mode dropped the connection (now answered from the saved password); a second Wi-Fi test could
+report the first one's result; update / factory reset / finish didn't require JSON; after a save in
+edit mode the code was gone from the screen (a login attempt brings it back); `/basic` replaced an
+own layout with Classic when saved; an unknown board preset was silently replaced.
+
+Battery (reported on the device, 2026-11-19: "battery too low" with USB attached): USB is seen only
+when a computer is connected, so on a charger the battery reading decided; a reading below 3.0 V
+(no battery, or not measurable) now counts as USB power, and the top bar shows `USB`.
+
+Verification: host tests (new `test_box_layout.cpp` incl. the shared vectors), web tests (20), all
+profiles compile, images of custom layouts reviewed (top row agenda without clock, without status bar
+with a hint and the problem mark, full-screen month).
+

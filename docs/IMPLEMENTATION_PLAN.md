@@ -227,14 +227,14 @@ Detailed plan: [plans/STAGE4_PERSONAL_WIDGETS.md](plans/STAGE4_PERSONAL_WIDGETS.
 **Done when:** all three are editable (through a temporary JSON API at first) and survive restarts and OTA.
 
 ### Stage 5: Smartphone configuration v2 (spec §7, Phase 4)
-Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: structure, then split / merge boxes, then a widget per box; look "Paper").
-- [ ] Secure provisioning: per-device AP password shown on the e-ink screen + Wi-Fi QR code (S2); on the home network a fresh code shown on the screen instead of an admin PIN (S4); secrets never echoed (S3)
-- [ ] First-time setup flow: Wi-Fi scan, device name, profile, weather, calendars
-- [ ] Pages: overview, widgets (enable, order, size, template), calendar (URL check with clear errors), weather, tasks & notes, device settings, firmware (version, channel, last update, last error)
-- [ ] **Layout editor:** choose a structure (full, halves, boxes …), split / merge boxes on the 4 × 3 grid, pick a widget per box; clock and status bar optional
-- [ ] **Preview:** device-rendered 800x480 image of the configured layout
-- [ ] Edit mode on the home network (setup hold, 10 minutes), see A.8; "always on USB power" moved to stage 6
-- [ ] Error texts for non-technical users; diagnostics in the app (behind the setup password / screen code)
+Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: structure, then split / merge boxes, then a widget per box; look "Paper"). Done in code (build 71), not yet checked on the device: see [DEVICE_TESTS.md](DEVICE_TESTS.md).
+- [x] Secure provisioning: per-device AP password shown on the e-ink screen + Wi-Fi QR code (S2); on the home network a fresh code shown on the screen instead of an admin PIN (S4); secrets never echoed (S3)
+- [x] First-time setup flow: Wi-Fi scan, device name, profile, weather, calendars
+- [x] Pages: overview, widgets (enable, order, size, template), calendar (URL check with clear errors), weather, tasks & notes, device settings, firmware (version, channel, last update, last error)
+- [x] **Layout editor:** choose a structure (full, halves, boxes …), split / merge boxes on the 4 × 3 grid, pick a widget per box; clock and status bar optional
+- [x] **Preview:** device-rendered 800x480 image of the configured layout
+- [x] Edit mode on the home network (setup hold, 10 minutes), see A.8; "always on USB power" moved to stage 6
+- [x] Error texts for non-technical users; problems with what to do on the Home tab (behind the setup password / screen code); a log view is not done
 
 **Done when:** a person without ESP32 knowledge sets up and personalizes a device using only a phone.
 

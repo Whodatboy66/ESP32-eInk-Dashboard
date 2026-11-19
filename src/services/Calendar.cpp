@@ -442,6 +442,44 @@ static bool readIcsFeed(const char* url, IcsWindow& w) {
   return true;
 }
 
+// Setup app "Check" (stage 5): reads a calendar link and counts its events, without changing the
+// calendar data on screen. Returns the number of events, or -1 with a reason for people in err.
+int checkIcsLink(const char* url, char* err, size_t cap) {
+  SecureClient client;
+  HTTPClient http;
+  http.useHTTP10(true);
+  http.setTimeout(15000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  if (!http.begin(client, url)) {
+    snprintf(err, cap, "The address can't be used.");
+    return -1;
+  }
+  int code = http.GET();
+  if (code != 200) {
+    if (code == 401 || code == 403) snprintf(err, cap, "Access refused (HTTP %d): use the secret or public iCal address.", code);
+    else if (code == 404) snprintf(err, cap, "Not found (HTTP 404): the link is wrong or was reset.");
+    else if (code < 0) snprintf(err, cap, "No connection to the server (certificate or network problem).");
+    else snprintf(err, cap, "The server answered HTTP %d.", code);
+    http.end();
+    return -1;
+  }
+  IcsLineReader reader(http.getStreamPtr());
+  static char line[640];
+  int events = 0;
+  bool calendar = false;
+  unsigned long t0 = millis();
+  while (reader.next(line, sizeof(line)) && millis() - t0 < 20000) {
+    if (!strcmp(line, "BEGIN:VCALENDAR")) calendar = true;
+    else if (!strcmp(line, "BEGIN:VEVENT")) events++;
+  }
+  http.end();
+  if (!calendar) {
+    snprintf(err, cap, "This is not an iCal calendar (no BEGIN:VCALENDAR): copy the iCal address.");
+    return -1;
+  }
+  return events;
+}
+
 // Birthdays from the birthday calendar link (stage 4): every event in the next 60 days, yearly
 // repeats expanded. Kept in /bday_feed.json; on failure the last list stays.
 bool fetchBirthdayFeed(const char* tz) {

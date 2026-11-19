@@ -11,9 +11,14 @@ drawing function plus a few facts the engine and the wake cycle need.
    to that rectangle; use the size to decide how much to show (rows = `Height / RowHeight`, …).
    Call `drawStaleMark(item, Service::...)` at the end if the data can get old.
 3. **Registry.** Add a `WidgetId` **at the end** (`src/layout/LayoutEngine.h`; its bit position is
-   stored in NVS `show_mask`, at most 16 widgets) with its size limits in cells
-   (`limitsOf`), and a line in `src/widgets/Registry.cpp`: key, name, layout ID, row height, column
-   width, refresh interval in minutes; in `configuredWidgets()` say when it counts as set up.
+   stored in NVS `show_mask`, at most 16 widgets) with its size limits in cells (`limitsOf`) and
+   its key in `WIDGET_KEYS` (used by the setup app, saved box layouts and the registry: never rename
+   a key, saved layouts refer to it), and a line in `src/widgets/Registry.cpp`: name, layout ID, row
+   height, column width, refresh interval in minutes, and the hint shown in its box when its
+   settings are missing ("Weather: set a place in the app"); in `configuredWidgets()` say when it
+   counts as set up. The setup app gets it automatically (`/api/state` lists every widget with its
+   size limits); for its sketch preview add a `case` to `widgetSvg()` in `web/app.js` and run
+   `python3 tools/web/build.py`.
 4. **Templates.** Place it in the templates that should show it (`src/layout/Templates.h`, grid
    cells `{col, row, cols, rows}` on the 4 × 3 grid). Classic stays as it is.
 5. **Wake cycle.** In `src/core/App.cpp`: fetch it when due (`WakePlan`: add its refresh to

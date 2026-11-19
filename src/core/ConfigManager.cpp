@@ -35,6 +35,8 @@ uint8_t user_content = 0;
 char layout_template[CFG_LAYOUT_MAX] = "classic";
 uint16_t widget_show_mask = 0xFFFF;
 bool clock_24h = true;
+char layout_boxes[CFG_LAYOUT_BOXES_MAX] = "";
+char device_name[CFG_DEVICE_NAME_MAX] = "";
 
 const char* const ICS_PREF_KEYS[ICS_MAX_FEEDS] = { "ics_url", "ics_url2", "ics_url3" };
 
@@ -95,7 +97,11 @@ void configLoad() {
   otaBeta = preferences.getBool("ota_beta", false);
   // Layout (schema 2; missing on older setups = today's Classic layout, everything shown, 24 h).
   preferences.getString("lay_tpl", layout_template, sizeof(layout_template));
-  if (layouts::templateIndex(layout_template) < 0) snprintf(layout_template, sizeof(layout_template), "classic");
+  preferences.getString("lay_box", layout_boxes, sizeof(layout_boxes));
+  preferences.getString("dev_name", device_name, sizeof(device_name));
+  // "custom" = the boxes of the setup app's editor (an unusable string falls back to Classic later).
+  if (layouts::templateIndex(layout_template) < 0 && strcmp(layout_template, "custom") != 0)
+    snprintf(layout_template, sizeof(layout_template), "classic");
   widget_show_mask = preferences.getUShort("show_mask", 0xFFFF);
   clock_24h = preferences.getBool("clk_24h", true);
   otaAvailBuild = preferences.getUInt("ota_avail", 0);
@@ -123,7 +129,8 @@ void configLoad() {
   int schema = preferences.getInt("cfg_schema", 0);
   preferences.end();
   if (configNeedsMigration(schema, FW_CONFIG_SCHEMA)) {
-    // 0 -> 1: nothing to convert. 1 -> 2: the layout keys are new; their defaults (Classic,
+    // 0 -> 1: nothing to convert. 2 -> 3: new keys (custom layout, device name, hotspot password)
+    // whose defaults change nothing. 1 -> 2: the layout keys are new; their defaults (Classic,
     // everything shown, 24 h) are today's screen. Only the key is stored.
     preferences.begin("config", false);
     if (schema < 2) {  // the defaults, so they are found from now on
@@ -164,6 +171,8 @@ void configSave() {
   preferences.putString("lay_tpl", layout_template);
   preferences.putUShort("show_mask", widget_show_mask);
   preferences.putBool("clk_24h", clock_24h);
+  preferences.putString("lay_box", layout_boxes);
+  preferences.putString("dev_name", device_name);
 
   preferences.putInt("cfg_schema", FW_CONFIG_SCHEMA);
   preferences.end();

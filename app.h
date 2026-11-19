@@ -36,9 +36,13 @@ extern char aerodatabox_key[CFG_ADB_KEY_MAX];
 
 // Layout (stage 3): template key, which widgets are shown, clock format.
 #define CFG_LAYOUT_MAX         16u
-extern char layout_template[CFG_LAYOUT_MAX];   // "classic", "planner", "minimal", "technical"
+#define CFG_LAYOUT_BOXES_MAX  200u   // custom layout string (src/layout/BoxLayout.h)
+#define CFG_DEVICE_NAME_MAX    33u   // "Kitchen display": app header and the .local address
+extern char layout_template[CFG_LAYOUT_MAX];   // "classic", "planner", ... or "custom" (layout_boxes)
 extern uint16_t widget_show_mask;              // widgetBit(layouts::WidgetId): switched on on the setup page
 extern bool clock_24h;
+extern char layout_boxes[CFG_LAYOUT_BOXES_MAX];  // the boxes when layout_template is "custom" (stage 5)
+extern char device_name[CFG_DEVICE_NAME_MAX];
 
 #define ICS_MAX_FEEDS 3
 extern char ics_urls[ICS_MAX_FEEDS][CFG_ICS_URL_MAX];
