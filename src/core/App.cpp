@@ -45,7 +45,10 @@ static long clockDrawnMinute = -1;
 RTC_DATA_ATTR static long personalDrawnDay = 0;
 RTC_DATA_ATTR static long bdayFeedDay = 0;
 RTC_DATA_ATTR static time_t bdayFeedRetryAt = 0;
-RTC_DATA_ATTR static uint32_t bdayFeedUrlHash = 0;  // a changed link is read right away
+RTC_DATA_ATTR static uint32_t bdayFeedUrlHash = 0;
+// Printer (MQTT): failed connections in a row and the time before which it isn't asked again.
+RTC_DATA_ATTR static uint8_t bambuFailures = 0;
+RTC_DATA_ATTR static time_t bambuRetryAfter = 0;  // a changed link is read right away
 
 static uint32_t textHash(const char* s) {
   uint32_t h = 2166136261u;  // FNV-1a
@@ -144,6 +147,11 @@ void appSetup() {
   if (setupRequest == SETUP_REQUEST_AP_MAGIC) {
     setupRequest = 0;
     startAP();
+    return;
+  }
+  if (setupRequest == SETUP_REQUEST_EDIT_MAGIC) {  // settings saved in edit mode: back into it
+    setupRequest = 0;
+    startEditMode();
     return;
   }
   if (setupRequest == SETUP_REQUEST_MAGIC) {
@@ -274,6 +282,8 @@ void appSetup() {
   wake.isPrinting = isPrinting;
   wake.previousIsPrinting = previousIsPrinting;
   wake.pendingBambuRetry = pendingBambuRetry;
+  wake.hasPrinterMqtt = mqtt_ip[0] && mqtt_sn[0] && mqtt_pass[0];
+  wake.bambuRetryAfter = bambuRetryAfter;
   wake.printViewOnScreen = printViewOnScreen;
   wake.showPrintView = showPrintView();
   wake.makerworldLastFetch = makerworldLastFetch;
@@ -363,6 +373,16 @@ void appSetup() {
         // Retry once at the next wake; after that wait for the next scheduled poll (the printer is
         // probably off). A rejected access code won't fix itself: don't retry it at all.
         pendingBambuRetry = !bambuOk && !bambuAuthRejected && !bambuRetry;
+        // Not answering (usually switched off): ask again after 10, 20, 40, then 60 minutes.
+        if (bambuOk) {
+          bambuFailures = 0;
+          bambuRetryAfter = 0;
+        } else {
+          if (bambuFailures < 255) bambuFailures++;
+          if (bambuFailures > 1) pendingBambuRetry = false;  // one quick retry, then the backoff
+          bambuRetryAfter = time(nullptr) + bambuBackoffSeconds(bambuFailures);
+          DBGF("[Bambu] next try in %ld min", (long)(bambuBackoffSeconds(bambuFailures) / 60));
+        }
         setProblem(PROBLEM_PRINTER_CODE, !bambuOk && bambuAuthRejected);
         setProblem(PROBLEM_PRINTER, !bambuOk && !bambuAuthRejected);
         signalPrintTransition();
@@ -547,7 +567,8 @@ void appSetup() {
   otaConfirmIfPending();
 
   bootCount++;
-  DBGF("Finished Boot %d\n", bootCount);
+  // Repeated at the end: after a deep-sleep wake the USB monitor misses the first lines.
+  DBGF("Finished wake %d: firmware %s (build %d, %s), awake %lu ms", bootCount, FW_VERSION, FW_BUILD, FW_VARIANT, millis());
 
   // Wake WAKE_AFTER_MINUTE_MS after the next minute boundary (sub-second precision).
   struct timeval tv;

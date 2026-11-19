@@ -142,7 +142,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
 // File-local helper: establish MQTT connection + subscribe to the report topic.
 static void connectMqtt( LayoutItem * infoBambu) {
   uint8_t retries = 0;
-  while (!client.connected() && retries < 5 ) {
+  while (!client.connected() && retries < 2 ) {
       DBG( F("[Bambu]: Connecting to MQTT...") );
       if (client.connect("ESP32_Bambu", "bblp", mqtt_pass)) {
           DBG( F("[Bambu]: connected") );
@@ -155,7 +155,7 @@ static void connectMqtt( LayoutItem * infoBambu) {
           snprintf(requestTopic, sizeof(requestTopic), "device/%s/request", mqtt_sn);
           client.publish(requestTopic, "{\"pushing\":{\"sequence_id\":\"0\",\"command\":\"pushall\"}}");
       } else {
-        DBGF("[Bambu]: MQTT fail rc=%d retry %d/5\n", client.state(), retries+1);
+        DBGF("[Bambu]: MQTT fail rc=%d try %d/2\n", client.state(), retries+1);
         // rc 4/5 = bad credentials or not authorized (wrong LAN access code): retrying won't help.
         if (client.state() == MQTT_CONNECT_BAD_CREDENTIALS || client.state() == MQTT_CONNECT_UNAUTHORIZED) {
           DBG(F("[Bambu] Access code rejected - check the LAN access code in setup"));
@@ -163,13 +163,13 @@ static void connectMqtt( LayoutItem * infoBambu) {
           break;
         }
         retries++;
-        // No TCP/TLS connection at all: the printer is off or unreachable. One retry is enough;
-        // each further attempt keeps the radio on for several seconds.
-        if (client.state() == MQTT_CONNECT_FAILED && retries >= 2) {
-          DBG(F("[Bambu] Printer unreachable"));
+        // No TCP/TLS connection at all: the printer is off or unreachable. No retry here: the wake
+        // plan asks again after a backoff (10 min up to 1 h).
+        if (client.state() == MQTT_CONNECT_FAILED) {
+          DBG(F("[Bambu] Printer unreachable (switched off?)"));
           break;
         }
-        delay(2000);
+        delay(1000);
       }
   }
   if (!client.connected())
@@ -205,6 +205,12 @@ bool fetchBambu(  LayoutItem* infoBambu  )
     return false;
   }
   wifiClient.setInsecure();
+  // A switched-off printer must not keep the radio on for long: short connect and TLS timeouts
+  // (the TLS client's default connect timeout is 30 s: each failed attempt took 30 s in the
+  // diagnostics log of 2026-11-19).
+  wifiClient.setConnectionTimeout(5000);
+  wifiClient.setHandshakeTimeout(8);
+  client.setSocketTimeout(5);
   client.setBufferSize(32768);  // a full pushall report can exceed 20 KB with an AMS attached
   gotReport = false;
   DBGF("[Bambu]: IP %s Port %d\n", mqtt_ip, mqtt_port );

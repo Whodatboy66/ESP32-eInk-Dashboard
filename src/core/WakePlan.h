@@ -43,6 +43,10 @@ struct WakeInputs {
   int batteryRefresh = 0, calendarRefresh = 0, bambuRefresh = 0;
   bool hasIcsFeeds = false, hasAerodataboxKey = false, hasMakerworldUid = false;
   bool isPrinting = false, previousIsPrinting = false, pendingBambuRetry = false;
+  // Printer status over MQTT needs the printer's address, serial number and access code (the
+  // printer widget also works with MakerWorld stats only). After failures: not before this time.
+  bool hasPrinterMqtt = true;
+  time_t bambuRetryAfter = 0;
   bool printViewOnScreen = false;  // the printer view (not MakerWorld) is on screen
   bool showPrintView = false;      // the printer view should be shown now (printing / just finished)
   time_t makerworldLastFetch = 0, lastNtpSync = 0;
@@ -106,12 +110,15 @@ inline WakePlan planWake(const WakeInputs& in) {
   p.battery = dueByWakes(in.batteryRefresh, in.bootCount);
   p.calendar = dueByWakes(in.calendarRefresh, in.bootCount) || (in.calendarRefresh > 0 && in.calendarRetry);
   bool bambuOnLayout = in.bambuRefresh > 0;
-  p.bambu = (bambuOnLayout && (((in.isPrinting || in.previousIsPrinting) && (in.bootCount % in.bambuRefresh == 0)) ||
-                               (in.bootCount % BAMBU_IDLE_REFRESH_MIN == 0))) ||
-            in.pendingBambuRetry;
-  p.bambuRetry = in.pendingBambuRetry;
+  bool bambuMqtt = bambuOnLayout && in.hasPrinterMqtt;
+  p.bambu = bambuMqtt && ((((in.isPrinting || in.previousIsPrinting) && (in.bootCount % in.bambuRefresh == 0)) ||
+                           (in.bootCount % BAMBU_IDLE_REFRESH_MIN == 0)) ||
+                          in.pendingBambuRetry);
+  // A printer that didn't answer (usually: switched off) is asked again only after its backoff.
+  if (p.bambu && in.bambuRetryAfter && now < in.bambuRetryAfter) p.bambu = false;
+  p.bambuRetry = p.bambu && in.pendingBambuRetry;
   // The "print finished" window just ended: redraw so the MakerWorld view replaces the printer view.
-  if (bambuOnLayout && in.printViewOnScreen && !in.showPrintView) p.bambu = true;
+  if (bambuMqtt && in.printViewOnScreen && !in.showPrintView) p.bambu = true;
 
   // MakerWorld stats: only for the idle view, at most once per MAKERWORLD_REFRESH_S.
   p.makerworld = bambuOnLayout && in.hasMakerworldUid && !in.showPrintView &&
@@ -152,3 +159,12 @@ inline int64_t sleepMicros(time_t sec, long usec) {
   }
   return sleepUs;
 }
+
+// Wait after the n-th failed printer connection in a row: 10, 20, 40, then 60 minutes (a printer that
+// is switched off shouldn't keep Wi-Fi busy every few minutes).
+inline time_t bambuBackoffSeconds(uint8_t failures) {
+  if (failures == 0) return 0;
+  time_t s = (time_t)600 << (failures > 3 ? 3 : failures - 1);
+  return s > 3600 ? 3600 : s;
+}
+

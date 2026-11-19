@@ -113,6 +113,30 @@ static void test_bambu_polling() {
   CHECK(p.bambu && p.bambuRetry);
 }
 
+static void test_bambu_needs_mqtt_settings_and_backs_off() {
+  WakeInputs in = base();
+  in.bootCount = 120;  // an idle poll is due
+  in.hasPrinterMqtt = false;  // MakerWorld only: no printer connection at all
+  CHECK(!planWake(in).bambu);
+  in.pendingBambuRetry = true;
+  CHECK(!planWake(in).bambu);
+  in.hasPrinterMqtt = true;
+  in.pendingBambuRetry = false;
+  CHECK(planWake(in).bambu);
+  in.bambuRetryAfter = in.now + 600;  // didn't answer: wait
+  CHECK(!planWake(in).bambu);
+  in.pendingBambuRetry = true;
+  CHECK(!planWake(in).bambu);  // not even the retry
+  in.now += 601;
+  CHECK(planWake(in).bambu);
+  CHECK_EQ(bambuBackoffSeconds(1), 600);
+  CHECK_EQ(bambuBackoffSeconds(2), 1200);
+  CHECK_EQ(bambuBackoffSeconds(3), 2400);
+  CHECK_EQ(bambuBackoffSeconds(4), 3600);
+  CHECK_EQ(bambuBackoffSeconds(200), 3600);
+  CHECK_EQ(bambuBackoffSeconds(0), 0);
+}
+
 static void test_bambu_redraw_when_print_view_ends() {
   WakeInputs in = base();
   in.printViewOnScreen = true;
@@ -293,6 +317,7 @@ int main() {
   test_makerworld_hourly_only_in_idle_view();
   test_bambu_polling();
   test_bambu_redraw_when_print_view_ends();
+  test_bambu_needs_mqtt_settings_and_backs_off();
   test_wifi_backoff();
   test_backoff_keeps_full_refresh_widgets();
   test_retry_after_a_failed_fetch();

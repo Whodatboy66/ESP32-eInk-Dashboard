@@ -150,12 +150,16 @@
       if (typeof v === 'string' && v && !/^(https?|webcals?):\/\//i.test(v.trim())) errors['ics.' + i] = 'A calendar link starts with https:// or webcal://.';
     });
     if (Object.keys(errors).length) return { status: 400, body: { ok: false, error: 'Some fields need a fix.', errors: errors } };
+    // stay: back in the same mode after the restart; finish (or the end of the first start): dashboard.
+    var stay = typeof b.stay === 'boolean' ? b.stay : b.finish ? false : !!settings.wifi_ssid;
+    delete b.stay;
+    delete b.finish;
     Object.keys(b).forEach(function (k) {
       if (k === 'ics') b.ics.forEach(function (v, i) { if (typeof v === 'string') settings.ics[i] = v; else if (v === null) settings.ics[i] = null; });
       else settings[k] = b[k];
     });
-    downUntil = Date.now() + 7000;
-    return { status: 200, body: { ok: true, restart: true } };
+    downUntil = Date.now() + (stay ? 4000 : 600000);
+    return { status: 200, body: { ok: true, restart: true, stay: stay } };
   }
 
 

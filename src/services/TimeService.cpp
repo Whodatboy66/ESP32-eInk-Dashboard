@@ -4,11 +4,13 @@
 #include <esp_sntp.h>
 #include <time.h>
 
-#include "../../configure.h"
+#include "../../app.h"
 
-// NTP sync. Timezone is set per-widget (clock) via TZ strings.
+// NTP sync, keeping the device's time zone: configTime(0, 0, ...) would set TZ to UTC, and
+// everything until the next widget set it again (log times, "today", edit mode) ran on UTC
+// (seen in the diagnostics log of 2026-11-19: times jumping between 16:xx and 17:xx).
 void initTime() {
-  configTime(0, 0, "pool.ntp.org", "time.nist.gov");
+  configTzTime(device_timezone[0] ? device_timezone : "UTC0", "pool.ntp.org", "time.nist.gov");
 }
 
 

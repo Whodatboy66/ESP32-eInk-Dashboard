@@ -69,7 +69,7 @@ int readWakeButtonAction() {
         return BUTTON_ACTION_REBOOT;
       case ButtonEvent::Setup:
         forceSuperMiniLedsOff();
-        logPrintln("Button held -> AP config mode");
+        logPrintln("Button held -> setup / edit mode");
         flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
         return BUTTON_ACTION_AP;
       case ButtonEvent::Fault:
@@ -126,7 +126,7 @@ void buttonWatchTask(void*) {
         otaConfirmByUser("setup hold");
         setupRequest = SETUP_REQUEST_MAGIC;
         forceSuperMiniLedsOff();
-        logPrintln("Button held -> AP config mode");
+        logPrintln("Button held -> setup / edit mode");
         flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
         ESP.restart();
         break;

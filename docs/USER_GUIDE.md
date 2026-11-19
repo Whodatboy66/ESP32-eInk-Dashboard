@@ -108,8 +108,9 @@ did something (Wi-Fi, a problem, a full refresh, setup mode), not the quiet once
 Over USB the same lines appear live in a serial monitor (115200 baud).
 
 Passwords, keys and calendar links are never shown again once saved ("Saved: type to replace").
-Saving settings restarts the device; layouts, tasks, the note and birthdays are shown right away
-without a restart.
+Saving settings restarts the device; it comes back in the same mode (setup mode: the phone reconnects
+to the hotspot; edit mode: same code, no new login), so you can go on; **Done** ends it. Layouts,
+tasks, the note and birthdays are shown right away without a restart.
 
 ### Layout editor
 
@@ -143,7 +144,7 @@ The previous setup page is still there for now, in setup mode only: `http://192.
 | **Stock Symbols** | Up to 5 Yahoo Finance symbols, comma separated: `AAPL,NVDA,^IXIC`. Indexes start with `^`. |
 | **Calendar iCal URLs** | Up to 3 `.ics` links (`https://`; `webcal://` and `http://` links are turned into `https://`), merged into one calendar. See [Getting your Google Calendar link](#getting-your-google-calendar-link). The server's certificate is checked: Google, iCloud, Outlook and servers with a normal certificate work; a self-hosted server with a self-signed certificate, or one that sends an incomplete certificate chain (`cert.pem` instead of `fullchain.pem`), doesn't. |
 | **Printer Name** | Title shown on the printer widget. |
-| **Bambu Printer IP** | The printer's address in your home network (e.g. `192.168.1.100`) or its name there (`x1c.local`, or a name your router knows, like `printer.fritz.box`). Leave empty to hide the printer widget. Only local addresses are used: the printer's connection is the one without a certificate check (the printer only has a self-signed one), so a name that resolves to a public address is refused when connecting (serial log: `not in the local network`). |
+| **Bambu Printer IP** | The printer's address in your home network (e.g. `192.168.1.100`) or its name there (`x1c.local`, or a name your router knows, like `printer.fritz.box`). Leave empty if you don't use the printer's LAN connection: with a MakerWorld user ID the widget then shows only the MakerWorld stats, and the device never tries to reach the printer. A printer that doesn't answer (switched off) is asked again after 10, 20, 40, then every 60 minutes. Only local addresses are used: the printer's connection is the one without a certificate check (the printer only has a self-signed one), so a name that resolves to a public address is refused when connecting (serial log: `not in the local network`). |
 | **Bambu MQTT Port** | `8883` (the default; MQTT over TLS). |
 | **Bambu Printer Serial Number** | On the printer screen under Settings → Device, or in Bambu Studio. |
 | **Bambu LAN Access Code** | On the printer screen under Settings → WLAN / Network → Access Code. Leave empty to keep the saved code. |

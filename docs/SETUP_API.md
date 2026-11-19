@@ -95,8 +95,12 @@ to three entries: a string = new link, `null` = remove, anything else (`{}`) = k
 `[{}, "https://…"]` changes only the second link. `pins` is sent whole when a pin changed (`-1` =
 not used). Field errors use the keys of the request (`ics.1`, `pins`). Validation as on the old page (timezone
 names, calendar links, stock symbols, printer address, port, custom pins).
-→ `{"ok": true, "restart": true}`; the device restarts about 3 s later (time for a following
-`/api/layout` in the first-start guide) (the app shows a "Saved,
+→ `{"ok": true, "restart": true, "stay": true}`; the device restarts about 3 s later (time for a
+following `/api/layout` in the first-start guide). With `stay` it comes back in the **same mode**
+(the hotspot with the same password, or edit mode with the same code and session), so the app
+reconnects; without it (end of the first start) it shows the dashboard. The request may say
+`"finish": true` or `"stay": true/false`; otherwise: first start (no Wi-Fi saved before) = finish,
+else stay (from build 73; before, every save ended setup mode). (the app shows a "Saved,
 restarting" screen). In AP mode the phone loses the hotspot while the device restarts.
 
 `GET /api/networks` → `{"networks": [{"ssid": "Home", "rssi": -52, "secure": true}]}` (sorted by

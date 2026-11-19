@@ -38,8 +38,14 @@ bool mount() {
   if (mountTried) return mounted;
   mountTried = true;
   // A damaged file system is formatted: the data is lost, but the device keeps working.
+  // A partition that was never formatted (the first start after the USB migration) makes the core
+  // print "Corrupted dir pair ... mount failed"; it then formats it and mounts again.
   mounted = LittleFS.begin(true, "/user", 4, PARTITION);
-  if (!mounted) DBGF("[User] LittleFS on \"%s\" not available", PARTITION);
+  if (mounted)
+    DBGF("[User] storage mounted: %u of %u KB used", (unsigned)(LittleFS.usedBytes() / 1024),
+         (unsigned)(LittleFS.totalBytes() / 1024));
+  else
+    DBGF("[User] LittleFS on \"%s\" not available (even after formatting)", PARTITION);
   return mounted;
 }
 

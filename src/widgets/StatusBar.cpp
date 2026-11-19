@@ -85,7 +85,8 @@ void drawStatus(LayoutItem* item) {
 
   if (hasBatteryPin()) {
     int percentage = batteryPercent(voltage);
-    DBGF("[Battery] %.2f V, %d%%", voltage, percentage);
+    if (batteryReadingPlausible(voltage)) DBGF("[Battery] %.2f V, %d%%", voltage, percentage);
+    else DBGF("[Battery] %.2f V: no battery measured (USB power)", voltage);
     // MDI battery-10 .. battery-90 are 0xF007A .. 0xF0082, full battery is 0xF0079.
     int tenths = constrain((percentage + 5) / 10, 1, 10);
     uint32_t charCode = tenths == 10 ? 0xF0079 : 0xF007A + (tenths - 1);

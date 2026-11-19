@@ -14,6 +14,9 @@ extern SetupKind setupKind;
 void setupNoteActivity();
 // After the answer was sent: restart in `delayMs` (settings saved, finish, update).
 void setupScheduleRestart(uint32_t delayMs);
+// Settings saved: restart back into the same mode (hotspot, or edit mode with the same code and
+// session), so the app reconnects and editing goes on.
+void setupScheduleRestartSameMode(uint32_t delayMs);
 // After the answer was sent: draw the dashboard with the new layout (no restart).
 void setupScheduleDashboard();
 

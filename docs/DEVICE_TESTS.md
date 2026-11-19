@@ -1,7 +1,7 @@
 # Device test session: everything still open
 
 Everything implemented so far that has only been checked on the PC (host tests, PC renderer, CI)
-and still needs the real device: stages 0-5, builds 63-72. Made to be done in **one session**, in
+and still needs the real device: stages 0-5, builds 63-73. Made to be done in **one session**, in
 this order (each block builds on the one before). Tick the boxes, note what the screen showed, and
 copy the results into the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log).
 
@@ -16,14 +16,23 @@ Whatever it runs now, flash it once over USB: on test build .90005 no release re
 too low" while the battery reading is wrong (block 0b). Battery **unplugged** until block 0b says it's
 safe.
 
-- [ ] `arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .` with the current `main` (build 72);
+- [ ] `arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .` with the current `main` (build 73);
       settings and Wi-Fi are kept
-- [ ] Serial monitor (115200): boot log shows `Firmware .72 (build 72, esp32c6_firebeetle, bw750, settings schema 3)`
+- [ ] Serial monitor (115200): boot log shows `Firmware .73 (build 73, esp32c6_firebeetle, bw750, settings schema 3)`
 - [ ] Settings schema: log shows `Settings schema 2 -> 3` once (not again after the next restart);
       coming from build 66 or older it starts at 1 or 2, also fine
 - [ ] The dashboard appears as before (same layout as you had)
 
 ## 0b. Battery and power (reported 2026-11-19: "battery low" with USB attached, not charging)
+
+Result (2026-11-19): with the battery the reading was a steady 1.16-1.17 V (0.06-0.11 V without it):
+the inline adapter connected the battery **reversed**. After flipping its wires: 4.22 V on the
+charger, 3.91 V (67 %) shortly after: the battery works.
+
+- [x] The battery's **red** wire ends on the pin marked **+** next to the board's battery connector
+      (the adapter's wires had to be swapped)
+- [x] The battery is alive: 4.22 V on the charger, 3.91 V (67 %)
+- [ ] First full charge: the cell gets at most slightly warm; Diagnostics shows the curve rising
 
 Note what the top bar shows (voltage or `USB`) in each case:
 
@@ -39,16 +48,19 @@ Note what the top bar shows (voltage or `USB`) in each case:
 - [ ] "Check for updates now" on a charger with a low battery: still "battery too low" (expected: the
       device can't see a charger); with a computer's USB it installs
 
-## 1. Button and boot (stage 0, never tested on hardware)
+## 1. Button and boot (stage 0): done
 
-- [ ] Boot with **no touch sensor connected**: dashboard appears, no reboots, no setup mode
-- [ ] Connect the TTP223. **Tap**: the dashboard refreshes (full refresh)
-- [ ] **Double tap**: info and update screen ("Up to date: .72" or a newer version)
-- [ ] **Hold 2 s**: restart
-- [ ] **Hold 5 s** (release after 4 s or more): setup / edit mode (see block 6)
-- [ ] **Sensor held HIGH 15 s or more** (keep a finger on it): no gesture, log `[Button] held past BUTTON_FAULT_MS`;
+Confirmed on the device on 2026-11-19 (reported by user, with a build before 71). The 5 s hold
+opening **edit mode** (new in build 71) is checked in block 6.
+
+- [x] Boot with **no touch sensor connected**: dashboard appears, no reboots, no setup mode
+- [x] Connect the TTP223. **Tap**: the dashboard refreshes (full refresh)
+- [x] **Double tap**: info and update screen ("Up to date: .73" or a newer version)
+- [x] **Hold 2 s**: restart
+- [x] **Hold 5 s** (release after 4 s or more): setup / edit mode (see block 6)
+- [x] **Sensor held HIGH 15 s or more** (keep a finger on it): no gesture, log `[Button] held past BUTTON_FAULT_MS`;
       after letting go the button works again; the board keeps sleeping (doesn't wake every second)
-- [ ] **BOOT backup:** tap RST, then hold BOOT for 1 s: setup hotspot opens even without the sensor
+- [x] **BOOT backup:** tap RST, then hold BOOT for 1 s: setup hotspot opens even without the sensor
 
 ## 2. Stage 2: no visible change, every service still loads
 
@@ -76,12 +88,12 @@ Note what the top bar shows (voltage or `USB`) in each case:
 
 Set channel **Beta**, auto install **off** first (setup app, Device tab).
 
-- [ ] **Release build 72 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
-      channel beta, "What's new" text. Then double tap: "Up to date: .72" (the device already has it)
+- [ ] **Release build 73 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
+      channel beta, "What's new" text. Then double tap: "Up to date: .73" (the device already has it)
 - [ ] **Hang test with the fix (build 69+):** OTA test release → `hang`; double tap, confirm tap:
       "Updated to .90005", then hangs. **Hold the button 2 s** during the hang: it must restart and come
-      back as .72 with "Update failed: previous version kept" (before build 69 a hold kept the test build)
-- [ ] OTA test release → `restore`; double tap: "Up to date: .72"
+      back as .73 with "Update failed: previous version kept" (before build 69 a hold kept the test build)
+- [ ] OTA test release → `restore`; double tap: "Up to date: .73"
 - [ ] **Notify only:** auto install off, a newer beta release (bump `FW_BUILD`, release to beta, or use
       the next real release): after the night check (03:00-03:59) the status bar shows the "Update
       available" mark
@@ -164,6 +176,8 @@ before or after and note them separately.
 
 ### Diagnostics (build 72)
 
+Seen on the device on 2026-11-19: the diagnostics view works, the firmware line is in the log.
+
 - [ ] After a few hours on the wall: Device → Diagnostics shows log lines of the Wi-Fi wakes (with
       times and a date line) and one battery value per hour
 - [ ] A broken calendar link (or Wi-Fi off for a while): it shows in the service table (failures,
@@ -173,6 +187,23 @@ before or after and note them separately.
 - [ ] Battery chart: the case of 2026-11-19 (1.1-1.4 V with the battery plugged in) is visible as
       "no battery measured"; after the battery fix the curve rises while on USB
 - [ ] The USB serial monitor still shows every line live, secrets masked
+
+### Fixes of build 73 (found in the device test, 2026-11-19)
+
+- [ ] Hotspot: save a setting → "Saved, restarting" → the device comes back in setup mode (hotspot
+      again, same password), the phone reconnects, the app reloads by itself; **Done** shows the dashboard
+- [ ] Edit mode: save a setting → back in edit mode with the **same code**, the app goes on without
+      asking for the code again
+- [ ] First start: the guide's last step ends with the dashboard (no waiting)
+- [ ] Printer switched off (or MakerWorld ID only, no printer address): the log shows `[Bambu] next try
+      in 10 min` (then 20, 40, 60), not a printer connection every 10 minutes; a wake takes a few seconds,
+      not tens of seconds
+- [ ] MakerWorld ID without printer address: the printer widget shows MakerWorld stats, no MQTT lines in the log
+- [ ] Log after a reset: `[User] storage mounted: … KB used`. The "Corrupted dir pair … mount failed"
+      lines may appear **once** (first start of storage); if they come on **every** boot, report it
+- [ ] USB monitor after a timer wake: the last line `Finished wake …: firmware .73 (build 73, …)` is visible
+- [ ] Diagnostics log: all times in local time (before build 73 they jumped between UTC and local time
+      after every Wi-Fi connect); a printer that doesn't answer costs about 5 s per wake, not 30-60 s
 
 ## 7. Factory reset (last, it erases everything)
 

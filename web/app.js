@@ -769,7 +769,7 @@ function infoScreen(title, lines, poll) {
   closeSheet();
   render();
   window.scrollTo(0, 0);
-  if (poll) setTimeout(pollBack, 8000);
+  if (poll) setTimeout(pollBack, 6000);
 }
 function pollBack() {
   if (!S.poll || S.poll.gaveUp) return;
@@ -782,11 +782,18 @@ function pollBack() {
     setTimeout(pollBack, 3000);
   });
 }
-function restarting() {
+// After POST /api/settings: `stay` true = the device comes back in the same mode (poll and
+// reload, same tab); false = setup ended, it shows the dashboard. Missing (older firmware): poll.
+function restarting(r) {
   var home = S.state.device.mode === 'home';
-  infoScreen('Saved — restarting…', ['The device restarts to use the new settings. That takes about 20 seconds.',
-    home ? 'If this page doesn\'t come back, open it again with the address shown on the display.' :
-      'Reconnect to the device\'s Wi-Fi if this page doesn\'t come back.'], true);
+  if (r && r.stay === false) {
+    infoScreen('Setup finished', ['The display shows your dashboard in a moment. You can close this page.',
+      home ? 'Open edit mode again with a 4-second hold.' : 'To change something later: hold the button for 4 seconds.'], false);
+    return;
+  }
+  infoScreen('Saved — restarting…', [home ?
+    'Saved. The device restarts and comes back in about 20 seconds (it reconnects to your Wi-Fi). This page reloads by itself.' :
+    'Saved. The device restarts and comes back in about 10 seconds. Your phone reconnects to Dashboard-Setup by itself; if this page doesn\'t come back, join Dashboard-Setup again (password on the display) and open http://192.168.4.1.'], true);
 }
 
 // ---------- sheet / dialog ----------
@@ -898,7 +905,7 @@ function saveSettings() {
     return api('POST', '/api/settings', body, { timeout: 15000 });
   }).then(function (r) {
     S.busy = '';
-    if (r.ok) { restarting(); return; }
+    if (r.ok) { restarting(r); return; }
     if (r.login) return;
     if (r.errors && Object.keys(r.errors).length) {
       S.errors = normErrors(r.errors);
@@ -1609,15 +1616,13 @@ function guideSave() {
   var lay = layoutCheck().ok ? api('POST', '/api/layout', layoutBody(), { timeout: 20000 }) : Promise.resolve({ ok: true });
   lay.then(function (r) {
     if (!r.ok) { if (!r.login) { S.guide.step = 3; S.barMsg = 'The screen layout wasn\'t taken: ' + (r.error || 'unknown reason'); } return null; }
-    return api('POST', '/api/settings', settingsBody(), { timeout: 15000 });
+    var body = settingsBody();
+    body.finish = true;
+    return api('POST', '/api/settings', body, { timeout: 15000 });
   }).then(function (r) {
     S.busy = '';
     if (!r) { render(); return; }
-    if (r.ok) {
-      infoScreen('Saved — restarting…', ['The device restarts, connects to ' + (cur('wifi_ssid') || 'your Wi-Fi') + ' and shows your screen in about a minute.',
-        'You can close this page. To change something later, hold the button on the device to open setup again.'], false);
-      return;
-    }
+    if (r.ok) { restarting(r); return; }
     if (r.login) return;
     if (r.errors && Object.keys(r.errors).length) {
       S.errors = normErrors(r.errors);

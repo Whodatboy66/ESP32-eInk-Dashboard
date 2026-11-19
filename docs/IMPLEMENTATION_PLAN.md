@@ -74,7 +74,7 @@ module with 8 MB flash (same chip, same code).
 - **The upstream repo has no license file** (GitHub: `license: null`). By default that means all rights
   reserved: forking on GitHub is allowed, but modifying and distributing it is legally unclear.
   Private family use is low-risk. **Recommended: open an issue upstream asking the author to add a license
-  (e.g. MIT)** before sharing builds more widely.
+  (e.g. MIT)** before sharing builds more widely. Status: issue posted upstream (2026-11-19), no answer yet.
 - Fonts: Montserrat (OFL 1.1, fine), Material Design Icons (Apache 2.0, fine),
   **HighSpeed font: personal use only**. OK for family devices, not for anything commercial.
 
@@ -158,8 +158,8 @@ the exact preview uses the device's own data (no sample data); agenda times stay
 - [x] Align CI with `sketch.yaml`: CI builds the profiles (`--profile`), so core and library versions come from one place; library patches dropped (not needed for the pinned versions)
 - [x] Enable Actions on the fork (Actions tab → "I understand my workflows, go ahead and enable them"); first green run on GitHub: 2026-11-16
 - [x] CI: compile on every push and pull request + size check (fails above the planned 1.875 MB OTA slot, flash/RAM table in the run summary); host tests (`tests/host/run.sh`); releases only from a manual run with "release" ticked
-- [x] Button input fix (A.6): pull-down (kept in deep sleep), 15 s fault limit (no gesture, no button wake while stuck), setup on release after 4 s; BOOT button backup (tap RST, then hold BOOT 1 s). Gesture logic in `src/input/ButtonGesture.h` with host tests. **Not yet tested on hardware**
-- [x] License question to upstream (A.5): issue text drafted, to be posted by me
+- [x] Button input fix (A.6): pull-down (kept in deep sleep), 15 s fault limit (no gesture, no button wake while stuck), setup on release after 4 s; BOOT button backup (tap RST, then hold BOOT 1 s). Gesture logic in `src/input/ButtonGesture.h` with host tests. Tested on hardware (reported by user, 2026-11-19)
+- [x] License question to upstream (A.5): issue posted (reported by user, 2026-11-19); waiting for the author's answer
 - [x] Repository layout: short README, manual in `docs/USER_GUIDE.md`, `docs/images/`, font converter in `tools/`, `CHANGELOG.md` (code moves into `src/` with stage 2)
 
 **Done when:** a push builds in CI with a size report; the device boots into the dashboard with no sensor connected.
@@ -300,6 +300,9 @@ Only tests actually performed on the device go here.
 | 2026-11-17 | .66 | OTA tests on the beta channel: wrong board, bad checksum, unsigned, crash on boot, beta release | All as expected: rejected / rolled back (reported by user) |
 | 2026-11-17 | .66 → .90005 | OTA test "hang", then `restore` | Test build kept instead of rolled back (most likely confirmed by a button use during the hang); afterwards every release showed "Up to date: .90005" because test builds count as newer. Fixed in build 69 (see CHANGELOG); the device needs one USB flash (reported by user) |
 | 2026-11-19 | .70 / older | Update with USB attached; battery voltage in the top bar; charging | "Battery too low" refused the update with USB attached: a USB charger isn't seen as USB, and the battery read 1.1-1.4 V with the battery plugged in (about 3.7 V without it); the charge LED stays on. The inline adapter between the battery's plug and the board crosses red and black: reversed polarity or an over-discharged cell suspected, battery unplugged until measured (DEVICE_TESTS block 0b). Software: from build 71 a reading below 3.0 V counts as USB power (reported by user) |
+| 2026-11-19 | before 71 | Button (stage 0 / A.6): boot without sensor, tap, double tap, 2 s and 5 s holds, sensor held HIGH 15 s, BOOT backup | All as expected (reported by user). Opening edit mode with the 5 s hold is new in build 71 and is checked in DEVICE_TESTS block 6 |
+| 2026-11-19 | .72 | Diagnostics view and log download on the device; battery reading over time | Diagnostics work (firmware line, log, download). Battery: 0.06-0.11 V without a battery, a steady 1.16-1.17 V with it on the charger (charge LED on): not charging. Either the cell is over-discharged, or the inline adapter (red and black crossed) connects it reversed: with a charger attached a reversed cell is reverse-charged, so the positive reading proves nothing. To check: battery red must end on the board's "+" pin; cell voltage at the battery's own plug (reported by user). The log showed: each printer connection attempt 30 s (printer not answering, 1 minute per wake), times jumping between UTC and local time after every Wi-Fi connect, a calendar with 1090 events (10 s per read). Fixed in build 73 |
+| 2026-11-19 | .72 | Battery after flipping the wires of the inline adapter (battery red now on the board's "+") | Charges: 4.22 V on the charger, 3.91 V (67 %) shortly after; the cell survived the reversed connection. Cause of the 1.17 V: the adapter connected the battery reversed (reported by user) |
 
 ## Changelog
 

@@ -19,7 +19,7 @@ const WidgetInfo WIDGETS[layouts::WIDGET_COUNT] = {
     {WidgetId::Month, layouts::WIDGET_KEYS[4], "Month calendar", 256, "Calendar", 28, 210, 60, ""},
     {WidgetId::Stocks, layouts::WIDGET_KEYS[5], "Stocks", 4, "Stocks", 22, 10, 60, "Stocks: add symbols in the app"},
     {WidgetId::Tracking, layouts::WIDGET_KEYS[6], "Package tracking", 16, "Tracking", 22, 0, 120, "Parcels: add the tracking key in the app"},
-    {WidgetId::Printer, layouts::WIDGET_KEYS[7], "Printer / MakerWorld", 64, "Bambu", 22, 70, 4, "Printer: set its address in the app"},
+    {WidgetId::Printer, layouts::WIDGET_KEYS[7], "Printer / MakerWorld", 64, "Bambu", 22, 70, 4, "Printer: set its address or a MakerWorld ID in the app"},
     // Personal widgets (stage 4): local data, drawn on full refreshes and when the date changes.
     {WidgetId::Tasks, layouts::WIDGET_KEYS[8], "Tasks", 512, "Tasks", 22, 0, 1440, "Tasks: add tasks in the app"},
     {WidgetId::Notes, layouts::WIDGET_KEYS[9], "Note", 1024, "Note", 22, 0, 1440, "Note: write a note in the app"},
@@ -37,7 +37,8 @@ uint16_t configuredWidgets() {
   if (hasIcsFeeds()) m |= layouts::widgetBit(WidgetId::Agenda);
   if (stock_symbols[0]) m |= layouts::widgetBit(WidgetId::Stocks);
   if (pkge_api_key[0]) m |= layouts::widgetBit(WidgetId::Tracking);
-  if (mqtt_ip[0]) m |= layouts::widgetBit(WidgetId::Printer);
+  // Printer status (MQTT) or MakerWorld stats: either is enough for the widget.
+  if (mqtt_ip[0] || makerworld_uid[0]) m |= layouts::widgetBit(WidgetId::Printer);
   if (user_content & USER_HAS_TASKS) m |= layouts::widgetBit(WidgetId::Tasks);
   if (user_content & USER_HAS_NOTE) m |= layouts::widgetBit(WidgetId::Notes);
   if ((user_content & USER_HAS_BIRTHDAYS) || bday_url[0]) m |= layouts::widgetBit(WidgetId::Birthdays);

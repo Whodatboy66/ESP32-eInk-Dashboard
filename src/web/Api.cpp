@@ -336,6 +336,7 @@ void handleSettings() {
   JsonObject errors = errDoc.to<JsonObject>();
   auto fail = [&](const char* field, const char* text) { errors[field] = text; };
 
+  const bool firstRun = wifi_ssid[0] == '\0';  // before this save
   // 1. Check every field first: nothing is saved if one is wrong.
   char name[CFG_DEVICE_NAME_MAX], ssid[CFG_WIFI_SSID_MAX], tz[CFG_TIMEZONE_MAX], loc[CFG_WEATHER_LOC_MAX],
       stocks[CFG_STOCKS_MAX], ics[ICS_MAX_FEEDS][CFG_ICS_URL_MAX], bday[CFG_ICS_URL_MAX],
@@ -481,11 +482,16 @@ void handleSettings() {
   applyStoredPinSelection();
   configSave();
 
+  // Back into the same mode, so the app reconnects and editing goes on ("Done" ends it). The
+  // first start (no Wi-Fi saved before) ends with the dashboard; "finish" / "stay" decide it.
+  bool stay = in["stay"].is<bool>() ? in["stay"].as<bool>() : !(in["finish"] | firstRun);
   JsonDocument out;
   out["ok"] = true;
   out["restart"] = true;
+  out["stay"] = stay;
   sendJson(200, out);
-  setupScheduleRestart(3000);  // time for the app to send the layout too (first start)
+  if (stay) setupScheduleRestartSameMode(3000);  // 3 s: time for the app to send the layout too
+  else setupScheduleRestart(3000);
 }
 
 // ---------- layout ----------

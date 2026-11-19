@@ -18,6 +18,7 @@
 #include "../core/ConfigValidation.h"
 #include "../hardware/EpaperDriver.h"
 #include "../hardware/PinMapping.h"
+#include "../hardware/TouchController.h"
 #include "../update/OtaFlow.h"
 #include "../update/UpdatePolicy.h"
 #include "../services/TimeService.h"
@@ -70,6 +71,30 @@ static bool codeOnScreen = false;  // edit mode: the code screen is shown (not t
 
 void setupNoteActivity() { apLastActivity = millis(); }
 void setupScheduleRestart(uint32_t delayMs) { restartAt = millis() + delayMs; if (!restartAt) restartAt = 1; }
+
+// Edit mode across a restart (settings saved): code and session survive a software restart in
+// RTC memory that isn't cleared at boot.
+struct EditSession {
+  uint32_t magic;
+  char code[7];
+  char token[33];
+  uint8_t rotations;
+};
+constexpr uint32_t EDIT_SESSION_MAGIC = 0xED17C0DE;
+RTC_NOINIT_ATTR static EditSession keptSession;
+
+void setupScheduleRestartSameMode(uint32_t delayMs) {
+  if (setupKind == SetupKind::Home) {
+    keptSession.magic = EDIT_SESSION_MAGIC;
+    memcpy(keptSession.code, loginCode, sizeof(keptSession.code));
+    memcpy(keptSession.token, sessionToken, sizeof(keptSession.token));
+    keptSession.rotations = codeRotations;
+    setupRequest = SETUP_REQUEST_EDIT_MAGIC;
+  } else if (setupKind == SetupKind::Ap) {
+    setupRequest = SETUP_REQUEST_AP_MAGIC;
+  }
+  setupScheduleRestart(delayMs);
+}
 void setupScheduleDashboard() { dashboardPending = true; }
 const char* setupHostName() { return hostName; }
 
@@ -1174,7 +1199,17 @@ void startEditMode() {
   initTime();
   makeHostName();
   if (MDNS.begin(hostName)) MDNS.addService("http", "tcp", 80);
-  newLoginCode();
+  if (keptSession.magic == EDIT_SESSION_MAGIC) {  // back after saving settings: same code, same session
+    keptSession.magic = 0;
+    memcpy(loginCode, keptSession.code, sizeof(loginCode));
+    loginCode[sizeof(loginCode) - 1] = '\0';
+    memcpy(sessionToken, keptSession.token, sizeof(sessionToken));
+    sessionToken[sizeof(sessionToken) - 1] = '\0';
+    codeRotations = keptSession.rotations;
+    wrongCodes = 0;
+  } else {
+    newLoginCode();
+  }
   registerRoutes(false);
   String ip = WiFi.localIP().toString();
   logPrintf("Edit mode: http://%s.local or http://%s\n", hostName, ip.c_str());
