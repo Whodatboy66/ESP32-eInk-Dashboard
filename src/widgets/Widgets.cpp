@@ -51,26 +51,26 @@ void debugPrintLayout() {
     for (int i = 0; i < layoutCount; i++) {
         LayoutItem &l = layout[i];
 
-        Serial.printf("Layout[%d]\n", i);
-        Serial.printf(" ID: %d\n", l.ID);
-        Serial.printf(" PosX: %d\n", l.PosX);
-        Serial.printf(" PosY: %d\n", l.PosY);
-        Serial.printf(" Width: %d\n", l.Width);
-        Serial.printf(" Height: %d\n", l.Height);
-        Serial.printf(" RowHeight: %d\n", l.RowHeight);
-        Serial.printf(" ColWidth: %d\n", l.ColWidth);
-        Serial.printf(" Group: %d\n", l.Group);
-        Serial.printf(" Active: %d\n", l.Active);
-        Serial.printf(" Refresh: %d\n", l.Refresh);
+        logPrintf("Layout[%d]\n", i);
+        logPrintf(" ID: %d\n", l.ID);
+        logPrintf(" PosX: %d\n", l.PosX);
+        logPrintf(" PosY: %d\n", l.PosY);
+        logPrintf(" Width: %d\n", l.Width);
+        logPrintf(" Height: %d\n", l.Height);
+        logPrintf(" RowHeight: %d\n", l.RowHeight);
+        logPrintf(" ColWidth: %d\n", l.ColWidth);
+        logPrintf(" Group: %d\n", l.Group);
+        logPrintf(" Active: %d\n", l.Active);
+        logPrintf(" Refresh: %d\n", l.Refresh);
 
-        Serial.printf(" Description: %s\n", l.Description);
-        Serial.printf(" Extra1: %s\n", l.Extra1);
-        Serial.printf(" Extra2: %s\n", l.Extra2);
-        Serial.printf(" Extra3: %s\n", l.Extra3);
-        Serial.printf(" Extra4: %s\n", l.Extra4);
-        Serial.printf(" Extra5: %s\n", l.Extra5);
+        logPrintf(" Description: %s\n", l.Description);
+        logPrintf(" Extra1: %s\n", l.Extra1);
+        logPrintf(" Extra2: %s\n", l.Extra2);
+        logPrintf(" Extra3: %s\n", l.Extra3);
+        logPrintf(" Extra4: %s\n", l.Extra4);
+        logPrintf(" Extra5: %s\n", l.Extra5);
 
-        Serial.println("------------------");
+        logPrintln("------------------");
     }
 }
 #endif
@@ -526,6 +526,6 @@ void loadMakerWorld() {
 
     prefs.end();
 
-    Serial.printf("Loaded MW -> Likes %d Downloads %d\n",
+    logPrintf("Loaded MW -> Likes %d Downloads %d\n",
                   makerworld.likes, makerworld.downloads);
 }

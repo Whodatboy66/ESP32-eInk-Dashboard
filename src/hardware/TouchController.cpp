@@ -60,21 +60,21 @@ int readWakeButtonAction() {
         return BUTTON_ACTION_NONE;
       case ButtonEvent::DoubleTap:
         forceSuperMiniLedsOff();
-        Serial.println("Button double tap -> update screen");
+        logPrintln("Button double tap -> update screen");
         return BUTTON_ACTION_UPDATE;
       case ButtonEvent::Reboot:
         forceSuperMiniLedsOff();
-        Serial.println("Button held -> reboot");
+        logPrintln("Button held -> reboot");
         flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
         return BUTTON_ACTION_REBOOT;
       case ButtonEvent::Setup:
         forceSuperMiniLedsOff();
-        Serial.println("Button held -> AP config mode");
+        logPrintln("Button held -> AP config mode");
         flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
         return BUTTON_ACTION_AP;
       case ButtonEvent::Fault:
         forceSuperMiniLedsOff();
-        Serial.printf("[Button] HIGH for %u s: sensor fault, ignored until it reads LOW\n",
+        logPrintf("[Button] HIGH for %u s: sensor fault, ignored until it reads LOW\n",
                       (unsigned)(BUTTON_FAULT_MS / 1000));
         buttonFaulted = true;
         return BUTTON_ACTION_NONE;
@@ -110,14 +110,14 @@ void buttonWatchTask(void*) {
         break;
       case ButtonEvent::DoubleTap:
         forceSuperMiniLedsOff();
-        Serial.println("Button double tap -> update screen");
+        logPrintln("Button double tap -> update screen");
         buttonMailbox = ButtonEvent::DoubleTap;
         break;
       case ButtonEvent::Reboot:
         buttonBusy = true;
         otaConfirmByUser("reboot hold");
         forceSuperMiniLedsOff();
-        Serial.println("Button held -> reboot");
+        logPrintln("Button held -> reboot");
         flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
         ESP.restart();
         break;
@@ -126,13 +126,13 @@ void buttonWatchTask(void*) {
         otaConfirmByUser("setup hold");
         setupRequest = SETUP_REQUEST_MAGIC;
         forceSuperMiniLedsOff();
-        Serial.println("Button held -> AP config mode");
+        logPrintln("Button held -> AP config mode");
         flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
         ESP.restart();
         break;
       case ButtonEvent::Fault:
         forceSuperMiniLedsOff();
-        Serial.println("[Button] held past BUTTON_FAULT_MS: sensor fault, ignored until it reads LOW");
+        logPrintln("[Button] held past BUTTON_FAULT_MS: sensor fault, ignored until it reads LOW");
         break;
     }
     buttonFaulted = gesture.isFaulted();

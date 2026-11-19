@@ -58,7 +58,7 @@ void callback(char* topic, byte* payload, unsigned int length) {
   copyJsonString(printer.gcode_state, sizeof(printer.gcode_state), print["gcode_state"]);
 
   // Persist printing state across deep sleep so we can refresh more frequently mid-print.
-  Serial.println( printer.gcode_state );
+  logPrintln( printer.gcode_state );
   if( ( printer.gcode_state && (strcmp(printer.gcode_state,"RUNNING")==0||  strcmp(printer.gcode_state,"PREPARE")==0 ) || strcmp(printer.gcode_state,"PAUSE")   == 0 ) || ( printer.percent <100 && printer.percent >0 ) )
     isPrinting=true;
   else

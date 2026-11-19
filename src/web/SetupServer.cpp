@@ -129,7 +129,7 @@ bool setupLogin(const char* code, String& cookie) {
       newLoginCode();
       homeScreenPending = true;
       if (++codeRotations >= 3) {
-        Serial.println("Edit mode: too many wrong codes -> leaving");
+        logPrintln("Edit mode: too many wrong codes -> leaving");
         setupScheduleRestart(500);
       }
     }
@@ -898,6 +898,7 @@ void handleUpdateNow() {
     "Its screen shows the result; a newer version is installed right away.</p>"
     "<p>You can close this page.</p></body></html>");
   delay(1500);
+  logFlush(true);
   ESP.restart();
 }
 
@@ -985,7 +986,7 @@ void handleSave() {
     if (!server.hasArg(String("show_") + widgetInfo(id).key)) widget_show_mask &= ~layouts::widgetBit(id);
   }
 
-  Serial.printf("MQTT P: %u SN: %s IP %s\n", mqtt_port, mqtt_sn, mqtt_ip);
+  logPrintf("MQTT P: %u SN: %s IP %s\n", mqtt_port, mqtt_sn, mqtt_ip);
   configSave();
 
 server.send(200, "text/html", R"rawliteral(
@@ -1079,6 +1080,7 @@ window.onload = updateCountdown;
 )rawliteral");
 
 delay(3000);
+logFlush(true);
 ESP.restart();
 
 }
@@ -1129,18 +1131,19 @@ void startSetup() {
 
 void startAP() {
   otaConfirmByUser("setup mode");
+  logKeepThisWake();
   setCpuFrequencyMhz(cpuFullMhz);
   apModeActive = true;
   setupKind = SetupKind::Ap;
   apLastActivity = millis();
   loadApPassword();
 
-  Serial.println("Start AP");
+  logPrintln("Start AP");
   // WPA2 with the per-device password shown on the display (the hotspot was open before stage 5).
   if (WiFi.softAP(AP_SSID, apPassword)) {
-    Serial.printf("AP started OK: %s\n", WiFi.softAPIP().toString().c_str());
+    logPrintf("AP started OK: %s\n", WiFi.softAPIP().toString().c_str());
   } else {
-    Serial.println("AP failed!");
+    logPrintln("AP failed!");
   }
 
   // Captive portal: answer every DNS lookup with our IP so phones/laptops pop up the setup app.
@@ -1156,10 +1159,11 @@ void startAP() {
 // on the screen. Without a connection: the hotspot instead.
 void startEditMode() {
   otaConfirmByUser("edit mode");
+  logKeepThisWake();
   setCpuFrequencyMhz(cpuFullMhz);
-  Serial.println("Edit mode: connecting to Wi-Fi");
+  logPrintln("Edit mode: connecting to Wi-Fi");
   if (!startWiFiReliable(wifi_ssid, wifi_pass)) {
-    Serial.println("Edit mode: no Wi-Fi -> setup hotspot");
+    logPrintln("Edit mode: no Wi-Fi -> setup hotspot");
     WiFi.disconnect(true);
     startAP();
     return;
@@ -1173,7 +1177,7 @@ void startEditMode() {
   newLoginCode();
   registerRoutes(false);
   String ip = WiFi.localIP().toString();
-  Serial.printf("Edit mode: http://%s.local or http://%s\n", hostName, ip.c_str());
+  logPrintf("Edit mode: http://%s.local or http://%s\n", hostName, ip.c_str());
   char host[48];
   snprintf(host, sizeof(host), "%s.local", hostName);
   drawSetupScreenHome(host, ip.c_str(), loginCode);
@@ -1208,7 +1212,8 @@ void setupModeLoop() {
     codeOnScreen = true;
   }
   if (restartAt && (long)(millis() - restartAt) >= 0) {
-    Serial.println("Setup: restarting");
+    logPrintln("Setup: restarting");
+    logFlush(true);
     delay(100);
     ESP.restart();
   }
@@ -1216,7 +1221,8 @@ void setupModeLoop() {
   // instead of keeping the radio on and draining the battery.
   unsigned long timeout = setupKind == SetupKind::Home ? EDIT_TIMEOUT_MS : AP_TIMEOUT_MS;
   if (wifi_ssid[0] != '\0' && wifi_pass[0] != '\0' && millis() - apLastActivity > timeout) {
-    Serial.println("Setup mode timed out -> restarting");
+    logPrintln("Setup mode timed out -> restarting");
+    logFlush(true);
     ESP.restart();
   }
 }

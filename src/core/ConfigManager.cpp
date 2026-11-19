@@ -78,11 +78,11 @@ void configLoad() {
   // Older setups may have saved a bare name like "CET" (which the C library treats as UTC).
   char tzRule[CFG_TIMEZONE_MAX];
   if (!normalizeTimezone(device_timezone, tzRule, sizeof(tzRule))) {
-    Serial.printf("Timezone \"%s\" not usable, using UTC: fix it on the setup page\n", device_timezone);
+    logPrintf("Timezone \"%s\" not usable, using UTC: fix it on the setup page\n", device_timezone);
     snprintf(tzRule, sizeof(tzRule), "UTC0");
   }
   if (strcmp(tzRule, device_timezone) != 0) {
-    Serial.printf("Timezone \"%s\" -> \"%s\"\n", device_timezone, tzRule);
+    logPrintf("Timezone \"%s\" -> \"%s\"\n", device_timezone, tzRule);
     snprintf(device_timezone, sizeof(device_timezone), "%s", tzRule);
     tzFixed = true;
   }
@@ -179,7 +179,7 @@ void configSave() {
 }
 
 void configFactoryReset() {
-  Serial.println("Factory reset: erasing all settings, restarting into setup mode");
+  logPrintln("Factory reset: erasing all settings, restarting into setup mode");
   // A user action: a new firmware that waits for confirmation must not roll back on this restart.
   otaConfirmByUser("factory reset");
   preferences.begin("config", false);
@@ -207,5 +207,5 @@ void configCheckSerialFactoryReset() {
   }
   line[n] = '\0';
   if (n && strcmp(line, COMMAND) == 0) configFactoryReset();
-  if (n) Serial.printf("Serial command \"%s\" unknown (only \"%s\")\n", line, COMMAND);
+  if (n) logPrintf("Serial command \"%s\" unknown (only \"%s\")\n", line, COMMAND);
 }

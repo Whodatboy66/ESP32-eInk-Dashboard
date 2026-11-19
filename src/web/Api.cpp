@@ -17,7 +17,10 @@
 #include "../core/AppState.h"
 #include "../core/ConfigManager.h"
 #include "../core/ConfigValidation.h"
+#include "../core/LogBuffer.h"
+#include "../core/Logger.h"
 #include "../core/Problems.h"
+#include "../core/ServiceState.h"
 #include "../core/Timezone.h"
 #include "../hardware/BatteryMonitor.h"
 #include "../hardware/PinMapping.h"
@@ -862,6 +865,118 @@ void handlePutBirthdays() {
   setupScheduleDashboard();
 }
 
+// ---------- diagnostics (build 72, docs/plans/STAGE5B_DIAGNOSTICS.md) ----------
+constexpr size_t LOG_READ_MAX = 24 * 1024;
+
+void handleDiagnostics() {
+  if (!allow()) return;
+  JsonDocument doc;
+  time_t now = time(nullptr);
+  doc["time"] = now > 1700000000 ? (long)now : 0;
+  doc["version"] = FW_VERSION;
+  doc["bootCount"] = bootCount;
+
+  // The last 200 log lines, oldest first.
+  std::unique_ptr<char[]> text(new (std::nothrow) char[LOG_READ_MAX]);
+  JsonArray log = doc["log"].to<JsonArray>();
+  if (text) {
+    size_t len = logReadAll(text.get(), LOG_READ_MAX);
+    std::unique_ptr<const char*[]> startsP(new (std::nothrow) const char*[200]);
+    const char** starts = startsP.get();
+    int n = starts ? lastLines(text.get(), len, starts, 200) : 0;
+    for (int i = 0; i < n; i++) {
+      const char* end = strchr(starts[i], '\n');
+      size_t l = end ? (size_t)(end - starts[i]) : strlen(starts[i]);
+      log.add(String(starts[i]).substring(0, l));
+    }
+  }
+
+  // Battery now and the hourly history ("unix,millivolts,usb").
+  JsonObject bat = doc["battery"].to<JsonObject>();
+  bat["sensor"] = hasBatteryPin();
+  if (hasBatteryPin()) {
+    float v = readBattery();
+    bat["mv"] = (int)(v * 1000.0f + 0.5f);
+    bat["plausible"] = batteryReadingPlausible(v);
+    bat["percent"] = batteryPercentNow();
+  }
+  bat["usb"] = usbPowered();
+  bat["minMv"] = (int)(BATTERY_MIN_RUNNING_V * 1000);
+  JsonArray hist = bat["history"].to<JsonArray>();
+  {
+    std::unique_ptr<char[]> csv(new (std::nothrow) char[8 * 1024]);
+    size_t len = csv ? readUserFile("/battery.csv", csv.get(), 8 * 1024) : 0;
+    for (char* line = csv.get(); len && line && *line;) {
+      char* next = strchr(line, '\n');
+      if (next) *next = '\0';
+      long t = 0;
+      int mv = 0, usb = 0;
+      if (sscanf(line, "%ld,%d,%d", &t, &mv, &usb) == 3) {
+        JsonArray p = hist.add<JsonArray>();
+        p.add(t);
+        p.add(mv);
+        p.add(usb);
+      }
+      line = next ? next + 1 : nullptr;
+    }
+  }
+
+  // Services: last success, failures, next retry, old data.
+  struct Svc {
+    Service s;
+    const char* key;
+    const char* name;
+    WidgetId widget;
+  };
+  const Svc svcs[] = {{Service::Weather, "weather", "Weather", WidgetId::Weather},
+                      {Service::Stocks, "stocks", "Stocks", WidgetId::Stocks},
+                      {Service::Calendar, "calendar", "Calendar", WidgetId::Agenda},
+                      {Service::Tracking, "tracking", "Parcels", WidgetId::Tracking}};
+  JsonArray services = doc["services"].to<JsonArray>();
+  for (const Svc& v : svcs) {
+    const ServiceState& st = serviceStates[(int)v.s];
+    JsonObject o = services.add<JsonObject>();
+    o["key"] = v.key;
+    o["name"] = v.name;
+    o["lastOk"] = (long)st.lastOk;
+    o["failures"] = st.failures;
+    o["retryAt"] = st.failures ? (long)st.retryAt : 0;
+    o["stale"] = isStale(st, now, (time_t)widgetInfo(v.widget).refresh * 60);
+  }
+  JsonArray probs = doc["problems"].to<JsonArray>();
+  for (const ProblemText& p : PROBLEM_TEXTS)
+    if (problems & p.flag) probs.add(p.key);
+  JsonObject wifi = doc["wifi"].to<JsonObject>();
+  wifi["failures"] = wifiFailures;
+  wifi["retryAfter"] = wifiFailures ? (long)wifiRetryAfter : 0;
+  wifi["rssi"] = setupOnline() ? WiFi.RSSI() : 0;
+  doc["lastTimeSync"] = (long)lastNtpSync;
+  JsonObject heap = doc["heap"].to<JsonObject>();
+  heap["free"] = ESP.getFreeHeap();
+  heap["minFree"] = ESP.getMinFreeHeap();
+  heap["largest"] = ESP.getMaxAllocHeap();
+  sendJson(200, doc);
+}
+
+void handleLogText() {
+  if (!allow()) return;
+  std::unique_ptr<char[]> text(new (std::nothrow) char[LOG_READ_MAX]);
+  if (!text) {
+    sendError(503, "Not enough memory right now: try again.");
+    return;
+  }
+  size_t len = logReadAll(text.get(), LOG_READ_MAX);
+  srv->sendHeader("Cache-Control", "no-store");
+  srv->sendHeader("Content-Disposition", "attachment; filename=\"dashboard-log.txt\"");
+  srv->send_P(200, "text/plain; charset=utf-8", text.get(), len);  // send_P: content with a length
+}
+
+void handleLogClear() {
+  if (!allow() || !jsonType()) return;
+  logClear();
+  sendOk();
+}
+
 // ---------- device ----------
 void handleLogin() {
   if (!allow(false)) return;
@@ -934,4 +1049,7 @@ void registerApiRoutes(WebServer& server) {
   server.on("/api/update", HTTP_POST, handleUpdate);
   server.on("/api/factory-reset", HTTP_POST, handleFactoryReset);
   server.on("/api/finish", HTTP_POST, handleFinish);
+  server.on("/api/diagnostics", HTTP_GET, handleDiagnostics);
+  server.on("/api/log.txt", HTTP_GET, handleLogText);
+  server.on("/api/log/clear", HTTP_POST, handleLogClear);
 }

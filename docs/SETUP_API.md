@@ -149,6 +149,38 @@ replaces the list (at most 30, titles up to 60 characters).
 Characters the screen font can't show are removed when saving; the answer says so:
 `{"ok": true, "removed": "✓"}`.
 
+## Diagnostics (build 72)
+
+`GET /api/diagnostics` →
+
+```json
+{
+  "time": 1795000000, "version": ".72", "bootCount": 412,
+  "log": ["--- 2026-11-19 ---", "07:41:20 WiFi connected.", "07:41:22 [ICS] 12 upcoming, 9 days marked"],
+  "battery": {"sensor": true, "mv": 1180, "plausible": false, "percent": -1, "usb": false, "minMv": 3000,
+              "history": [[1794990000, 1210, 0], [1794993600, 1180, 0]]},
+  "services": [{"key": "weather", "name": "Weather", "lastOk": 1794999000, "failures": 0, "retryAt": 0, "stale": false}],
+  "problems": ["calendar"],
+  "wifi": {"failures": 0, "retryAfter": 0, "rssi": -61},
+  "lastTimeSync": 1794998000,
+  "heap": {"free": 182340, "minFree": 141200, "largest": 110592}
+}
+```
+
+- `log`: the last 200 lines, oldest first (stored log plus the lines of the running setup session).
+  Each line starts with the local time (`07:41:20`), or `+12.345 s` before the clock was set; date
+  lines `--- YYYY-MM-DD ---` separate the days. Only wakes that did something are stored (Wi-Fi,
+  a full refresh, a problem change, setup mode), not the quiet clock wakes.
+- `battery.mv`: measured now (raw, also when not plausible); `plausible`: 3.0-4.4 V (a LiPo running
+  the board); `percent` -1 when not plausible or without sensor; `usb`: a computer's USB seen (a
+  charger isn't). `history`: `[unix time, millivolts, usb 0/1]` once an hour, last 7 days, oldest first.
+- `services`: last success (0 = never this power-on), failures in a row, next retry (0 = none),
+  `stale` = the widget shows "old".
+
+`GET /api/log.txt` → the whole stored log as a text file (`Content-Disposition: attachment`).
+
+`POST /api/log/clear` `{}` → `{"ok": true}`: erases the stored log.
+
 ## Device
 
 `POST /api/update` → `{"ok": true}`, then the device restarts and runs the update check (as the

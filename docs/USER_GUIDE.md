@@ -100,6 +100,13 @@ Both close after a few minutes without use and the dashboard comes back.
 | **Data** | Calendar links (with **Check**), birthday calendar link, weather place (search), stocks, parcels, flights, printer, MakerWorld; tasks, note and birthdays |
 | **Device** | Name, Wi-Fi (scan, **Test**), time zone, updates (automatic, channel, check now), board pins (advanced), factory reset |
 
+**Diagnostics** (Device tab): what the device did while nobody was looking: the recent log (download
+it with **Download log**, e.g. to attach to a bug report), the battery voltage once an hour over the
+last 7 days (a working LiPo stays between 3.0 and 4.2 V and rises while charging), and for weather,
+stocks, calendar and parcels the last success, failures and next retry. The log keeps the wakes that
+did something (Wi-Fi, a problem, a full refresh, setup mode), not the quiet once-a-minute clock wakes.
+Over USB the same lines appear live in a serial monitor (115200 baud).
+
 Passwords, keys and calendar links are never shown again once saved ("Saved: type to replace").
 Saving settings restarts the device; layouts, tasks, the note and birthdays are shown right away
 without a restart.

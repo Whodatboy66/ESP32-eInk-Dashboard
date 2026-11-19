@@ -159,4 +159,16 @@ details > summary { list-style: none; cursor: pointer; min-height: 44px; display
 details > summary::-webkit-details-marker { display: none; }
 details > summary::before { content: "\25B8\FE0E"; margin-right: 8px; }
 details[open] > summary::before { content: "\25BE\FE0E"; }
+/* diagnostics */
+.dh { font-size: 16px; margin-top: 18px !important; }
+.chart svg { display: block; width: 100%; height: auto; font-family: var(--sans); }
+.tblw { overflow-x: auto; }
+.tbl { width: 100%; border-collapse: collapse; font-size: 14px; }
+.tbl th { text-align: left; font-weight: 650; padding: 4px 6px 6px 0; border-bottom: var(--bw) solid var(--ink); }
+.tbl td { padding: 7px 6px 7px 0; border-top: 1px solid var(--sep); vertical-align: top; }
+.tag { display: inline-block; margin-left: 6px; padding: 0 5px; border: var(--bw) solid var(--ink); border-radius: 4px; font-size: 12px; font-weight: 700; }
+.log { max-height: 60vh; overflow-y: auto; border: var(--bw) solid var(--ink); border-radius: var(--rs); padding: 4px 10px 10px; background: var(--bg); }
+.log pre { margin: 0; font: 13px/1.45 ui-monospace, Menlo, Consolas, "Roboto Mono", monospace; white-space: pre-wrap; word-break: break-word; }
+.logd { font-size: 13px; color: var(--mut); margin: 8px 0 2px; position: sticky; top: 0; background: var(--bg); }
+a.btn { display: inline-flex; align-items: center; justify-content: center; text-decoration: none; color: var(--ink); }
 @media (prefers-reduced-motion: reduce) { .spin { animation-duration: 3s; } }

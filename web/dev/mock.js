@@ -1,11 +1,11 @@
 // Fake device for developing the setup app without hardware (web/dev/index.html). Replaces
 // window.fetch and answers every /api/ route of docs/SETUP_API.md with sample data. Not part of
-// the bundle. Address options: ?first=1 ?home=1 ?offline=1 ?slow=1 ?down=1 ?classic=1 ?mem=1
+// the bundle. Address options: ?first=1 ?home=1 ?offline=1 ?slow=1 ?down=1 ?classic=1 ?mem=1 ?lowbat=1
 (function () {
   'use strict';
   function opt(k) { return new RegExp('[?&]' + k + '=1').test(location.search); }
   var FIRST = opt('first'), HOME = opt('home'), OFFLINE = opt('offline'), SLOW = opt('slow'), DOWN = opt('down');
-  var CLASSIC = opt('classic'), MEM = opt('mem');
+  var CLASSIC = opt('classic'), MEM = opt('mem'), LOWBAT = opt('lowbat');
   var loggedIn = !HOME, wrongCodes = 0, code = '123456', downUntil = 0;
 
   var settings = {
@@ -158,6 +158,70 @@
     return { status: 200, body: { ok: true, restart: true } };
   }
 
+
+  // Diagnostics (build 72): a few wakes with a Wi-Fi retry and a failed calendar fetch; battery
+  // 1.1-1.4 V for 2 days (no battery, board on a charger), then ~3.9 V rising to 4.15 V on a computer's USB.
+  var NOW = Math.floor(Date.now() / 1000);
+  function hm(t) { var d = new Date(t * 1000); return ('0' + d.getHours()).slice(-2) + ':' + ('0' + d.getMinutes()).slice(-2) + ':' + ('0' + d.getSeconds()).slice(-2); }
+  function day(t) { var d = new Date(t * 1000); return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+  function makeLog() {
+    var out = [], lastDay = '';
+    function at(t, text) { var dd = day(t); if (dd !== lastDay) { out.push('--- ' + dd + ' ---'); lastDay = dd; } out.push(hm(t) + ' ' + text); }
+    var wakes = [NOW - 26 * 3600, NOW - 14 * 3600, NOW - 3 * 3600, NOW - 40 * 60, NOW - 12 * 60];
+    wakes.forEach(function (t, i) {
+      at(t, 'Wake ' + (405 + i) + ': full refresh due');
+      at(t + 1, 'WiFi connecting to Home...');
+      if (i === 2) {
+        at(t + 9, 'WiFi failed (no answer from the router), retry in 5 min');
+        at(t + 10, 'Sleep 290 s');
+        t += 300;
+        at(t, 'Wake ' + (405 + i) + ': WiFi retry');
+        at(t + 1, 'WiFi connecting to Home...');
+      }
+      at(t + 3, 'WiFi connected, RSSI -6' + (i % 4));
+      at(t + 4, '[NTP] time set, drift 0.4 s');
+      at(t + 5, '[Weather] Berlin, DE: 7 days, 9° / 2°');
+      at(t + 6, '[Stocks] AAPL 231.50, NVDA 141.20, ^IXIC 18920.1');
+      at(t + 8, '[ICS] feed 1: 12 upcoming, 9 days marked');
+      if (i >= 3) { at(t + 9, '[ICS] feed 2: HTTP 404 from calendar.google.com, keeping the last list'); if (i === 3) at(t + 9, 'Problem on: calendar'); }
+      at(t + 11, 'Display: full refresh (3.1 s)');
+      at(t + 11, 'Battery ' + (i < 2 ? '1.21 V (not plausible)' : '4.1' + i + ' V') + ', USB ' + (i < 2 ? 'no' : 'computer'));
+      at(t + 12, 'Sleep ' + (48 - i) + ' s');
+    });
+    out.push('+0.412 s Boot 412, reset reason: button (setup hold)');
+    out.push('+0.950 s Setup mode: hotspot Dashboard-Setup');
+    at(NOW - 60, '[Setup] app opened, WEB_APP 29 KB');
+    return out;
+  }
+  var diagLog = makeLog();
+  function history() {
+    var out = [], start = NOW - 80 * 3600;
+    for (var t = start, i = 0; t <= NOW; t += 3600, i++) {
+      if (i === 30 || i === 31) continue;                               // two missing hours
+      if (i < 48) out.push([t, Math.round(1250 + 140 * Math.sin(i / 3) + (i * 7 % 30)), 0]);
+      else out.push([t, Math.round(3890 + Math.min(260, (i - 48) * 9) + (i * 5 % 12)), 1]);
+    }
+    return out;
+  }
+  function diagnostics() {
+    var hist = history(), last = hist[hist.length - 1];
+    return {
+      time: NOW, version: '.72', bootCount: 412, log: diagLog.slice(-200),
+      battery: LOWBAT ? { sensor: true, mv: 1180, plausible: false, percent: -1, usb: false, minMv: 3000, history: hist } :
+        { sensor: true, mv: last[1], plausible: true, percent: 96, usb: true, minMv: 3000, history: hist },
+      services: [
+        { key: 'weather', name: 'Weather', lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },
+        { key: 'stocks', name: 'Stocks', lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },
+        { key: 'calendar', name: 'Calendar', lastOk: NOW - 3 * 3600, failures: 2, retryAt: NOW + 4 * 60, stale: true },
+        { key: 'tracking', name: 'Parcels', lastOk: 0, failures: 0, retryAt: 0, stale: false }
+      ],
+      problems: ['calendar'],
+      wifi: { failures: 0, retryAfter: 0, rssi: -61 },
+      lastTimeSync: NOW - 12 * 60,
+      heap: { free: 182340, minFree: 141200, largest: 110592 }
+    };
+  }
+
   function json(status, body) {
     return new Response(JSON.stringify(body), { status: status, headers: { 'Content-Type': 'application/json' } });
   }
@@ -219,6 +283,10 @@
         if ((body.manual || []).length > 50) return json(400, { ok: false, error: 'At most 50 birthdays.' });
         manual = body.manual;
         return json(200, { ok: true });
+      case 'GET /api/diagnostics': return json(200, diagnostics());
+      case 'GET /api/log.txt':
+        return new Response(diagLog.join('\n') + '\n', { status: 200, headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Content-Disposition': 'attachment; filename="log.txt"' } });
+      case 'POST /api/log/clear': diagLog = []; return json(200, { ok: true });
       case 'POST /api/update': case 'POST /api/finish': case 'POST /api/factory-reset':
         downUntil = Date.now() + 600000;
         return json(200, { ok: true });

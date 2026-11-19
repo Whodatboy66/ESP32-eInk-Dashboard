@@ -1338,9 +1338,199 @@ function deviceTab() {
       btn('Check for updates now', function () { installUpdate('chkupd'); }, 'wide', { 'data-f': 'chkupd' })),
     lbl('About'), card(kv('Board', d.variant || '?'), kv('Version', d.version + ' (build ' + d.build + ')'),
       kv('Mode', d.mode === 'home' ? 'Edit mode on the home network' : 'Setup hotspot'), kv('Battery', batteryText(d))),
-    h('div', { style: 'margin-top:16px' }, adv),
+    h('div', { style: 'margin-top:16px' }, diagSection()),
+    h('div', { style: 'margin-top:8px' }, adv),
     lbl('Factory reset'), reset
   ];
+}
+
+// ---------- Device tab: diagnostics (GET /api/diagnostics, build 72) ----------
+
+function loadDiag() {
+  S.diag = { busy: true, data: S.diag && S.diag.data };
+  render();
+  api('GET', '/api/diagnostics', undefined, { timeout: 15000 }).then(function (r) {
+    if (r.ok && r.battery) S.diag = { data: r };
+    else S.diag = { err: r.login ? '' : r.error || 'The device sent no diagnostics.', data: S.diag && S.diag.data };
+    render();
+  });
+}
+// Relative times, against the device's clock.
+function agoText(t, now) {
+  if (!t) return 'never since power-on';
+  if (!now) return 'clock not set';
+  var s = now - t;
+  if (s < 60) return 'just now';
+  if (s < 3600) return Math.floor(s / 60) + ' min ago';
+  if (s < 86400) return Math.floor(s / 3600) + ' h ago';
+  return Math.floor(s / 86400) + ' d ago';
+}
+function inText(t, now) {
+  if (!t) return 'none';
+  if (!now) return 'clock not set';
+  var s = t - now;
+  if (s <= 0) return 'now';
+  if (s < 3600) return 'in ' + Math.max(1, Math.ceil(s / 60)) + ' min';
+  return 'in ' + Math.round(s / 3600) + ' h';
+}
+function volts(mv) { return (mv / 1000).toFixed(2) + ' V'; }
+function kb(b) { return Math.round((b || 0) / 1024) + ' KB'; }
+
+function batteryNow(b) {
+  if (!b.sensor) return 'No battery sensor on this board.';
+  var t = volts(b.mv);
+  if (b.plausible === false) t += ': no battery measured (the board runs on USB power)';
+  else if (b.percent >= 0) t += ', ' + b.percent + ' %';
+  return t;
+}
+
+// Line chart of the battery history: x = last 7 days, y = 0-4.5 V, 3.0-4.2 V band hatched.
+function batteryChart(hist, now) {
+  var W = 340, H = 196, x0 = 34, x1 = 332, y0 = 8, y1 = 168, VMAX = 4500, DAY = 86400;
+  var end = now || hist[hist.length - 1][0], start = end - 7 * DAY;
+  function X(t) { return (x0 + (t - start) / (end - start) * (x1 - x0)).toFixed(1); }
+  function Y(mv) { return (y1 - Math.max(0, Math.min(VMAX, mv)) / VMAX * (y1 - y0)).toFixed(1); }
+  var s = '<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
+    '<line x1="0" y1="0" x2="0" y2="6" stroke="#000" stroke-width="1" opacity=".35"/></pattern></defs>';
+  s += '<rect x="' + x0 + '" y="' + Y(4200) + '" width="' + (x1 - x0) + '" height="' + (Y(3000) - Y(4200)).toFixed(1) + '" fill="url(#hatch)"/>';
+  s += '<text x="' + (x0 + 4) + '" y="' + (+Y(4200) + 12) + '" font-size="10">working battery</text>';
+  for (var v = 0; v <= 4; v++) {
+    s += '<line x1="' + x0 + '" y1="' + Y(v * 1000) + '" x2="' + x1 + '" y2="' + Y(v * 1000) + '" stroke="#000" stroke-width="' + (v ? .5 : 1.5) + '"' + (v ? ' stroke-dasharray="2 3"' : '') + '/>' +
+      '<text x="' + (x0 - 4) + '" y="' + (+Y(v * 1000) + 4) + '" font-size="11" text-anchor="end">' + v + ' V</text>';
+  }
+  var d = new Date(start * 1000);
+  d.setHours(24, 0, 0, 0);
+  for (var t = d.getTime() / 1000; t <= end; t += DAY) {
+    var day = new Date(t * 1000);
+    s += '<line x1="' + X(t) + '" y1="' + y1 + '" x2="' + X(t) + '" y2="' + (y1 + 5) + '" stroke="#000"/>' +
+      '<text x="' + X(t + DAY / 2) + '" y="' + (y1 + 18) + '" font-size="11" text-anchor="middle">' + (t + DAY / 2 < end ? DAYS[day.getDay()] : '') + '</text>';
+  }
+  var path = '', prev = 0;
+  hist.forEach(function (p) {
+    if (p[0] < start) return;
+    path += (prev && p[0] - prev <= 3 * 3600 ? 'L' : 'M') + X(p[0]) + ' ' + Y(p[1]);
+    prev = p[0];
+  });
+  s += '<path d="' + path + '" fill="none" stroke="#000" stroke-width="2" stroke-linejoin="round"/>';
+  hist.forEach(function (p) {
+    if (p[0] >= start && p[2]) s += '<circle cx="' + X(p[0]) + '" cy="' + Y(p[1]) + '" r="2.6" fill="#000"/>';
+  });
+  var last = hist[hist.length - 1];
+  var label = 'Battery voltage, last 7 days: ' + hist.length + ' values, from ' + volts(hist[0][1]) + ' to ' + volts(last[1]) + ', the newest ' + volts(last[1]) + '.';
+  return '<svg viewBox="0 0 ' + W + ' ' + H + '" role="img" aria-label="' + esc(label) + '" xmlns="http://www.w3.org/2000/svg">' + s + '</svg>';
+}
+
+// Log lines (oldest first) -> days, newest first, each day's lines newest first.
+function logGroups(lines, filter) {
+  var groups = [], g = { date: '', lines: [] }, f = (filter || '').toLowerCase();
+  groups.push(g);
+  (lines || []).forEach(function (l) {
+    var m = /^--- (\d{4}-\d{2}-\d{2}) ---$/.exec(l);
+    if (m) { g = { date: m[1], lines: [] }; groups.push(g); return; }
+    if (!f || l.toLowerCase().indexOf(f) >= 0) g.lines.push(l);
+  });
+  return groups.filter(function (x) { return x.lines.length; }).reverse().map(function (x) { x.lines.reverse(); return x; });
+}
+function fillLog(el, count, lines, filter) {
+  var groups = logGroups(lines, filter), n = 0, total = (lines || []).filter(function (l) { return !/^--- /.test(l); }).length;
+  el.innerHTML = '';
+  groups.forEach(function (g) {
+    n += g.lines.length;
+    if (g.date) el.appendChild(h('h3', { class: 'logd' }, g.date));
+    el.appendChild(h('pre', null, g.lines.join('\n')));
+  });
+  if (!groups.length) el.appendChild(h('p', { class: 'note' }, total ? 'No line contains "' + filter + '".' : 'The log is empty.'));
+  count.textContent = filter ? n + ' of ' + total + ' lines' : total + ' lines, newest first';
+}
+function legacyCopy(t) {
+  var ta = h('textarea', { readonly: true, style: 'position:fixed;top:0;left:0;opacity:0' });
+  ta.value = t;
+  document.body.appendChild(ta);
+  ta.select();
+  var ok = false;
+  try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+  ta.remove();
+  return ok;
+}
+function copyText(t) {
+  if (navigator.clipboard && window.isSecureContext) {
+    return navigator.clipboard.writeText(t).then(function () { return true; }, function () { return legacyCopy(t); });
+  }
+  return Promise.resolve(legacyCopy(t));
+}
+function canCopy() {
+  return !!(navigator.clipboard && window.isSecureContext) || !!(document.queryCommandSupported && document.queryCommandSupported('copy'));
+}
+
+function diagPart() {
+  var st = S.diag || {}, D = st.data, out = [];
+  out.push(btn(st.busy ? 'Loading…' : 'Refresh', loadDiag, 'wide', { disabled: !!st.busy, 'data-f': 'diag-refresh' }));
+  if (st.err) out.push(h('p', { class: 'err', role: 'alert' }, st.err));
+  if (!D) {
+    if (st.busy) out.push(h('p', { class: 'msg', role: 'status' }, h('span', { class: 'spin', 'aria-hidden': 'true' }), 'Asking the device…'));
+    return out;
+  }
+  var now = D.time || 0, b = D.battery || {}, hist = b.history || [];
+  // battery
+  out.push(h('h3', { class: 'dh' }, 'Battery'), h('p', null, batteryNow(b)));
+  if (b.usb) out.push(h('p', { class: 'note' }, 'USB from a computer.'));
+  if (hist.length) {
+    out.push(h('div', { class: 'chart', html: batteryChart(hist, now) }),
+      h('p', { class: 'note' }, 'Hatched: 3.0-4.2 V, a working battery. Filled dots: USB from a computer. One value per hour.'));
+  } else out.push(h('p', { class: 'note' }, 'No history yet: one value per hour.'));
+  // services
+  out.push(h('h3', { class: 'dh' }, 'Services'));
+  var rows = (D.services || []).map(function (s) {
+    return h('tr', null, h('td', null, s.name || s.key, s.stale ? h('span', { class: 'tag' }, 'old') : null),
+      h('td', null, agoText(s.lastOk, now)), h('td', null, String(s.failures || 0)), h('td', null, inText(s.retryAt, now)));
+  });
+  out.push(h('div', { class: 'tblw' }, h('table', { class: 'tbl' },
+    h('thead', null, h('tr', null, ['Service', 'Last success', 'Failures', 'Next retry'].map(function (t) { return h('th', { scope: 'col' }, t); }))),
+    h('tbody', null, rows))));
+  // the rest
+  var known = {};
+  (S.state.device.problems || []).forEach(function (p) { known[p.key] = p.text; });
+  var probs = (D.problems || []).map(function (k) { return known[k] || k; });
+  var w = D.wifi || {}, mem = D.heap || {};
+  out.push(h('div', null,
+    kv('Wi-Fi failures', (w.failures || 0) + (w.retryAfter ? ', next try ' + inText(w.retryAfter, now) : '')),
+    w.rssi ? kv('Wi-Fi signal', w.rssi + ' dBm, ' + signalWord(w.rssi)) : null,
+    kv('Last time sync', agoText(D.lastTimeSync, now)),
+    kv('Problems', probs.length ? probs.join('; ') : 'none'),
+    kv('Free memory', kb(mem.free) + ' (lowest ' + kb(mem.minFree) + ', largest block ' + kb(mem.largest) + ')'),
+    D.bootCount ? kv('Starts since power-on', String(D.bootCount)) : null,
+    kv('Device clock', now ? new Date(now * 1000).toLocaleString() : 'not set')));
+  // log
+  out.push(h('h3', { class: 'dh' }, 'Log'));
+  var logEl = h('div', { class: 'log' }), count = h('p', { class: 'note', 'aria-live': 'polite' });
+  var fid = uid();
+  var filter = h('input', { type: 'search', id: fid, value: S.logFilter || '', placeholder: 'For example ICS or WiFi', autocomplete: 'off', autocapitalize: 'off',
+    spellcheck: 'false', 'data-f': 'logfilter', oninput: function () { S.logFilter = filter.value; fillLog(logEl, count, D.log, filter.value.trim()); } });
+  fillLog(logEl, count, D.log, (S.logFilter || '').trim());
+  out.push(h('div', { class: 'f' }, h('label', { for: fid }, 'Show lines containing'), filter), count, logEl,
+    h('div', { class: 'btns' },
+      h('a', { class: 'btn', href: '/api/log.txt', download: 'dashboard-log.txt' }, 'Download log'),
+      canCopy() ? btn('Copy', function () {
+        var shown = logGroups(D.log, (S.logFilter || '').trim()).map(function (g) { return (g.date ? '--- ' + g.date + ' ---\n' : '') + g.lines.join('\n'); }).join('\n');
+        copyText(shown).then(function (ok) { toast(ok ? 'Copied the shown lines.' : 'Copying didn\'t work here: use "Download log".'); });
+      }, '', { 'data-f': 'logcopy' }) : null,
+      btn('Clear log', function () {
+        ask('Clear the log?', 'The stored log on the device is erased. The battery history and settings stay.', 'Clear log', function () {
+          api('POST', '/api/log/clear', {}).then(function (r) {
+            if (r.ok) { toast('The log is cleared.'); loadDiag(); }
+            else if (!r.login) toast(r.error || 'Clearing didn\'t work. Try again.');
+          });
+        }, 'logclear');
+      }, '', { 'data-f': 'logclear' })),
+    h('p', { class: 'note' }, 'Download log saves the whole stored log as a text file; the list shows the last 200 lines.'));
+  return out;
+}
+function diagSection() {
+  var el = h('details', { open: !!S.diagOpen, ontoggle: function () {
+    S.diagOpen = el.open;
+    if (el.open && !S.diag) loadDiag();
+  } }, h('summary', null, 'Diagnostics'), h('div', { class: 'card' }, S.diagOpen ? diagPart() : null));
+  return el;
 }
 
 // ---------- first-start guide ----------

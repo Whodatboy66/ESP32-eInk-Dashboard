@@ -104,12 +104,12 @@ void appSetup() {
   int wakeup_reason = esp_sleep_get_wakeup_cause();
 
   switch (wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0: Serial.println("Wakeup caused by external signal using RTC_IO"); break;
-    case ESP_SLEEP_WAKEUP_EXT1: Serial.println("Wakeup caused by external signal using RTC_CNTL"); fullRefresh=true; bootCount=0; break;
-    case ESP_SLEEP_WAKEUP_TIMER: Serial.println("Wakeup caused by timer"); break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD: Serial.println("Wakeup caused by touchpad"); break;
-    case ESP_SLEEP_WAKEUP_ULP: Serial.println("Wakeup caused by ULP program"); break;
-    default: Serial.printf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason); break;
+    case ESP_SLEEP_WAKEUP_EXT0: logPrintln("Wakeup caused by external signal using RTC_IO"); break;
+    case ESP_SLEEP_WAKEUP_EXT1: logPrintln("Wakeup caused by external signal using RTC_CNTL"); fullRefresh=true; bootCount=0; break;
+    case ESP_SLEEP_WAKEUP_TIMER: logPrintln("Wakeup caused by timer"); break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD: logPrintln("Wakeup caused by touchpad"); break;
+    case ESP_SLEEP_WAKEUP_ULP: logPrintln("Wakeup caused by ULP program"); break;
+    default: logPrintf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason); break;
   }
   // An update screen covered the dashboard during the last wake: redraw (and refetch) everything.
   if (redrawAll) {
@@ -119,6 +119,7 @@ void appSetup() {
   }
 
   configLoad();
+  const uint16_t problemsAtStart = problems;  // a change is worth keeping in the diagnostics log
   // Local time for everything drawn (the clock widget used to be the only place that set it, and
   // a layout may have no clock).
   setenv("TZ", device_timezone[0] ? device_timezone : "UTC0", 1);
@@ -132,7 +133,7 @@ void appSetup() {
   // Test build only (docs/OTA_TESTS.md): crash in the first start after an over-the-air install,
   // before the update can confirm itself. Never crashes when flashed over USB.
   if (otaPendingVerify) {
-    Serial.println("[OTA test] crashing on purpose");
+    logPrintln("[OTA test] crashing on purpose");
     Serial.flush();
     abort();
   }
@@ -155,9 +156,9 @@ void appSetup() {
   // Setup mode asked by holding BOOT right after a reset (works without the touch sensor).
   if (bootButtonSetup) {
     if (isPinInActiveConfig(BOOT_BUTTON_PIN)) {
-      Serial.printf("BOOT held, but GPIO%d is used by the pin map: ignored\n", BOOT_BUTTON_PIN);
+      logPrintf("BOOT held, but GPIO%d is used by the pin map: ignored\n", BOOT_BUTTON_PIN);
     } else {
-      Serial.println("BOOT held after reset -> AP config mode");
+      logPrintln("BOOT held after reset -> AP config mode");
       startAP();
       return;
     }
@@ -172,6 +173,7 @@ void appSetup() {
       return;
     case BUTTON_ACTION_REBOOT:
       otaConfirmByUser("reboot hold");
+      logFlush(true);
       ESP.restart();
       return;
     case BUTTON_ACTION_UPDATE:
@@ -198,7 +200,7 @@ void appSetup() {
   // Test build only (docs/OTA_TESTS.md): hang after "Updated to" in the first start after an
   // over-the-air install; the 3-minute timer must restart the board and roll back.
   if (otaPendingVerify) {
-    Serial.println("[OTA test] hanging on purpose");
+    logPrintln("[OTA test] hanging on purpose");
     for (;;) delay(1000);
   }
 #endif
@@ -326,6 +328,7 @@ void appSetup() {
                      (todayNum != bdayFeedDay || bdayHash != bdayFeedUrlHash) && nowTs >= bdayFeedRetryAt;
   if (bdayFeedDue && !plan.wifiBackoff) needWiFi = true;
   else bdayFeedDue = false;
+  if (needWiFi) logKeepThisWake();  // stored for the diagnostics view (quiet clock wakes aren't)
   bool makerworldRedraw = false;
   // A parcel delivered more than a day ago is still on screen: remove it without a download
   // (decided on the interval alone, before a Wi-Fi backoff, as before).
@@ -599,6 +602,11 @@ void appSetup() {
   }
 
   esp_sleep_enable_timer_wakeup(sleep_us);
+
+  // Diagnostics (setup app): the battery once an hour; this wake's log if it did something.
+  batteryHistorySample();
+  if (fullRefresh || problems != problemsAtStart) logKeepThisWake();
+  logFlush();
 
   esp_deep_sleep_start();
 }

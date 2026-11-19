@@ -58,6 +58,10 @@ char otaAvailVersion[16] = "";
 bool showPrintView() { return false; }
 
 float readBattery() { return 3.95f; }
+void logPrint(const char* s) { fputs(s, stderr); }
+void logPrint(const String& s) { fputs(s.c_str(), stderr); }
+void logPrintln(const char* s) { fprintf(stderr, "%s\n", s); }
+void logPrintln(const String& s) { fprintf(stderr, "%s\n", s.c_str()); }
 void logPrintf(const char* fmt, ...) {
   va_list a;
   va_start(a, fmt);

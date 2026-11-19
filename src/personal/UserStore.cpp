@@ -226,12 +226,47 @@ size_t readUserFile(const char* path, char* out, size_t cap) {
   return len;
 }
 
+bool userFileExists(const char* path) { return mount() && LittleFS.exists(path); }
+
+size_t userFileSize(const char* path) {
+  if (!userFileExists(path)) return 0;
+  File f = LittleFS.open(path, "r");
+  if (!f) return 0;
+  size_t n = f.size();
+  f.close();
+  return n;
+}
+
+bool appendUserFile(const char* path, const char* data, size_t len) {
+  if (!mount()) return false;
+  File f = LittleFS.open(path, "a");
+  if (!f) return false;
+  size_t w = f.write(reinterpret_cast<const uint8_t*>(data), len);
+  f.close();
+  return w == len;
+}
+
+bool writeUserFile(const char* path, const char* data, size_t len) { return writeAtomic(path, data, len); }
+
+void removeUserFile(const char* path) {
+  if (userFileExists(path)) LittleFS.remove(path);
+}
+
+void userFileRotate(const char* path, const char* oldPath) {
+  if (!mount()) return;
+  LittleFS.remove(oldPath);
+  LittleFS.rename(path, oldPath);
+}
+
 void eraseUserData() {
   if (!mount()) return;
   LittleFS.remove(USER_TASKS_FILE);
   LittleFS.remove(USER_NOTE_FILE);
   LittleFS.remove(USER_BDAY_FILE);
   LittleFS.remove(USER_BDAY_FEED_FILE);
+  LittleFS.remove("/log.txt");  // diagnostics (src/core/Logger.cpp)
+  LittleFS.remove("/log.1");
+  LittleFS.remove("/battery.csv");
   if (tasksP) tasksP->count = 0;
   note[0] = '\0';
   if (birthdaysP) birthdaysP->count = 0;

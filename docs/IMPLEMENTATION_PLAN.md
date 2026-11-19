@@ -234,14 +234,28 @@ Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: s
 - [x] **Layout editor:** choose a structure (full, halves, boxes …), split / merge boxes on the 4 × 3 grid, pick a widget per box; clock and status bar optional
 - [x] **Preview:** device-rendered 800x480 image of the configured layout
 - [x] Edit mode on the home network (setup hold, 10 minutes), see A.8; "always on USB power" moved to stage 6
-- [x] Error texts for non-technical users; problems with what to do on the Home tab (behind the setup password / screen code); a log view is not done
+- [x] Error texts for non-technical users; problems with what to do on the Home tab (behind the setup password / screen code); **diagnostics** (log, battery history, service state) in build 72, see [plans/STAGE5B_DIAGNOSTICS.md](plans/STAGE5B_DIAGNOSTICS.md)
 
 **Done when:** a person without ESP32 knowledge sets up and personalizes a device using only a phone.
 
 ### Stage 6: Power management (spec §8, Phase 5)
 - [ ] Power profiles Battery Saver / Balanced / USB Powered; USB detection; on USB the setup app stays reachable on the home network (moved from stage 5)
 - [ ] Configurable refresh intervals per data type
-- [ ] Low-battery threshold, reduced updates, critical-battery screen, then stay asleep
+- [ ] **Automatic battery saver (decided 2026-11-19), whatever profile and refresh settings are chosen:**
+  - below **20 %** (about 3.73 V, where the LiPo curve starts to drop fast), on battery (a plausible
+    reading, no computer USB): the screen refreshes **every 15 minutes** instead of every minute, data
+    fetches at most hourly (slower ones stay as they are), one full refresh a day;
+  - back to normal above **30 %** (no flapping around the threshold) or as soon as USB / charging is
+    seen (the voltage rising between hourly samples);
+  - below **5 %**: a "Please charge" screen, no more timer wakes, only the button wakes it;
+  - the status bar shows a small "Saver" mark while it's on; the setup app says why;
+  - a reading that isn't plausible (no battery measured, below 3.0 V) never triggers it (that's USB);
+  - expected effect: about 15 times fewer wakes, the largest part of the battery use (to be measured);
+  - **open:** what the clock shows meanwhile (it can't change every minute): proposed is the time of
+    the last refresh plus a small note "Battery low: updates every 15 min", or the clock replaced by
+    the date. To decide when stage 6 starts.
+- [ ] Low-battery threshold, reduced updates, critical-battery screen, then stay asleep (see the
+  battery saver above)
 - [ ] Touch wake + gestures validated with the TTP223 on hardware
 - [ ] **Measurements:** sleep current, clock-wake energy, Wi-Fi-wake energy, TTP223 + HAT standby, and the battery life calculated from them; documented in `docs/POWER.md`
 

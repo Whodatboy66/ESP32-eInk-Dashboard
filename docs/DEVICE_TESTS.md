@@ -1,7 +1,7 @@
 # Device test session: everything still open
 
 Everything implemented so far that has only been checked on the PC (host tests, PC renderer, CI)
-and still needs the real device: stages 0-5, builds 63-71. Made to be done in **one session**, in
+and still needs the real device: stages 0-5, builds 63-72. Made to be done in **one session**, in
 this order (each block builds on the one before). Tick the boxes, note what the screen showed, and
 copy the results into the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log).
 
@@ -14,9 +14,9 @@ a laptop for the GitHub workflows, about 2-3 hours (block 4 waits for 03:00 or i
 The device is on test build .90005, which only a USB flash can leave (see
 [OTA_TESTS.md](OTA_TESTS.md#stuck-on-a-test-build)).
 
-- [ ] `arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .` with the current `main` (build 71);
+- [ ] `arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .` with the current `main` (build 72);
       settings and Wi-Fi are kept
-- [ ] Serial monitor (115200): boot log shows `Firmware .71 (build 71, esp32c6_firebeetle, bw750, settings schema 3)`
+- [ ] Serial monitor (115200): boot log shows `Firmware .72 (build 72, esp32c6_firebeetle, bw750, settings schema 3)`
 - [ ] Settings schema: log shows `Settings schema 2 -> 3` once (not again after the next restart)
 - [ ] The dashboard appears as before (same layout as you had)
 
@@ -40,7 +40,7 @@ Note what the top bar shows (voltage or `USB`) in each case:
 
 - [ ] Boot with **no touch sensor connected**: dashboard appears, no reboots, no setup mode
 - [ ] Connect the TTP223. **Tap**: the dashboard refreshes (full refresh)
-- [ ] **Double tap**: info and update screen ("Up to date: .71" or a newer version)
+- [ ] **Double tap**: info and update screen ("Up to date: .72" or a newer version)
 - [ ] **Hold 2 s**: restart
 - [ ] **Hold 5 s** (release after 4 s or more): setup / edit mode (see block 6)
 - [ ] **Sensor held HIGH 15 s or more** (keep a finger on it): no gesture, log `[Button] held past BUTTON_FAULT_MS`;
@@ -73,12 +73,12 @@ Note what the top bar shows (voltage or `USB`) in each case:
 
 Set channel **Beta**, auto install **off** first (setup app, Device tab).
 
-- [ ] **Release build 71 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
-      channel beta, "What's new" text. Then double tap: "Up to date: .71" (the device already has it)
+- [ ] **Release build 72 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
+      channel beta, "What's new" text. Then double tap: "Up to date: .72" (the device already has it)
 - [ ] **Hang test with the fix (build 69+):** OTA test release → `hang`; double tap, confirm tap:
       "Updated to .90005", then hangs. **Hold the button 2 s** during the hang: it must restart and come
-      back as .71 with "Update failed: previous version kept" (before build 69 a hold kept the test build)
-- [ ] OTA test release → `restore`; double tap: "Up to date: .71"
+      back as .72 with "Update failed: previous version kept" (before build 69 a hold kept the test build)
+- [ ] OTA test release → `restore`; double tap: "Up to date: .72"
 - [ ] **Notify only:** auto install off, a newer beta release (bump `FW_BUILD`, release to beta, or use
       the next real release): after the night check (03:00-03:59) the status bar shows the "Update
       available" mark
@@ -158,6 +158,18 @@ before or after and note them separately.
 - [ ] A second phone without the code can't change anything (asks for the code)
 - [ ] Device tab: **Change Wi-Fi** → the device restarts into the hotspot
 - [ ] 10 minutes without use: back to the dashboard
+
+### Diagnostics (build 72)
+
+- [ ] After a few hours on the wall: Device → Diagnostics shows log lines of the Wi-Fi wakes (with
+      times and a date line) and one battery value per hour
+- [ ] A broken calendar link (or Wi-Fi off for a while): it shows in the service table (failures,
+      next retry) and in the log
+- [ ] **Download log** opens / saves a text file (iPhone captive browser and a normal browser)
+- [ ] **Clear log**: the list is empty; new lines appear after the next Wi-Fi wake
+- [ ] Battery chart: the case of 2026-11-19 (1.1-1.4 V with the battery plugged in) is visible as
+      "no battery measured"; after the battery fix the curve rises while on USB
+- [ ] The USB serial monitor still shows every line live, secrets masked
 
 ## 7. Factory reset (last, it erases everything)
 

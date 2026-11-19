@@ -22,6 +22,14 @@ bool saveUserFeedBirthdays(const personal::BirthdayList& list);
 // The stored files as JSON, for the API (empty lists when there is none). Returns the length.
 size_t readUserFile(const char* path, char* out, size_t cap);
 
+// Plain files on the userdata partition (diagnostics log, battery history).
+bool userFileExists(const char* path);
+size_t userFileSize(const char* path);  // 0 if missing
+bool appendUserFile(const char* path, const char* data, size_t len);
+bool writeUserFile(const char* path, const char* data, size_t len);  // replaced atomically
+void removeUserFile(const char* path);
+void userFileRotate(const char* path, const char* oldPath);  // path becomes oldPath
+
 // Factory reset: erases all personal data.
 void eraseUserData();
 

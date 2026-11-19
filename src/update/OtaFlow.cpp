@@ -105,7 +105,7 @@ static void otaSaveResult(const char* fmt, ...) {
   va_start(args, fmt);
   vsnprintf(text, sizeof(text), fmt, args);
   va_end(args);
-  Serial.printf("[OTA] %s\n", text);
+  logPrintf("[OTA] %s\n", text);
   preferences.begin("config", false);
   preferences.putString("ota_result", text);
   preferences.putUInt("ota_rtime", (uint32_t)time(nullptr));
@@ -150,6 +150,7 @@ static void otaInstallAndRestart(const ota::Manifest& m) {
     preferences.end();
     otaSaveResult("Installed %s, restarting", m.version);
     ota::showRestarting(m.version);
+    logFlush(true);
     delay(300);
     ESP.restart();
   }
@@ -357,7 +358,7 @@ static void otaMarkValid(const char* why) {
   p.putString("ota_result", text);
   p.putUInt("ota_rtime", (uint32_t)time(nullptr));
   p.end();
-  Serial.printf("[OTA] new firmware %s confirmed (%s)\n", FW_VERSION, why);
+  logPrintf("[OTA] new firmware %s confirmed (%s)\n", FW_VERSION, why);
 }
 
 // The user is operating the device (a hold, setup mode, the update screen): the new firmware
@@ -366,7 +367,7 @@ static void otaMarkValid(const char* why) {
 // only if it passes the automatic check (Wi-Fi and display).
 void otaConfirmByUser(const char* why) {
   if (ota::isTestBuild(FW_BUILD)) {
-    if (otaPendingVerify) Serial.printf("[OTA] test build: not confirmed by %s\n", why);
+    if (otaPendingVerify) logPrintf("[OTA] test build: not confirmed by %s\n", why);
     return;
   }
   otaMarkValid(why);
@@ -375,7 +376,8 @@ void otaConfirmByUser(const char* why) {
 void otaConfirmIfPending() {
   if (!otaPendingVerify) return;
   if (!otaWifiOk) {
-    Serial.println("[OTA] new firmware not confirmed (no Wi-Fi): rolling back");
+    logPrintln("[OTA] new firmware not confirmed (no Wi-Fi): rolling back");
+    logFlush(true);
     Serial.flush();
     esp_ota_mark_app_invalid_rollback_and_reboot();
     return;  // only if there is no previous version to go back to
@@ -392,7 +394,7 @@ void otaReadBootState() {
   otaPendingVerify = running && esp_ota_get_state_partition(running, &state) == ESP_OK &&
                      state == ESP_OTA_IMG_PENDING_VERIFY;
   if (!otaPendingVerify) return;
-  Serial.println("[OTA] new firmware, not confirmed yet");
+  logPrintln("[OTA] new firmware, not confirmed yet");
   esp_timer_create_args_t args = {};
   args.callback = [](void*) { esp_restart(); };
   args.name = "ota_hang";

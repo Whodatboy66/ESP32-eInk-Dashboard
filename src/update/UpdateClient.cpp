@@ -35,7 +35,7 @@ class GitHubClient : public SecureClient {
 public:
   int connect(const char* host, uint16_t port, int32_t timeout) override {
     if (!isAllowedHost(host)) {
-      Serial.printf("[OTA] refused connection to %s\n", host ? host : "?");
+      logPrintf("[OTA] refused connection to %s\n", host ? host : "?");
       return 0;
     }
     return SecureClient::connect(host, port, timeout);
@@ -122,7 +122,7 @@ FetchOutcome fetchManifestOnce(bool beta, Manifest& out) {
                    : outcome.httpCode == TOO_LARGE ? FetchResult::BadManifest
                    : FetchResult::HttpError;
     if (outcome.httpCode == TOO_LARGE) outcome.manifestError = ManifestError::BadJson;
-    Serial.printf("[OTA] %s manifest: HTTP %d\n", channelName(beta), outcome.httpCode);
+    logPrintf("[OTA] %s manifest: HTTP %d\n", channelName(beta), outcome.httpCode);
     return outcome;
   }
 
@@ -137,14 +137,14 @@ FetchOutcome fetchManifestOnce(bool beta, Manifest& out) {
     return outcome;
   }
   if (code != HTTP_CODE_OK || !verifySignature(OTA_PUBLIC_KEY_PEM, json.get(), jsonLen, sig, sigLen)) {
-    Serial.printf("[OTA] manifest signature %s: rejected\n", code == HTTP_CODE_OK ? "invalid" : "missing");
+    logPrintf("[OTA] manifest signature %s: rejected\n", code == HTTP_CODE_OK ? "invalid" : "missing");
     outcome.result = FetchResult::BadSignature;
     return outcome;
   }
 
   outcome.manifestError = parseManifest(reinterpret_cast<const char*>(json.get()), jsonLen, FW_VARIANT, out);
   outcome.result = outcome.manifestError == ManifestError::None ? FetchResult::Ok : FetchResult::BadManifest;
-  Serial.printf("[OTA] %s manifest (signed): build %u (%s), file for %s: %s, error %d\n", channelName(beta),
+  logPrintf("[OTA] %s manifest (signed): build %u (%s), file for %s: %s, error %d\n", channelName(beta),
                 (unsigned)out.build, out.version, FW_VARIANT, out.hasFile ? out.fileName : "none",
                 (int)outcome.manifestError);
   return outcome;
@@ -174,18 +174,18 @@ InstallResult install(const Manifest& m, ProgressFn progress) {
   if (!http.begin(client, url)) return InstallResult::DownloadFailed;
   int code = http.GET();
   if (code != HTTP_CODE_OK) {
-    Serial.printf("[OTA] download: HTTP %d\n", code);
+    logPrintf("[OTA] download: HTTP %d\n", code);
     http.end();
     return InstallResult::DownloadFailed;
   }
   int size = http.getSize();
   if (size != (int)m.fileSize) {
-    Serial.printf("[OTA] download: size %d, manifest says %u\n", size, (unsigned)m.fileSize);
+    logPrintf("[OTA] download: size %d, manifest says %u\n", size, (unsigned)m.fileSize);
     http.end();
     return InstallResult::WrongSize;
   }
   if (!Update.begin(m.fileSize, U_FLASH)) {
-    Serial.printf("[OTA] no update slot: %s\n", Update.errorString());
+    logPrintf("[OTA] no update slot: %s\n", Update.errorString());
     http.end();
     return InstallResult::NoSpace;
   }
@@ -218,7 +218,7 @@ InstallResult install(const Manifest& m, ProgressFn progress) {
     lastData = millis();
     mbedtls_sha256_update(&sha, buf, got);
     if (Update.write(buf, got) != (size_t)got) {
-      Serial.printf("[OTA] write failed: %s\n", Update.errorString());
+      logPrintf("[OTA] write failed: %s\n", Update.errorString());
       result = InstallResult::WriteFailed;
       break;
     }
@@ -235,7 +235,7 @@ InstallResult install(const Manifest& m, ProgressFn progress) {
   mbedtls_sha256_finish(&sha, digest);
   mbedtls_sha256_free(&sha);
   if (result != InstallResult::Ok) {
-    Serial.printf("[OTA] download stopped at %u of %u bytes\n", (unsigned)done, (unsigned)m.fileSize);
+    logPrintf("[OTA] download stopped at %u of %u bytes\n", (unsigned)done, (unsigned)m.fileSize);
     Update.abort();
     return result;
   }
@@ -244,7 +244,7 @@ InstallResult install(const Manifest& m, ProgressFn progress) {
   char hex[65];
   toHex(digest, sizeof(digest), hex, sizeof(hex));
   if (strcmp(hex, m.sha256) != 0) {
-    Serial.printf("[OTA] SHA-256 mismatch: got %s\n", hex);
+    logPrintf("[OTA] SHA-256 mismatch: got %s\n", hex);
     Update.abort();
     return InstallResult::HashMismatch;
   }
@@ -253,10 +253,10 @@ InstallResult install(const Manifest& m, ProgressFn progress) {
   // Checks the image and makes the new slot the boot slot. The bootloader keeps the old slot
   // until the new firmware confirms itself (rollback).
   if (!Update.end()) {
-    Serial.printf("[OTA] activate failed: %s\n", Update.errorString());
+    logPrintf("[OTA] activate failed: %s\n", Update.errorString());
     return InstallResult::WriteFailed;
   }
-  Serial.printf("[OTA] installed %s (%u bytes), restart to run it\n", m.version, (unsigned)m.fileSize);
+  logPrintf("[OTA] installed %s (%u bytes), restart to run it\n", m.version, (unsigned)m.fileSize);
   return InstallResult::Ok;
 }
 
