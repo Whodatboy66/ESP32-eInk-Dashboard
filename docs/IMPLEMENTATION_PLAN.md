@@ -139,6 +139,17 @@ Order differs slightly from spec §14: **OTA comes early (stage 1)**. Every late
 without USB, and the partition change (the only step that needs USB) happens once, before devices are
 handed out. Every stage ends with a `FW_BUILD` bump, a line in [CHANGELOG.md](../CHANGELOG.md) and, from stage 1 on, a beta release.
 
+**Where we are (2026-11-19, build 72):** stages 0-5 are implemented, including the diagnostics view
+(build 72); released so far: build 70 (stable and beta). Next is **one device test session** for
+everything of stages 0-5 that has only been checked on the PC: [DEVICE_TESTS.md](DEVICE_TESTS.md)
+(start with the battery wiring, block 0b). **Stage 6 (power) starts after that session:** it needs
+measurements on the device and a battery that charges, and its open decision (what the clock shows
+in the battery saver) can be taken with the device in hand. Not done on purpose so far (details in
+the plans' "Result" sections): the old setup page `/basic` stays until the app is checked on phones;
+the exact preview uses the device's own data (no sample data); agenda times stay 24 h with the
+12-hour clock; tasks can't be ticked off on the device; one note only; several alternating screens
+(TRMNL playlists) not decided.
+
 ### Stage 0: Reproducible base (spec Phase 1)
 - [x] Fix `sketch.yaml` profiles (partition, Zigbee flag): done `daa506c`
 - [x] Display bring-up test `tools/epd_test`
@@ -288,6 +299,7 @@ Only tests actually performed on the device go here.
 | 2026-11-16 | .64 → .65 | Double tap on the TTP223 → info screen → "New version .65" → confirm tap → download from the GitHub release, install, restart | Installed and running .65 (reported by user). Confirms the certificate bundle fix for GitHub's redirect |
 | 2026-11-17 | .66 | OTA tests on the beta channel: wrong board, bad checksum, unsigned, crash on boot, beta release | All as expected: rejected / rolled back (reported by user) |
 | 2026-11-17 | .66 → .90005 | OTA test "hang", then `restore` | Test build kept instead of rolled back (most likely confirmed by a button use during the hang); afterwards every release showed "Up to date: .90005" because test builds count as newer. Fixed in build 69 (see CHANGELOG); the device needs one USB flash (reported by user) |
+| 2026-11-19 | .70 / older | Update with USB attached; battery voltage in the top bar; charging | "Battery too low" refused the update with USB attached: a USB charger isn't seen as USB, and the battery read 1.1-1.4 V with the battery plugged in (about 3.7 V without it); the charge LED stays on. The inline adapter between the battery's plug and the board crosses red and black: reversed polarity or an over-discharged cell suspected, battery unplugged until measured (DEVICE_TESTS block 0b). Software: from build 71 a reading below 3.0 V counts as USB power (reported by user) |
 
 ## Changelog
 

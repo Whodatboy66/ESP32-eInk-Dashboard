@@ -11,13 +11,16 @@ a laptop for the GitHub workflows, about 2-3 hours (block 4 waits for 03:00 or i
 
 ## 0. Bring the device to the current build (USB, once)
 
-The device is on test build .90005, which only a USB flash can leave (see
-[OTA_TESTS.md](OTA_TESTS.md#stuck-on-a-test-build)).
+Whatever it runs now, flash it once over USB: on test build .90005 no release reaches it (see
+[OTA_TESTS.md](OTA_TESTS.md#stuck-on-a-test-build)), and builds before 71 refuse updates as "battery
+too low" while the battery reading is wrong (block 0b). Battery **unplugged** until block 0b says it's
+safe.
 
 - [ ] `arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .` with the current `main` (build 72);
       settings and Wi-Fi are kept
 - [ ] Serial monitor (115200): boot log shows `Firmware .72 (build 72, esp32c6_firebeetle, bw750, settings schema 3)`
-- [ ] Settings schema: log shows `Settings schema 2 -> 3` once (not again after the next restart)
+- [ ] Settings schema: log shows `Settings schema 2 -> 3` once (not again after the next restart);
+      coming from build 66 or older it starts at 1 or 2, also fine
 - [ ] The dashboard appears as before (same layout as you had)
 
 ## 0b. Battery and power (reported 2026-11-19: "battery low" with USB attached, not charging)
