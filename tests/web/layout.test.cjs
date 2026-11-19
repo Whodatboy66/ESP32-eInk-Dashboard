@@ -1,4 +1,4 @@
-// Tests of web/layout.js (the setup app's layout editor logic). Run: node --test tests/web/
+// Tests of web/layout.js (the setup app's layout editor logic). Run: node --test tests/web/*.test.cjs
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');

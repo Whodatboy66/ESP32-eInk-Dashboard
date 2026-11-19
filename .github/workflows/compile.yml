@@ -101,7 +101,7 @@ jobs:
         run: tests/host/run.sh
       # The setup app (web/): editor logic and the layout vectors shared with the firmware tests.
       - name: Web app tests
-        run: node --test tests/web/
+        run: node --test tests/web/*.test.cjs
       # The compiled-in copy (src/web/generated/WebApp.h) matches web/ and stays under 60 KB gzipped.
       - name: Web app up to date
         run: python3 tools/web/build.py --check

@@ -217,7 +217,7 @@ open `web/dev/index.html`) and a DOM stand-in, not in a real browser. Decisions 
 - **The app** (`web/`, plain JavaScript, ES2017 for the iOS captive-portal browser) is 95 KB, 30 KB
   gzipped; compiled in as `src/web/generated/WebApp.h` by `tools/web/build.py`; CI checks that the
   header matches `web/` (hash of the unpacked bundle, so different zlib versions don't matter) and the
-  60 KB limit, and runs the editor tests (`node --test tests/web/`).
+  60 KB limit, and runs the editor tests (`node --test tests/web/*.test.cjs`).
 - **One set of layout rules, tested twice:** `tests/vectors/layouts.json` (20 cases) runs through the
   app's `validate()` and the firmware's `validateBoxes()`; every built-in template converted to boxes
   draws the same rectangles as the template (host test, every widget combination).
