@@ -1,7 +1,7 @@
 # Device test session: everything still open
 
 Everything implemented so far that has only been checked on the PC (host tests, PC renderer, CI)
-and still needs the real device: stages 0-6, builds 63-76. Made to be done in **one session**, in
+and still needs the real device: stages 0-6, builds 63-77. Made to be done in **one session**, in
 this order (each block builds on the one before). Tick the boxes, note what the screen showed, and
 copy the results into the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log).
 
@@ -214,8 +214,11 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
 
 ### Fixes of build 76 (device test, 2026-11-20)
 
-- [ ] Top bar: the battery in percent ("53 %") instead of volts; in full-width layouts the date first
-      ("Fri 20 Nov")
+- [ ] Top bar: the battery in percent ("53 %") instead of volts, right of the battery icon (build 77);
+      in full-width layouts the date on the left ("Fri 20 Nov")
+- [ ] Weather in a grid layout: the weekday above each icon ("Fri", "Sat", ...) (build 77)
+- [ ] Agenda: today's and tomorrow's events (in the evening too: tomorrow's appear under their own date)
+      (build 77)
 - [ ] Exact preview after switching to 12 h (not saved yet): shows AM/PM where it fits
 
 ## 6b. Stage 6 part 1: power (build 75)

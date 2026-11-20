@@ -160,16 +160,6 @@ inline time_t wifiBackoffSeconds(uint8_t failures) {
   return backoff > WIFI_BACKOFF_MAX_S ? WIFI_BACKOFF_MAX_S : backoff;
 }
 
-// Deep sleep until WAKE_AFTER_MINUTE_MS after the next minute starts (60 s without real time).
-inline int64_t sleepMicros(time_t sec, long usec) {
-  int64_t sleepUs = 60LL * 1000000LL;
-  if (sec > 1700000000) {  // the RTC holds a real date
-    int64_t intoMinuteUs = (int64_t)(sec % 60) * 1000000LL + usec;
-    sleepUs = 60LL * 1000000LL - intoMinuteUs + WAKE_AFTER_MINUTE_MS * 1000LL;
-  }
-  return sleepUs;
-}
-
 // Wait after the n-th failed printer connection in a row: 10, 20, 40, then 60 minutes (a printer that
 // is switched off shouldn't keep Wi-Fi busy every few minutes).
 inline time_t bambuBackoffSeconds(uint8_t failures) {

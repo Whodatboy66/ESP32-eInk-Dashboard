@@ -11,6 +11,10 @@ existing working code is reused, nothing is reported as hardware-tested unless i
 
 ## Part A: Repository assessment (spec Phase 1)
 
+**Original assessment (upstream .63, 2026-11-15) — historical.** It describes the code before the
+stages: file names, sizes and "today" refer to that state. Notes marked *Now* say what changed where a
+statement would mislead today; the current code is described in the [README](../README.md#repository-layout).
+
 Based on upstream commit `8d0a66b` (FW .63) plus our fork fixes.
 
 ### A.1 Source files and responsibilities
@@ -52,6 +56,10 @@ Proposed OTA layout (Zigbee partitions dropped; Zigbee support removed, see stag
 | userdata (LittleFS) | 0x3D0000 | 128 KB | tasks, notes, birthdays, layout config, data caches |
 | coredump | 0x3F0000 | 64 KB | crash diagnostics |
 
+*Now:* this layout is in `partitions.csv` since build 64. The userdata partition holds tasks, the
+note, birthdays, the diagnostics log and the battery history; the layout is stored in NVS. Sizes:
+the CI run summary of each build.
+
 Today's firmware uses **69 %** of a slot, leaving about 600 KB of headroom. Planned additions (layout engine,
 web UI assets gzipped in flash, new widgets, signature check, QR code) are estimated at 100-250 KB,
 so this fits. The CI size check (stage 0) watches the limit. If the firmware ever outgrows 1.875 MB:
@@ -63,9 +71,9 @@ module with 8 MB flash (same chip, same code).
 | # | Finding | Where | Fix in stage |
 |---|---|---|---|
 | S1 | `setInsecure()`: no TLS certificate check on any HTTPS request | `directFetch.cpp` (5x), `bambulab.cpp` | 2: done (build 67), certificate bundle everywhere; Bambu LAN only to a local address |
-| S2 | Setup Wi-Fi `Dashboard-Setup` is **open** (no password) | `startAP()` | 5 (per-device WPA2 password, shown on the e-ink screen + QR code) |
-| S3 | Setup page **echoes saved calendar URLs** to anyone connected to the AP | `handleConfig` (`htmlAttr(ics_urls[i])`) | 5 (show "saved", never echo) |
-| S4 | Setup page has no authentication | web server | 5 (admin PIN / pairing) |
+| S2 | Setup Wi-Fi `Dashboard-Setup` was **open** (no password) | `startAP()` | 5: done (build 71), per-device WPA2 password, shown on the e-ink screen + Wi-Fi QR code |
+| S3 | Setup page **echoed saved calendar URLs** to anyone connected to the AP | `handleConfig` (`htmlAttr(ics_urls[i])`) | 5: done (build 71), the app shows "Saved", secrets are never sent back |
+| S4 | Setup page had no authentication | web server | 5: done (build 71), hotspot password; on the home network a 6-digit code shown on the screen and a session |
 | S5 | No firmware authenticity check (no OTA yet) | n/a | 1: done, signed manifest (build 66) |
 | S6 | Secrets partly redacted in logs already (recent upstream commit) | debug log | 2: done (build 67), `DBGF` masks registered secrets |
 
@@ -89,6 +97,7 @@ module with 8 MB flash (same chip, same code).
 - The TTP223 auto-calibrates at power-up: don't touch it while powering on. It can also report a long
   "touch" after recalibration problems. Add a sanity limit (e.g. a "touch" longer than 15 s is ignored
   as a fault and not counted as a gesture).
+- *Now:* pull-down, fault limit and BOOT backup are done (stage 0) and were tested on the device on 2026-11-19.
 - Standby current: datasheet low-power mode is in the µA range, but module LEDs add current. **Measure it** (stage 6).
 - **Recovery if the sensor fails:** the FireBeetle's **BOOT button (GPIO9)** works as a backup:
   tap RST, then hold BOOT within 3 s for setup mode. Also: factory reset from the setup page and
@@ -102,6 +111,10 @@ during sleep. That's a good base. Needed: power profiles (clock interval 1/5/15 
 retry backoff, **real current measurements** (USB power meter for averages, and ideally a PPK2 or
 µCurrent for sleep current) instead of estimates.
 
+*Now:* retry backoff (build 68: per service; build 73: printer), clock interval 1/2/5/10/15/30 min,
+night quiet hours, automatic battery saver and the critical-battery screen (build 75) are done.
+Open: power profiles and the current measurements (stage 6).
+
 ### A.8 Key design constraint: the device is asleep most of the time
 
 The phone web interface (spec §7) can only be reached while the device is awake. Tasks and notes
@@ -109,6 +122,9 @@ editing therefore needs an explicit "edit mode": a long touch opens the web inte
 home network (not just the setup AP) for a few minutes, the screen shows the address and a QR code, and
 on USB power ("USB Powered" profile) it stays reachable. Editing while the device sleeps
 (spec §11 remote management) is a later phase.
+
+*Now:* edit mode is done (build 71): a 4-second hold with working Wi-Fi, 10 minutes, address, QR code
+and a 6-digit code on the screen. Staying reachable on USB power is open (stage 6).
 
 ### A.9 Answers to the spec's "Immediate Assignment"
 
@@ -128,8 +144,8 @@ on USB power ("USB Powered" profile) it stays reachable. Editing while the devic
 
 Stay with **arduino-cli + `sketch.yaml`** (it works on WSL, Windows and CI). New modules go in `src/`
 (Arduino compiles it recursively). Hardware-independent logic (layout, config validation, scheduling,
-manifest checks) is plain C++ without Arduino headers, so it can be **unit-tested on the PC with g++ and
-doctest** in CI (spec §15). Switching to PlatformIO isn't needed for this.
+manifest checks) is plain C++ without Arduino headers, so it can be **unit-tested on the PC with g++** in
+CI (spec §15). Switching to PlatformIO isn't needed for this. (*Now:* plain C++ checks, no doctest; see stage 2.)
 
 ---
 
@@ -139,16 +155,16 @@ Order differs slightly from spec §14: **OTA comes early (stage 1)**. Every late
 without USB, and the partition change (the only step that needs USB) happens once, before devices are
 handed out. Every stage ends with a `FW_BUILD` bump, a line in [CHANGELOG.md](../CHANGELOG.md) and, from stage 1 on, a beta release.
 
-**Where we are (2026-11-19, build 72):** stages 0-5 are implemented, including the diagnostics view
-(build 72); released so far: build 70 (stable and beta). Next is **one device test session** for
-everything of stages 0-5 that has only been checked on the PC: [DEVICE_TESTS.md](DEVICE_TESTS.md)
-(start with the battery wiring, block 0b). **Stage 6 (power) starts after that session:** it needs
-measurements on the device and a battery that charges, and its open decision (what the clock shows
-in the battery saver) can be taken with the device in hand. Not done on purpose so far (details in
-the plans' "Result" sections): the old setup page `/basic` stays until the app is checked on phones;
-the exact preview uses the device's own data (no sample data); agenda times stay 24 h with the
-12-hour clock; tasks can't be ticked off on the device; one note only; several alternating screens
-(TRMNL playlists) not decided.
+**Where we are (2026-11-20, build 76):** stages 0-5 and stage 6 part 1 (clock interval, night quiet
+hours, battery saver, build 75) are implemented. Two device test rounds found fixes that went into
+builds 73 and 76; the rest of the open checks are in [DEVICE_TESTS.md](DEVICE_TESTS.md). Releases:
+build 70 (stable and beta), build 76 (beta). Next: [plans/LOOK_AND_LANGUAGE.md](plans/LOOK_AND_LANGUAGE.md),
+part 1 (German / English), then part 2 (the new look); then the rest of stage 6 (profiles, USB
+detection, current measurements). Not done on purpose so far (details in the plans' "Result"
+sections): the old setup page `/basic` stays until the app is checked on phones; the exact preview
+uses the device's own data (no sample data); agenda times stay 24 h with the 12-hour clock; tasks
+can't be ticked off on the device; one note only; several alternating screens (TRMNL playlists) not
+decided.
 
 ### Stage 0: Reproducible base (spec Phase 1)
 - [x] Fix `sketch.yaml` profiles (partition, Zigbee flag): done `daa506c`
@@ -170,29 +186,28 @@ All parts implemented; open are the remaining "Done when" tests on the device (s
 - [x] OTA partition table (A.3); one-time USB migration, settings kept (nvs offset unchanged)
 - [x] `FW_BUILD` (64) and board variant (`FW_VARIANT` = sketch.yaml profile) compiled in
 - [x] Display id (`FW_DISPLAY`) and config-schema version (`FW_CONFIG_SCHEMA`) compiled in, listed per file in the manifest (read out of the image by CI) and checked
-- [x] Update client (`src/update/`): daily night-time check (03:00-03:59), manifest download over verified HTTPS (certificate bundle), board-variant and min-build checks, no downgrades, SHA-256 check while writing, size check
+- [x] Update client (`src/update/`): daily check from 03:00 until noon (03:00-03:59 until build 74; with quiet hours over 03:00 at their end), manifest download over verified HTTPS (certificate bundle), board-variant and min-build checks, no downgrades, SHA-256 check while writing, size check
 - [x] **ECDSA signature check** of the manifest (P-256, `manifest.sig`, public key in `src/update/OtaPublicKey.h`); unsigned or altered manifests are rejected
 - [x] **Battery guard (decided):** below 30 % battery no update is installed unless USB is connected; the device retries at the next check
 - [x] Rollback: new firmware is confirmed only after Wi-Fi + display refresh succeed; without Wi-Fi it rolls back right away (clean restart); a hang rolls back after 3 min (timer restart); using the button (hold, setup, update screen) confirms it, so a user restart doesn't roll back (not in test builds, 90001+, which also take any regular release again); a build that rolled back is not auto-installed again
-- [x] Channels stable/beta (setup page "Update channel"); beta reads the fixed `beta` pre-release, which every release refreshes
+- [x] Channels stable/beta ("Update channel", setup app Device tab; the old page until build 70); beta reads the fixed `beta` pre-release, which every release refreshes
 - [x] CI: release job publishes app binaries + `manifest.json` only when triggered manually; the "What's new" input (max. 3 lines) goes into the manifest and the release notes
 - [x] CI: signs the manifest with the `OTA_SIGNING_KEY` secret and checks it against the firmware's public key before publishing; channel input, beta = pre-release
 - [x] Host tests: manifest parsing, version and compatibility rules (incl. display, settings schema), signature check, channel URLs, battery-guard and auto/notify decisions, double tap
 - [x] Secret `OTA_SIGNING_KEY` set on GitHub, offline backup of the private key (me)
 
 **Update triggers and settings (decided):**
-- [x] **Setup page checkbox "Install updates automatically"** (per device, default on). On: the night-time check installs by itself. Off (notify only): the night-time check only looks; a new version shows a small **"Update available"** mark in the status bar until it's installed
+- [x] **Switch "Install updates by themselves"** (setup app Device tab; on the old page "Install updates automatically"; per device, default on). On: the night-time check installs by itself. Off (notify only): the night-time check only looks; a new version shows a small **"Update available"** mark in the status bar until it's installed
 - [x] **Double tap on the TTP223 = info and update screen** ("do it now", works in both modes). Add `ButtonEvent::DoubleTap` to `src/input/ButtonGesture.h` with host tests: second tap within about 400 ms; a single tap is then reported after that window (refresh starts about 0.4 s later). Must also work as the first wake from deep sleep (first tap wakes, second tap is caught after boot)
-- [x] **Setup page button "Check for updates now"**: backup trigger if the touch sensor fails. The setup network goes away when the device restarts to go online, so the result appears on the e-ink screen (and as "Last check" on the setup page next time); a newer version is installed without a confirm tap
-- [x] Until the TTP223 is installed: the setup-page button is the manual trigger (the BOOT button stays reserved for setup recovery)
+- [x] **Button "Check for updates now"** (setup app Device tab, before build 71 the setup page): backup trigger if the touch sensor fails. The setup network goes away when the device restarts to go online, so the result appears on the e-ink screen (and in the app next time); a newer version is installed without a confirm tap
 
 **Update screens (e-ink, partial refresh about 1.6 s per step):**
-Wording follows the e-paper font, which has no ( ) ! ' and no ✓: "Tap to install - cancels in 15 s", "Up to date: .64"; the check mark is drawn with lines.
-- [x] Info screen (double tap): firmware version, channel, last update date, battery %, Wi-Fi status, then "Checking for updates…"
-- [x] Update available: "New version .65", the "What's new" lines, **"Tap to install (cancels in 15 s)"**. No tap: back to the dashboard (protects against accidental touches)
+The font has no ✓, so the check mark is drawn with lines. (Before build 70 it also lacked `( ) ! '`, hence wording like "Tap to install - cancels in 15 s".)
+- [x] Info screen (double tap): firmware version, channel, auto install, last update date, battery %, Wi-Fi status, then "Checking for updates…"
+- [x] Update available: "New version .65", the "What's new" lines, **"Tap to install - cancels in 15 s"**. No tap: back to the dashboard (protects against accidental touches)
 - [x] Progress: Downloading (bar refreshed every 20-25 %), Verifying, Installing, Restarting
-- [x] After the restart, shown once: "Updated to .65 ✓" + "What's new", then the dashboard
-- [x] Plain-language results: "Up to date (.64)", "No Wi-Fi: try again later", "Battery too low for an update: please charge", "Update failed: previous version kept"
+- [x] After the restart, shown once: "Updated to .65" with the drawn check mark + "What's new", then the dashboard
+- [x] Plain-language results: "Up to date: .64", "No Wi-Fi: try again later", "Battery too low for an update: please charge", "Update failed: previous version kept"
 - [x] Status bar shows the current version (and the "Update available" mark in notify-only mode)
 
 **Done when** (status: ✔ = confirmed on the device, see hardware test log):
@@ -206,8 +221,8 @@ Original wording: a beta release installs itself on my device at night (auto on)
 
 ### Stage 2: Firmware foundation (spec §4, Phase 2)
 No visible changes, only structure:
-Detailed plan and result: [plans/STAGE2_FOUNDATION.md](plans/STAGE2_FOUNDATION.md). Done in code (build 67), **not yet checked on the device**.
-- [x] Split the `.ino` (2800 lines → 14) into `src/core` (App, WakePlan, ConfigManager, Logger, Problems), `src/hardware` (PinMapping, StatusLed, BatteryMonitor, TouchController, EpaperDriver), `src/services` (Weather, Stocks, Calendar, Tracking, Flight, MakerWorld, Bambu, Wi-Fi, Time, SecureClient), `src/widgets`, `src/ui` (canvas seam, sparse fonts), `src/web` (setup page), `src/update` (OTA flow); moved functions checked verbatim (`tools/dev/check_moves.py`)
+Detailed plan and result: [plans/STAGE2_FOUNDATION.md](plans/STAGE2_FOUNDATION.md). Done in code (build 67); checked on the device in the first test round (DEVICE_TESTS block 2, all ticked).
+- [x] Split the `.ino` (2800 lines → 14) into `src/core` (App, WakePlan, ConfigManager, Logger, Problems), `src/hardware` (PinMapping, StatusLed, BatteryMonitor, TouchController, EpaperDriver), `src/services` (Weather, Stocks, Calendar, Tracking, Flight, MakerWorld, Bambu, Wi-Fi, Time, SecureClient), `src/widgets`, `src/ui` (canvas seam, sparse fonts), `src/web` (setup page), `src/update` (OTA flow); moved functions checked verbatim (`tools/dev/check_moves.py` (removed after stage 2))
 - [x] ConfigManager: schema version (`cfg_schema`), validation before saving (timezone, iCal links incl. `webcal://`, stock symbols, MQTT port, printer in the local network), migration hook, factory reset (setup page + serial `factory-reset`); secrets stay in NVS
 - [x] TLS: certificate bundle for every HTTPS request (S1); Bambu LAN MQTT the one exception, only to a local network address
 - [x] Logger: `DBGF` masks Wi-Fi password, access code, API keys and iCal links (S6)
@@ -217,31 +232,31 @@ Detailed plan and result: [plans/STAGE2_FOUNDATION.md](plans/STAGE2_FOUNDATION.m
 **Done when:** behavior is the same as before (side-by-side check on the device), CI is green, every HTTPS request is verified.
 
 ### Stage 3: Widget system + layout engine (spec §5, §6, Phase 3)
-Detailed plan and result: [plans/STAGE3_WIDGETS_LAYOUT.md](plans/STAGE3_WIDGETS_LAYOUT.md). Done in code (build 68), **not yet checked on the device**; rendered on the PC: [docs/images/layouts/](images/layouts/).
+Detailed plan and result: [plans/STAGE3_WIDGETS_LAYOUT.md](plans/STAGE3_WIDGETS_LAYOUT.md). Done in code (build 68); rendered on the PC: [docs/images/layouts/](images/layouts/). On the device: all templates switch with a full refresh and partial refreshes work; gap filling, the 12-hour clock and the "old" badge are still open (DEVICE_TESTS block 3).
 - [x] Static widget registry (`src/widgets/Registry.cpp`): clock (12/24 h, timezone; large, centered in any size), weather (days that fit), agenda + month view (multiple feeds), status bar, and the technical ones (printer / MakerWorld, stocks, tracking); flights inside the agenda. Compact 1×1 clock dropped (no medium font; see the plan result)
 - [x] Grid layout engine (4 × 3 cells, `src/layout/`) + templates Classic (today's exact pixels) / Planner / Minimal / Technical; validation, fallback to Classic, disabled widgets leave no gaps (neighbors grow)
 - [x] Render planning: one full-screen drawing for device and PC (`drawFullScreen`), every widget clipped to its place; full refresh on a layout change (signature in RTC), button wake, setup, daily; partial refreshes otherwise
 - [x] Per service retry after a failure (2, 4, 8, 16 min, capped at the interval, then the regular schedule) and an "old" badge on stale data (spec §10.2)
 - [x] Host tests: layout (every template × every widget combination), fitting, min/max sizes, invalid templates → fallback, service state, retries in the wake plan; PC renderer for the images
-- [x] Setup page: Layout, Clock (24 h / 12 h), Show (per widget); settings schema 2
-- [x] On the device: all four templates and switching through the setup page
+- [x] Setup page: Layout, Clock (24 h / 12 h), Show (per widget); settings schema 2 (since build 71 in the setup app's Screen tab)
+- [x] On the device: all templates and switching between them (DEVICE_TESTS block 3)
 
 **Done when:** widgets and the layout are switched through configuration only; all four templates render correctly on the device.
 
 ### Stage 4: Personal widgets (spec §5.3)
-Detailed plan: [plans/STAGE4_PERSONAL_WIDGETS.md](plans/STAGE4_PERSONAL_WIDGETS.md). Done in code (build 70), not yet checked on the device.
+Detailed plan: [plans/STAGE4_PERSONAL_WIDGETS.md](plans/STAGE4_PERSONAL_WIDGETS.md). Done in code (build 70); partly checked on the device (DEVICE_TESTS block 5).
 - [x] LittleFS user-data partition; storage for tasks / notes / birthdays with size limits
 - [x] Tasks (add, delete, done, due date, priority, show the top N)
 - [x] Notes (multi-line, length limit)
 - [x] Birthdays (from a chosen calendar feed or manual list; days remaining)
 
-**Done when:** all three are editable (through a temporary JSON API at first) and survive restarts and OTA.
+**Done when:** all three are editable (through a temporary JSON API at first, since build 71 in the setup app) and survive restarts and OTA.
 
 ### Stage 5: Smartphone configuration v2 (spec §7, Phase 4)
-Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: structure, then split / merge boxes, then a widget per box; look "Paper"). Done in code (build 71), not yet checked on the device: see [DEVICE_TESTS.md](DEVICE_TESTS.md).
+Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: structure, then split / merge boxes, then a widget per box; look "Paper"). Done in code (build 71); partly checked on the device, fixes in builds 73 and 76; open checks in [DEVICE_TESTS.md](DEVICE_TESTS.md) block 6.
 - [x] Secure provisioning: per-device AP password shown on the e-ink screen + Wi-Fi QR code (S2); on the home network a fresh code shown on the screen instead of an admin PIN (S4); secrets never echoed (S3)
-- [x] First-time setup flow: Wi-Fi scan, device name, profile, weather, calendars
-- [x] Pages: overview, widgets (enable, order, size, template), calendar (URL check with clear errors), weather, tasks & notes, device settings, firmware (version, channel, last update, last error)
+- [x] First-time setup flow: Wi-Fi (scan, test), name and place, calendars, screen
+- [x] Tabs Home (preview, problems, update, device state), Screen (layout editor, clock, power), Data (calendars with URL check and clear errors, weather place search, keys, printer, tasks, note, birthdays), Device (name, Wi-Fi, time zone, updates: channel, last result, check now; pins; factory reset)
 - [x] **Layout editor:** choose a structure (full, halves, boxes …), split / merge boxes on the 4 × 3 grid, pick a widget per box; clock and status bar optional
 - [x] **Preview:** device-rendered 800x480 image of the configured layout
 - [x] Edit mode on the home network (setup hold, 10 minutes), see A.8; "always on USB power" moved to stage 6
@@ -254,30 +269,28 @@ Part 1 (build 75): [plans/STAGE6_POWER.md](plans/STAGE6_POWER.md): clock interva
 battery saver, critical screen, estimates. Done in code, not yet checked on the device.
 - [ ] Power profiles Battery Saver / Balanced / USB Powered; USB detection; on USB the setup app stays reachable on the home network (moved from stage 5)
 - [ ] Configurable refresh intervals per data type
-- [ ] **Battery use, first numbers (2026-11-20, build 73, estimated from the diagnostics log):** 3 %
-  in 13 hours (after the surface charge settled), about 2-4 weeks per charge. Estimated shares: the
-  once-a-minute clock refresh about 50-60 %, the hourly Wi-Fi wake (calendar, 26-30 s, of which 10 s
-  for one calendar with 1090 events) about 25-30 %, deep sleep unknown. Options to decide in this
-  stage: **night quiet hours** (no clock updates, no fetches, e.g. 23:00-06:00: about 25-30 % less),
-  clock every 2 or 5 minutes as a profile option, calendar every 2 hours (or per calendar), the
-  battery saver below; first measure with a USB power meter
+- [ ] **Battery use measured, not estimated.** First numbers (2026-11-20, build 73, from the
+  diagnostics log): 3 % in 13 hours, about 2-4 weeks per charge; the clock wakes are the largest
+  share, then the hourly Wi-Fi wake. Measure with a USB power meter and replace the estimates in
+  `src/core/PowerPlan.h` (quiet hours, clock interval and battery saver are done, see below);
+  calendar every 2 hours (or per calendar) still open
 - [x] **Clock refresh interval** as a setting (1-30 min) with the estimated battery life per choice; **night quiet hours** (default 23:00-06:00, configurable) (decided 2026-11-20, build 75)
 - [x] **Automatic battery saver (decided 2026-11-19), whatever profile and refresh settings are chosen** (build 75):
   - below **20 %** (about 3.73 V, where the LiPo curve starts to drop fast), on battery (a plausible
-    reading, no computer USB): the screen refreshes **every 15 minutes** instead of every minute, data
-    fetches at most hourly (slower ones stay as they are), one full refresh a day;
-  - back to normal above **30 %** (no flapping around the threshold) or as soon as USB / charging is
-    seen (the voltage rising between hourly samples);
+    reading, no computer USB): the screen refreshes **every 15 minutes** instead of every minute; data
+    fetches keep their intervals, rounded up to a multiple of 15 minutes; one full refresh a day;
+  - back to normal above **30 %** (no flapping around the threshold) or when a computer's USB is seen
+    (a USB charger isn't detected);
   - below **5 %**: a "Please charge" screen; only a battery check once an hour (nothing drawn), back
-    above 10 % or on USB;
-  - the status bar shows a small "Saver" mark while it's on; the setup app says why;
+    above 10 % or on a computer's USB;
+  - the setup app's Home tab says why;
   - a reading that isn't plausible (no battery measured, below 3.0 V) never triggers it (that's USB);
   - expected effect: about 15 times fewer wakes, the largest part of the battery use (to be measured);
   - the clock shows the time of the last refresh, with the note "Battery saver: every 15 min" in the
     status bar (decided 2026-11-20)
 - [x] Low-battery threshold, reduced updates, critical-battery screen, then stay asleep (see the
   battery saver above; build 75)
-- [ ] Touch wake + gestures validated with the TTP223 on hardware
+- [x] Touch wake + gestures validated with the TTP223 on hardware (2026-11-19, hardware test log; the edit-mode hold is in DEVICE_TESTS block 6)
 - [ ] **Measurements:** sleep current, clock-wake energy, Wi-Fi-wake energy, TTP223 + HAT standby, and the battery life calculated from them; documented in `docs/POWER.md`
 
 **Done when:** measured values and the resulting battery life are documented per profile.

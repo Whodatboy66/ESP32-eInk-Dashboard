@@ -9,7 +9,7 @@ including the setup website".
 headings), and the screen, the setup app and the device's messages are in German by default and in
 English when chosen.
 
-## Part 1: languages (build 77)
+## Part 1: languages (build 78)
 
 1. **Setting `lang`:** `de` (default, also for existing devices after the update) or `en`. Set on the
    Device tab, and as the first question of the first-start guide (which always starts in German,
@@ -29,7 +29,7 @@ English when chosen.
    the screen font for the longest German text, e.g. "Akku leer: bitte laden"); PC renders in both
    languages.
 
-## Part 2: new screen look (build 78)
+## Part 2: new screen look (build 79)
 
 1. **New fonts from Montserrat** (SIL Open Font License, already used for the text): clock digits
    Montserrat Bold about 110 px (clean digits like the sketch, instead of the dotted HighSpeed font,
@@ -43,8 +43,8 @@ English when chosen.
    "November 2026"), with a line under them.
 4. **Month view like the sketch:** today as a black square, days with events underlined (now: black
    circles, which look heavy when a calendar has events on most days).
-5. **Weather:** weekday above each icon, "9° / 2°" below.
-6. **Status bar:** date left, battery percent with icon and Wi-Fi right (build 76 started this).
+5. **Weather:** weekday above each icon (done in build 77 for the grid layouts), "9° / 2°" below.
+6. **Status bar:** date left, battery percent right of the icon (done in builds 76 / 77); Wi-Fi bars right.
 7. **Classic gets the new clock too** (decided 2026-11-20: the dotted digits are hard to read with
    reflections and scale badly); its places stay where they are. The HighSpeed font is then gone
    completely (it was licensed for personal use only). Filled digits cost the same energy per refresh

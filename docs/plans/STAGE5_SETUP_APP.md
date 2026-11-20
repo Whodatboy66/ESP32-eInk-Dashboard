@@ -4,8 +4,8 @@ Detailed plan for stage 5 of [IMPLEMENTATION_PLAN.md](../IMPLEMENTATION_PLAN.md)
 configuration v2", spec §7, Phase 4). Builds on stage 3 ([STAGE3_WIDGETS_LAYOUT.md](STAGE3_WIDGETS_LAYOUT.md)):
 the layout engine, the widget registry and the shared `drawFullScreen()`.
 
-Clickable prototype of the editor and the look: [STAGE5_mockup.html](STAGE5_mockup.html) (open it in
-a browser; it needs no server).
+The clickable prototype used for these decisions was removed once the real app existed (build 71);
+the app itself can be opened without a device: `web/dev/index.html`.
 
 **Done when:** a person without ESP32 knowledge sets up a device with only a phone, designs the
 screen with the editor (structure, split / merge, a widget per box), and the device shows exactly

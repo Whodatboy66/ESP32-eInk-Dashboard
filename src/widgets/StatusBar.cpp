@@ -47,20 +47,21 @@ void drawStatus(LayoutItem* item) {
   char buf[40] = "";
   // A full-width bar (grid layouts) starts with the date ("Fri 20 Nov"): the clock widget has no
   // room for it below its digits. Classic keeps its own date in the agenda.
-  int n = 0;
   if (item->Width >= 600) {
     time_t now = time(nullptr);
     struct tm lt;
-    if (now > 1700000000 && localtime_r(&now, &lt)) n = strftime(buf, sizeof(buf), "%a %d %b   ", &lt);
+    if (now > 1700000000 && localtime_r(&now, &lt)) strftime(buf, sizeof(buf), "%a %d %b", &lt);
   }
+  // Right end: the battery icon and, right of it, the charge in percent (the voltage is in the log
+  // and Diagnostics); without a measured battery "USB" (the board runs on USB power).
+  char pct[12] = "";
   if (hasBatteryPin()) {
     voltage = readBattery();
     batteryNoteQuiet(voltage);  // drawn with Wi-Fi off: the reading the setup app shows
-    // The charge in percent (the voltage is in the log and Diagnostics); without a measured
-    // battery the board runs on USB (a voltage there would only confuse).
-    if (batteryReadingPlausible(voltage)) snprintf(buf + n, sizeof(buf) - n, "%d %%", batteryPercent(voltage));
-    else snprintf(buf + n, sizeof(buf) - n, "USB");
+    if (batteryReadingPlausible(voltage)) snprintf(pct, sizeof(pct), "%d %%", batteryPercent(voltage));
+    else snprintf(pct, sizeof(pct), "USB");
   }
+  const int16_t pctW = pct[0] ? getSparseStringWidth(&epaperFont, pct) + 4 : 0;
 
   char versionBuf[48];
   if (otaAvailBuild > FW_BUILD)  // notify only: a newer release waits for a double tap
@@ -81,7 +82,7 @@ void drawStatus(LayoutItem* item) {
   constexpr int16_t ICON_STEP = 22;
   constexpr int16_t RIGHT_PAD = 4;
 
-  int16_t iconReserve = RIGHT_PAD;
+  int16_t iconReserve = RIGHT_PAD + pctW;
   if (hasBatteryPin())                  iconReserve += ICON_STEP;
   if (isPrinting || previousIsPrinting) iconReserve += ICON_STEP;
 
@@ -100,8 +101,12 @@ void drawStatus(LayoutItem* item) {
 
   drawProblems(leftX, item->PosY + 16, versionX - 8);
 
-  // Draw icons right to left
+  // Right to left: percent, battery icon, printer icon.
   int16_t ix = item->PosX + item->Width - RIGHT_PAD;
+  if (pct[0]) {
+    ix -= pctW;
+    drawSparseString(&epaperFont, ix + 4, item->PosY + 16, pct, GxEPD_BLACK);
+  }
 
   if (hasBatteryPin()) {
     int percentage = batteryPercent(voltage);

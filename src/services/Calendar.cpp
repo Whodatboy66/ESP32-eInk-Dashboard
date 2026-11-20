@@ -47,6 +47,7 @@ struct IcsWindow {
   time_t to;         // max(now + 24h, first day of next month)
   time_t monthEnd;
   int month;         // tm_mon of today
+  time_t upcomingTo; // end of tomorrow: the agenda shows today and tomorrow
   bool days[32];
   personal::BirthdayList* collect;  // birthday feed: occurrences go here, not into cal
 };
@@ -199,7 +200,7 @@ static bool emitOccurrence(const IcsEvent& ev, IcsWindow& w, time_t s) {
     return true;
   }
 
-  if (e > w.now && s < w.now + 86400) addUpcoming(ev, s, e);
+  if (e > w.now && s < w.upcomingTo) addUpcoming(ev, s, e);
   if (s < w.monthEnd) markDays(w, s, e > s ? e : s + 1);
 
   // Remember the earliest flight not yet over within the next week: still to depart (pinned with a
@@ -528,6 +529,7 @@ bool fetchCalendarIcs(const char* tz, int* failed) {
   w.now = time(nullptr);
   w.from = makeLocal(nowTm.tm_year + 1900, nowTm.tm_mon + 1, nowTm.tm_mday, 0, 0, 0);
   w.monthEnd = makeLocal(nowTm.tm_year + 1900, nowTm.tm_mon + 2, 1, 0, 0, 0);
+  w.upcomingTo = makeLocal(nowTm.tm_year + 1900, nowTm.tm_mon + 1, nowTm.tm_mday + 2, 0, 0, 0);
   w.to = max(w.now + ICS_FLIGHT_LOOKAHEAD_S, w.monthEnd);
   w.month = nowTm.tm_mon;
 

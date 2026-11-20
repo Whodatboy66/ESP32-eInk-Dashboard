@@ -333,12 +333,6 @@ static void test_flight_stops() {
   CHECK(planWake(in).flightStatus);
 }
 
-static void test_sleep_until_next_minute() {
-  // 12:00:20.250 -> wake at 12:01:00.500
-  CHECK_EQ(sleepMicros(NOW - (NOW % 60) + 20, 250000), (60 - 20) * 1000000LL - 250000 + 500000);
-  // No real time yet: 60 s.
-  CHECK_EQ(sleepMicros(1000, 0), 60 * 1000000LL);
-}
 
 int main() {
   test_quiet_wake_needs_no_wifi();
@@ -361,6 +355,5 @@ int main() {
   test_flight_live_status_window();
   test_flight_fast_refresh_near_departure();
   test_flight_stops();
-  test_sleep_until_next_minute();
   return finish("wake plan");
 }

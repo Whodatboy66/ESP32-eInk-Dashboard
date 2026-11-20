@@ -87,7 +87,7 @@ buffers) stays the real header for now.
 
 ## Steps (each ends with all four profiles compiling and host tests green)
 
-1. **Tooling:** `tools/dev/check_moves.py` (compares moved functions with `git show <base>:file`),
+1. **Tooling** (removed after stage 2, in git history): `tools/dev/check_moves.py` (compares moved functions with `git show <base>:file`),
    `tools/dev/build_all.sh` (the CI compile for all profiles + size table, locally).
 2. **Fonts and renderer:** `fonts/*.h` → `src/ui/fonts/`, sparse-font functions → `src/ui/SparseFont`,
    `Canvas` seam; `display.` → `canvas().` in drawing code.

@@ -5,7 +5,9 @@ drawing function plus a few facts the engine and the wake cycle need.
 
 1. **Data.** A fetch function in `src/services/` (verified HTTPS through `SecureClient`, see
    `HttpJson.h`) that fills a data struct (`src/widgets/Widgets.h`). If it can fail, give it a
-   `Service` in `src/core/ServiceState.h` for retries and the "old data" mark.
+   `Service` in `src/core/ServiceState.h` for retries and the "old data" mark. Data typed in by the
+   user (like tasks) goes into `src/personal/` (stored with `UserStore`) with a route in
+   `src/web/Api.cpp` ([SETUP_API.md](SETUP_API.md)).
 2. **Drawing.** `void myWidget(LayoutItem* item)` in `src/widgets/`: draw with `canvas()` and the
    sparse fonts (`src/ui/SparseFont.h`) inside `item->PosX/PosY/Width/Height`. Drawing is clipped
    to that rectangle; use the size to decide how much to show (rows = `Height / RowHeight`, …).
@@ -20,7 +22,9 @@ drawing function plus a few facts the engine and the wake cycle need.
    size limits); for its sketch preview add a `case` to `widgetSvg()` in `web/app.js` and run
    `python3 tools/web/build.py`.
 4. **Templates.** Place it in the templates that should show it (`src/layout/Templates.h`, grid
-   cells `{col, row, cols, rows}` on the 4 × 3 grid). Classic stays as it is.
+   cells `{col, row, cols, rows}` on the 4 × 3 grid). Classic stays as it is. The editor's empty
+   structures (`GENERIC` in `web/layout.js`, tested by `tests/web/layout.test.cjs`) suggest a widget
+   per box; add it there if it fits.
 5. **Wake cycle.** In `src/core/App.cpp`: fetch it when due (`WakePlan`: add its refresh to
    `WakeInputs` / `WakePlan`, with a host test in `tests/host/test_wake_plan.cpp`), redraw it with
    `updatePartial(item, myWidget)` after new data, and add it to `FullScreenParts` /

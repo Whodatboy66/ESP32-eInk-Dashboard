@@ -43,38 +43,6 @@ void loadDefaultLayout() {
     loadLayout();
 }
 
-#if DEBUG
-void debugPrintLayout() {
-    DBG(F("---- Layout Debug ----"));
-    DBGF("Layout Count: %d", layoutCount);
-
-    for (int i = 0; i < layoutCount; i++) {
-        LayoutItem &l = layout[i];
-
-        logPrintf("Layout[%d]\n", i);
-        logPrintf(" ID: %d\n", l.ID);
-        logPrintf(" PosX: %d\n", l.PosX);
-        logPrintf(" PosY: %d\n", l.PosY);
-        logPrintf(" Width: %d\n", l.Width);
-        logPrintf(" Height: %d\n", l.Height);
-        logPrintf(" RowHeight: %d\n", l.RowHeight);
-        logPrintf(" ColWidth: %d\n", l.ColWidth);
-        logPrintf(" Group: %d\n", l.Group);
-        logPrintf(" Active: %d\n", l.Active);
-        logPrintf(" Refresh: %d\n", l.Refresh);
-
-        logPrintf(" Description: %s\n", l.Description);
-        logPrintf(" Extra1: %s\n", l.Extra1);
-        logPrintf(" Extra2: %s\n", l.Extra2);
-        logPrintf(" Extra3: %s\n", l.Extra3);
-        logPrintf(" Extra4: %s\n", l.Extra4);
-        logPrintf(" Extra5: %s\n", l.Extra5);
-
-        logPrintln("------------------");
-    }
-}
-#endif
-
 void formatTimeRange(time_t start, time_t end, char* buf, size_t bufLen)
 {
     if (!buf || bufLen == 0) return;
@@ -221,9 +189,12 @@ void gCalWidget( LayoutItem* item )
   int y = item->PosY + 16;  // baseline of the first line, at the top of the widget
   bool firstLine = true;
 
-  // A flight later than the next 24 hours is pinned on top with a countdown.
+  // A flight not in the list (later than tomorrow) is pinned on top with a countdown.
   const CalEventItem& flight = cal.nextFlight;
-  if (flight.start > now + 86400) {
+  bool flightListed = false;
+  for (size_t i = 0; i < cal.eventCount; i++)
+    if (cal.next24hEvents[i].start == flight.start) flightListed = true;
+  if (flight.start > now && !flightListed) {
     char countdown[24], line[CFG_CAL_TITLE_MAX + 40];
     formatCountdown(flight.start - now, countdown, sizeof(countdown));
     snprintf(line, sizeof(line), "%s  %s", flight.title, countdown);
@@ -414,8 +385,12 @@ void weatherWidget(LayoutItem* item) {
     }
 
     int x = item->PosX;
-    // Vertically centered: the original 105 px place had the icons 63 px down.
-    int y = item->PosY + 63 + (item->Height - 105) / 2;
+    // Vertically centered: the original 105 px place had the icons 63 px down. Where there is room
+    // (grid boxes, 150 px), the weekday goes above each icon: label + icon + temperatures need about
+    // 120 px (icons reach 67 px above their baseline and 12 below; the temperatures sit at +30).
+    const bool dayLabels = item->Height >= 125;
+    int y = dayLabels ? item->PosY + 85 + (item->Height - 119) / 2 : item->PosY + 63 + (item->Height - 105) / 2;
+    time_t nowT = time(nullptr);
     // As many days as fit: one per ColWidth, the last one only needs its 80 px icon.
     int days = layouts::weatherDaysFor(item->Width, item->ColWidth);
     if (days > weather.count) days = weather.count;
@@ -424,6 +399,19 @@ void weatherWidget(LayoutItem* item) {
 
     for (int i = 0; i < days; i++) {
         WeatherDay &wd = weather.day[i];
+
+        // Weekday above the icon ("Fri", the first day is today)
+        if (dayLabels && nowT > 1700000000) {
+            struct tm d;
+            localtime_r(&nowT, &d);
+            d.tm_mday += i;
+            d.tm_hour = 12;
+            d.tm_isdst = -1;
+            mktime(&d);
+            char day[8];
+            strftime(day, sizeof(day), "%a", &d);
+            drawSparseStringCentered(&epaperFont, x + 40 + i*item->ColWidth, y - 73, day, GxEPD_BLACK);
+        }
 
         // Draw icon
         drawSparseChar(&MDI_80_Sparse, x + i*item->ColWidth, y, wd.icon, GxEPD_BLACK);

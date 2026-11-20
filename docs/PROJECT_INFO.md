@@ -1,8 +1,8 @@
 # Project info (fork: Whodatboy66/ESP32-eInk-Dashboard)
 
 Fork of [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard).
-The user manual ([USER_GUIDE.md](USER_GUIDE.md), the upstream README) describes the features and setup page. This file covers our hardware,
-our workflow and what we found while bringing it up.
+The user manual ([USER_GUIDE.md](USER_GUIDE.md)) describes the features and the setup app. This file
+covers our hardware, our workflow and what is still open from bringing it up.
 
 Requirements: "Development Specification: Modular E-Ink Smart Dashboard Platform" (Google Doc, Jonas).
 Related: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) (assessment + staged upgrades),
@@ -10,11 +10,9 @@ Related: [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) (assessment + staged u
 
 ## Hardware
 
-| Part | Model |
-|---|---|
-| Board | DFRobot FireBeetle 2 ESP32-C6 (4 MB flash, LiPo charger) |
-| Display driver | Waveshare e-Paper Driver HAT (has the PWR pin) |
-| Panel | 7.5" black/white 800x480 (GxEPD2 driver `GxEPD2_750_T7`) |
+Parts: see the [README](../README.md#hardware). Details: the FireBeetle 2 ESP32-C6 has 4 MB flash and a
+LiPo charger; the Waveshare e-Paper Driver HAT has the PWR pin; the 7.5" black/white panel uses the
+GxEPD2 driver `GxEPD2_750_T7`.
 
 ### Wiring (firmware preset "ESP32 C6")
 
@@ -36,7 +34,8 @@ Connections must be firm: solder headers or use a breadboard. Loose Dupont conta
 random "no response" / "busy timeout" results during bring-up.
 
 Red LED next to the battery connector = charge indicator. It flickers when no battery is connected,
-which is normal.
+which is normal. The battery's red wire must end on the board's "+" pin: an inline adapter with
+crossed wires connected our battery reversed (hardware test log, 2026-11-19).
 
 ## Workflow
 
@@ -68,25 +67,51 @@ arduino-cli compile --profile esp32c6_firebeetle -u -p COM3 .
 arduino-cli monitor -p COM3 --profile esp32c6_firebeetle -c baudrate=115200
 ```
 
-- The dashboard deep-sleeps between minutes, so its USB port is often unavailable. Before each upload:
-  hold **BOOT**, tap **RST**, release **BOOT**. After the upload, tap **RST**.
+- The dashboard deep-sleeps between clock wakes (1-30 minutes, and through the whole night quiet
+  hours), so its USB port is often unavailable. Before each upload: hold **BOOT**, tap **RST**,
+  release **BOOT**. After the upload, tap **RST**.
 - `monitor` needs `--profile` (otherwise: "no monitor available for the port protocol serial").
-- The monitor disconnects when the board sleeps. Press RST to see a full boot log.
-- Settings (Wi-Fi, keys, location) live in NVS and survive firmware uploads.
+- The monitor disconnects when the board sleeps. Press RST to see a full boot log, or read the stored
+  log in the setup app (Device tab, Diagnostics).
+- Settings (Wi-Fi, keys, location) live in NVS, tasks / note / birthdays and the log on the user-data
+  partition; both survive firmware uploads.
 - Setup mode without the touch sensor: tap **RST**, then within 3 s hold **BOOT** for 1 s.
 - **One-time step for build 64 (OTA partition table):** the first upload of build 64 or later changes the
   flash layout to two app slots. Settings survive (NVS keeps its offset). After that, updates come over the
-  air (double tap, setup page button, or at night). Publishing a release: [OTA_UPDATES.md](OTA_UPDATES.md#publishing-a-release).
+  air (double tap, setup app, or at night). Publishing a release: [OTA_UPDATES.md](OTA_UPDATES.md#publishing-a-release).
 - **Releases are signed (build 66 on):** the GitHub secret `OTA_SIGNING_KEY` must hold the private key
-  ([OTA_UPDATES.md](OTA_UPDATES.md#signing)). Host tests need mbedTLS too
-  (`CXX=... MBEDTLS_PREFIX=... tests/host/run.sh`, or `sudo apt install libmbedtls-dev`).
+  ([OTA_UPDATES.md](OTA_UPDATES.md#signing)).
+- `tools/dev/build_all.sh [profile ...]` (WSL) builds the profiles like CI (pin preset flag, OTA slot
+  limit) and prints a size table.
 
-## Host tests
+## Setup app (web/)
 
-Hardware-independent logic (for now the button gestures) is tested on the PC, also in CI:
+The setup app is plain HTML / CSS / JavaScript in `web/`, compiled into the firmware as
+`src/web/generated/WebApp.h`:
+
+```bash
+python3 tools/web/build.py            # after every change in web/; CI fails if the header is out of date
+python3 tools/web/build.py --check    # what CI runs (also checks the size limit)
+```
+
+To work on it without a device, open `web/dev/index.html` in a browser: the real app with a fake
+device (`web/dev/mock.js` answers every API call of [SETUP_API.md](SETUP_API.md)). Options in the
+address: `?first=1` first start, `?home=1` home network (code 123456), `?offline=1`, `?slow=1`,
+`?down=1`, `?classic=1`, `?mem=1`, `?lowbat=1`, `?saver=1`.
+
+## Tests
+
+Hardware-independent logic is tested on the PC, also in CI: wake plan, power plan, layout and box
+layouts, button gestures, config validation, time zones, manifest and signature, update policy,
+personal data, log buffer, redaction, LAN rule, battery curve, service state (`tests/host/test_*.cpp`).
+
 ```bash
 tests/host/run.sh                    # needs g++ (WSL: sudo apt install g++), or CXX=/path/to/g++
+node --test tests/web/*.test.cjs     # the setup app's editor logic (needs Node.js)
 ```
+
+`run.sh` also needs mbedTLS (`sudo apt install libmbedtls-dev`, or `MBEDTLS_PREFIX=...`) and the
+ArduinoJson header (found in the Arduino libraries folder, or set `ARDUINOJSON_INCLUDE`).
 
 ## VS Code IntelliSense (red squiggles on `#include`)
 
@@ -107,17 +132,10 @@ arduino-cli compile --profile esp32c6_firebeetle -u -p COM3 tools/epd_test
 LED blinks 4x/s, the BUSY line is probed, and a test pattern is redrawn every 20 s. A good refresh
 logs `took ~3400 ms -> DISPLAY RESPONDED`.
 
-## Findings and fixes so far
+## Open points
+
+Fixed findings are in the [CHANGELOG](../CHANGELOG.md) and the plan's hardware test log.
 
 | Issue | Status |
 |---|---|
-| `sketch.yaml` profiles used the default 1.25 MB partition; Zigbee profiles never set `USE_ZIGBEE` (arduino-cli ignores `build.properties` in profiles) | Fixed (`daa506c`) |
-| Zigbee (smart plug following the Bambu aux fan) not needed on a dashboard | Removed completely (code, profiles, CI, README) |
-| Button GPIO2 uses `INPUT_PULLUP` but is active-HIGH (TTP223): with nothing connected the pin can read "held" and open setup mode by itself | Fixed in code (stage 0): pull-down (also in deep sleep), 15 s fault limit, BOOT backup. Not yet tested on hardware |
-| README's `upload.maximum_size=3604480` doesn't match `partitions.csv` (app0 = 0x360000 = 3538944) | Fixed in the user guide |
-| Profiles ignore `build.properties` too: the `esp32_waveshare` profile built with the plain ESP32 pin preset, and `PartitionScheme=custom` sets the size limit to the whole flash (16 MB) | Blocks removed from `sketch.yaml`; CI passes the preset flag and the size limits; the user guide shows the flag for `esp32_waveshare` |
-| CI workflow uses core 3.3.12 / GxEPD2 1.6.9 / GFX 1.12.6, profiles use 3.3.7 / 1.6.8 / 1.12.5 | Fixed: CI builds the `sketch.yaml` profiles |
-| All HTTPS calls use `setInsecure()` (no certificate check) | Stage 2 (full security list: plan A.4) |
-| Upstream repo has no license; HighSpeed font is personal-use only | See plan A.5 |
-| Setup page Wi-Fi list never pre-selected the saved network: saving the page for any change (e.g. the timezone) stored the first scanned network with the saved password, so Wi-Fi, internet time (clock drifted ~50 min) and updates stopped. Upstream bug, seen 2026-11-16 | Fixed (build 66): saved network pre-selected (also when out of range), empty choice keeps it, duplicates listed once, names HTML-escaped |
-| Timezone `CET` (no offset) is treated as UTC by the C library: clock 1 h behind in German winter | Fixed (build 66): names like CET / Europe/Berlin are turned into `CET-1CEST,M3.5.0,M10.5.0/3`, invalid strings are refused on the setup page, a saved `CET` is corrected at boot |
+| Upstream repo has no license; HighSpeed font is personal-use only | Issue posted upstream (2026-11-19), no answer yet. See plan A.5 |

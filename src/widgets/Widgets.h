@@ -143,7 +143,6 @@ extern LiveFlight liveFlight;
 int findLayoutIndexByID(int);
 
 #if DEBUG
-void debugPrintLayout();
 #endif
 
 void loadDefaultLayout();

@@ -70,7 +70,7 @@ its own password).
   },
   "widgets": [
     {"key": "clock", "name": "Clock", "minW": 2, "minH": 1, "configured": true, "hint": ""},
-    {"key": "weather", "name": "Weather", "minW": 1, "minH": 1, "configured": false, "hint": "Set a place on the Data tab"}
+    {"key": "weather", "name": "Weather", "minW": 1, "minH": 1, "configured": false, "hint": "Weather: set a place in the app"}
   ],
   "structures": [{"key": "planner", "name": "Planner", "boxes": [{"c": 0, "r": 0, "w": 2, "h": 1, "widget": "clock"}]}],
   "grid": {"cols": 4, "rows": 3, "cellW": 200, "cellH": 150, "statusH": 28}
@@ -81,7 +81,8 @@ its own password).
 - `battery`: percent, `-1` without a sensor (or no battery measured). From build 74 it's the last
   reading taken with Wi-Fi off (`batteryAt`: its Unix time; `null` = measured now): with Wi-Fi on in
   setup / edit mode the voltage sags by a few hundredths of a volt, up to ~10 % on the flat part of
-  the LiPo curve. `time`: Unix time, `0` when the clock isn't set.
+  the LiPo curve. `usb`: always `false` for now (no USB detection in setup mode yet; planned with
+  stage 6). `time`: Unix time, `0` when the clock isn't set.
 - `layout.template`: `"custom"` (boxes) or a built-in key (`"classic"`, `"planner"`, `"minimal"`,
   `"technical"`, `"personal"`). For a built-in grid template, `boxes` is its current result (after gap
   filling), so the editor can start from it. `show` is the list of widget keys switched on (used by
