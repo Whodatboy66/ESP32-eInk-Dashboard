@@ -4,6 +4,7 @@
 // (open tasks in display order, due labels). Plain C++, tested on the PC.
 #include <ArduinoJson.h>
 
+#include "../i18n/Dates.h"
 #include "PersonalText.h"
 
 namespace personal {
@@ -31,20 +32,22 @@ struct TaskList {
 
 // Parses and checks a task list. Titles are trimmed and, with hasGlyph, filtered (characters the
 // screen font can't show are removed and listed in `removed`); empty titles are dropped. Returns
-// false (and a message for people in err) for broken JSON, more than MAX_TASKS tasks or a bad date.
+// false (and a message for people in err, in `lang`: the setup app's language, English for the log)
+// for broken JSON, more than MAX_TASKS tasks or a bad date.
 inline bool parseTasks(const char* json, size_t len, TaskList& out, char* err, size_t errCap,
-                       bool (*hasGlyph)(uint32_t) = nullptr, char* removed = nullptr, size_t removedCap = 0) {
+                       bool (*hasGlyph)(uint32_t) = nullptr, char* removed = nullptr, size_t removedCap = 0,
+                       i18n::Lang lang = i18n::Lang::En) {
   out.count = 0;
   if (err && errCap) err[0] = '\0';
   if (removed && removedCap) removed[0] = '\0';
   JsonDocument doc;
   if (deserializeJson(doc, json, len) || !doc["tasks"].is<JsonArrayConst>()) {
-    if (err) std::snprintf(err, errCap, "The task list could not be read.");
+    if (err) std::snprintf(err, errCap, "%s", i18n::text(i18n::S::TasksUnreadable, lang));
     return false;
   }
   JsonArrayConst arr = doc["tasks"].as<JsonArrayConst>();
   if (arr.size() > static_cast<size_t>(MAX_TASKS)) {
-    if (err) std::snprintf(err, errCap, "At most %d tasks.", MAX_TASKS);
+    if (err) std::snprintf(err, errCap, i18n::text(i18n::S::TasksTooMany, lang), MAX_TASKS);
     return false;
   }
   for (JsonObjectConst t : arr) {
@@ -61,7 +64,7 @@ inline bool parseTasks(const char* json, size_t len, TaskList& out, char* err, s
     if (!raw[0]) continue;
     copyChars(task.title, sizeof(task.title), raw, TASK_TITLE_CHARS);
     if (!parseIsoDate(t["due"] | "", task.due)) {
-      if (err) std::snprintf(err, errCap, "Task \"%.40s\": the due date is not a date.", task.title);
+      if (err) std::snprintf(err, errCap, i18n::text(i18n::S::TaskBadDate, lang), task.title);
       return false;
     }
     int prio = t["prio"] | 2;
@@ -130,9 +133,9 @@ inline int openTaskOrder(const TaskList& list, const Date& today, int* order, in
   return n;
 }
 
-// Short due label: "today", "tomorrow", a weekday within the next 6 days ("Fri"), else "24.11.";
-// overdue tasks get their date and overdue = true. Empty without a due date.
-inline void dueLabel(const Task& t, const Date& today, char* out, size_t cap, bool* overdue) {
+// Short due label: "heute" / "today", "morgen" / "tomorrow", a weekday within the next 6 days ("Fr" /
+// "Fri"), else "24.11."; overdue tasks get their date and overdue = true. Empty without a due date.
+inline void dueLabel(const Task& t, const Date& today, char* out, size_t cap, bool* overdue, i18n::Lang lang) {
   if (overdue) *overdue = false;
   if (cap) out[0] = '\0';
   if (!t.due.valid()) return;
@@ -141,16 +144,15 @@ inline void dueLabel(const Task& t, const Date& today, char* out, size_t cap, bo
     return;
   }
   long diff = dayNumber(t.due) - dayNumber(today);
-  static const char* const WD[7] = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
   if (diff < 0) {
     if (overdue) *overdue = true;
     std::snprintf(out, cap, "%d.%d.", t.due.d, t.due.m);
   } else if (diff == 0) {
-    std::snprintf(out, cap, "today");
+    std::snprintf(out, cap, "%s", i18n::text(i18n::S::DueToday, lang));
   } else if (diff == 1) {
-    std::snprintf(out, cap, "tomorrow");
+    std::snprintf(out, cap, "%s", i18n::text(i18n::S::DueTomorrow, lang));
   } else if (diff <= 6) {
-    std::snprintf(out, cap, "%s", WD[weekday(t.due)]);
+    std::snprintf(out, cap, "%s", i18n::weekdayShort((weekday(t.due) + 1) % 7, lang));  // Monday = 1 there
   } else {
     std::snprintf(out, cap, "%d.%d.", t.due.d, t.due.m);
   }

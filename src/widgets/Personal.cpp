@@ -76,7 +76,7 @@ void tasksWidget(LayoutItem* item) {
   int y = item->PosY + FIRST_LINE;
   const int x = item->PosX, right = item->PosX + item->Width - 16;  // clear of the neighbor
   if (open == 0) {
-    drawSparseString(&epaperFont, x, y, list.count ? "All tasks done" : "No tasks", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x, y, tr(list.count ? i18n::S::TasksAllDone : i18n::S::TasksNone), GxEPD_BLACK);
     return;
   }
   int maxLines = linesThatFit(item);
@@ -87,7 +87,7 @@ void tasksWidget(LayoutItem* item) {
     if (t.prio == PRIO_HIGH) canvas().fillRect(x + 4, y - 10, 7, 7, GxEPD_BLACK);  // high priority: filled
     char label[16];
     bool overdue;
-    dueLabel(t, today, label, sizeof(label), &overdue);
+    dueLabel(t, today, label, sizeof(label), &overdue, ui_lang);
     int labelW = 0;
     if (label[0]) {
       if (overdue) {
@@ -103,7 +103,7 @@ void tasksWidget(LayoutItem* item) {
   }
   if (shown < open) {
     char more[24];
-    snprintf(more, sizeof(more), "+%d more", open - shown);
+    snprintf(more, sizeof(more), tr(i18n::S::TasksMore), open - shown);
     drawSparseString(&epaperFont, x + 20, y, more, GxEPD_BLACK);
   }
 }
@@ -114,7 +114,7 @@ void noteWidget(LayoutItem* item) {
   int x = item->PosX, y = item->PosY + FIRST_LINE;
   int maxWidth = item->Width - 8;
   if (!text[0]) {
-    drawSparseString(&epaperFont, x, y, "No note", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x, y, tr(i18n::S::NoteNone), GxEPD_BLACK);
     return;
   }
   constexpr int MAX_LINES = 20;
@@ -147,18 +147,18 @@ void birthdaysWidget(LayoutItem* item) {
   int x = item->PosX, y = item->PosY + FIRST_LINE;
   int right = item->PosX + item->Width - 6;
   if (n == 0) {
-    drawSparseString(&epaperFont, x, y, today.valid() ? "No birthdays in the next 60 days" : "Birthdays", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x, y, tr(today.valid() ? i18n::S::BdayNone : i18n::S::WBirthdays), GxEPD_BLACK);
     return;
   }
   int maxLines = linesThatFit(item);
-  const int labelCol = 92;  // "Tomorrow" fits
+  const int labelCol = 92;  // "Tomorrow", "in 12 T." fit
   for (int i = 0; i < n && i < maxLines; i++) {
     char label[16];
     if (up[i].days <= 1 || up[i].days > 14) {
-      if (up[i].days <= 1) daysLabel(up[i].days, label, sizeof(label));
+      if (up[i].days <= 1) daysLabel(up[i].days, label, sizeof(label), ui_lang);
       else snprintf(label, sizeof(label), "%d.%d.", up[i].date.d, up[i].date.m);
     } else {
-      daysLabel(up[i].days, label, sizeof(label));
+      daysLabel(up[i].days, label, sizeof(label), ui_lang);
     }
     if (up[i].days == 0) {
       int w = getSparseStringWidth(&epaperFont, label);

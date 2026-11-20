@@ -5,6 +5,7 @@
 #include "../../app.h"
 #include "../core/AppState.h"
 #include "../core/Problems.h"
+#include "../i18n/Dates.h"
 #include "../hardware/BatteryCurve.h"
 #include "../hardware/BatteryMonitor.h"
 #include "../services/Bambu.h"
@@ -25,8 +26,9 @@ static void drawProblems(int16_t x, int16_t y, int16_t maxX) {
   int remaining = __builtin_popcount(problems);
   for (int i = 0; i < count; i++) {
     if (!(problems & (1 << i))) continue;
-    int16_t w = getSparseStringWidth(&epaperFont, PROBLEM_LABELS[i]);
-    char more[8];
+    const char* label = tr(PROBLEM_LABELS[i]);
+    int16_t w = getSparseStringWidth(&epaperFont, label);
+    char more[16];
     snprintf(more, sizeof(more), "+%d", remaining);
     // Keep room for a "+N" summary unless this is the last name.
     int16_t reserve = remaining > 1 ? getSparseStringWidth(&epaperFont, more) + 6 : 0;
@@ -34,7 +36,7 @@ static void drawProblems(int16_t x, int16_t y, int16_t maxX) {
       drawSparseString(&epaperFont, x, y, more, ALERT_COLOR);
       return;
     }
-    drawSparseString(&epaperFont, x, y, PROBLEM_LABELS[i], ALERT_COLOR);
+    drawSparseString(&epaperFont, x, y, label, ALERT_COLOR);
     x += w + 8;
     remaining--;
   }
@@ -45,12 +47,12 @@ void drawStatus(LayoutItem* item) {
 
   float voltage = 0.0f;
   char buf[40] = "";
-  // A full-width bar (grid layouts) starts with the date ("Fri 20 Nov"): the clock widget has no
-  // room for it below its digits. Classic keeps its own date in the agenda.
+  // A full-width bar (grid layouts) starts with the date ("Fr 20. Nov" / "Fri 20 Nov"): the clock
+  // widget has no room for it below its digits. Classic keeps its own date in the agenda.
   if (item->Width >= 600) {
     time_t now = time(nullptr);
     struct tm lt;
-    if (now > 1700000000 && localtime_r(&now, &lt)) strftime(buf, sizeof(buf), "%a %d %b", &lt);
+    if (now > 1700000000 && localtime_r(&now, &lt)) i18n::formatStatusDate(lt, ui_lang, buf, sizeof(buf));
   }
   // Right end: the battery icon and, right of it, the charge in percent (the voltage is in the log
   // and Diagnostics); without a measured battery "USB" (the board runs on USB power).
@@ -65,7 +67,7 @@ void drawStatus(LayoutItem* item) {
 
   char versionBuf[48];
   if (otaAvailBuild > FW_BUILD)  // notify only: a newer release waits for a double tap
-    snprintf(versionBuf, sizeof(versionBuf), "Update available  v%s", FW_VERSION);
+    snprintf(versionBuf, sizeof(versionBuf), tr(i18n::S::UpdateAvailable), FW_VERSION);
   else
     snprintf(versionBuf, sizeof(versionBuf), "v%s", FW_VERSION);
 
@@ -92,7 +94,7 @@ void drawStatus(LayoutItem* item) {
   if (versionX < minVersionX) versionX = minVersionX;
   drawSparseString(&epaperFont, versionX, item->PosY + 16, versionBuf, GxEPD_BLACK);
 
-  // Power note (stage 6): "Night until 06:00", "Battery saver: every 15 min", "Clock every 5 min".
+  // Power note (stage 6): "Nacht bis 06:00", "Akku-Sparen: alle 15 Min.", "Uhr alle 5 Min.".
   powerNoteShown = textHash(powerNote);
   if (powerNote[0] && leftX + getSparseStringWidth(&epaperFont, powerNote) < versionX - 8) {
     drawSparseString(&epaperFont, leftX, item->PosY + 16, powerNote, GxEPD_BLACK);
@@ -133,7 +135,7 @@ void drawProblemCorner() {
   const char* first = "";
   for (int i = 0; i < count; i++)
     if (problems & (1 << i)) {
-      first = PROBLEM_LABELS[i];
+      first = tr(PROBLEM_LABELS[i]);
       break;
     }
   char text[32];

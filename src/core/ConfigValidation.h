@@ -51,30 +51,103 @@ inline bool validateIcsUrl(const char* in, char* out, size_t cap) {
 // Yahoo Finance symbols: letters, digits and ^ . = - (e.g. ^IXIC, BRK-B, EURUSD=X, SAP.DE),
 // separated by commas and/or spaces. Written to `out` as "A,B,C": empty entries dropped, at most
 // 5 (the widget shows 5; the fetcher always used the first 5). False for any other character.
+// Stocks setting: up to 5 entries separated by commas, each "SYMBOL" (Yahoo Finance: letters,
+// digits, ^ . = -) or "SYMBOL:Label" (own name on the screen, up to STOCK_LABEL_CHARS characters,
+// e.g. "EUNL.DE:MSCI World"). Without labels, spaces separate symbols too ("AAPL MSFT"), as before.
+// Writes the cleaned list ("EUNL.DE:MSCI World,PPFB.DE:Gold"); false if something is invalid.
+constexpr size_t STOCK_LABEL_CHARS = 12;
+constexpr int STOCK_MAX_ENTRIES = 5;
+
+inline bool stockSymbolChar(char c) {
+  return std::isalnum(static_cast<unsigned char>(c)) || c == '^' || c == '.' || c == '=' || c == '-';
+}
+
 inline bool normalizeStockSymbols(const char* in, char* out, size_t cap) {
   if (!in || !out || cap == 0) return false;
   size_t o = 0;
   int count = 0;
-  const char* p = in;
   out[0] = '\0';
-  while (*p) {
-    while (*p == ' ' || *p == ',') p++;
-    const char* start = p;
-    while (*p && *p != ' ' && *p != ',') {
-      char c = *p;
-      if (!(std::isalnum(static_cast<unsigned char>(c)) || c == '^' || c == '.' || c == '=' || c == '-')) return false;
-      p++;
-    }
-    size_t len = static_cast<size_t>(p - start);
-    if (len == 0 || count >= 5) continue;
-    if (o + (count ? 1 : 0) + len + 1 > cap) return false;
+  auto append = [&](const char* sym, size_t symLen, const char* label, size_t labelLen) -> bool {
+    if (count >= STOCK_MAX_ENTRIES) return true;  // more than 5: ignored, as before
+    size_t need = (count ? 1 : 0) + symLen + (labelLen ? 1 + labelLen : 0) + 1;
+    if (o + need > cap) return false;
     if (count) out[o++] = ',';
-    std::memcpy(out + o, start, len);
-    o += len;
+    std::memcpy(out + o, sym, symLen);
+    o += symLen;
+    if (labelLen) {
+      out[o++] = ':';
+      std::memcpy(out + o, label, labelLen);
+      o += labelLen;
+    }
     out[o] = '\0';
     count++;
+    return true;
+  };
+  const char* p = in;
+  while (*p) {
+    const char* start = p;
+    while (*p && *p != ',') p++;
+    const char* end = p;
+    if (*p == ',') p++;
+    while (start < end && *start == ' ') start++;
+    while (end > start && end[-1] == ' ') end--;
+    if (start == end) continue;
+    const char* colon = static_cast<const char*>(std::memchr(start, ':', static_cast<size_t>(end - start)));
+    if (colon) {  // "SYMBOL:Label"
+      const char* se = colon;
+      while (se > start && se[-1] == ' ') se--;
+      if (se == start) return false;
+      for (const char* q = start; q < se; q++)
+        if (!stockSymbolChar(*q)) return false;
+      const char* ls = colon + 1;
+      while (ls < end && *ls == ' ') ls++;
+      size_t chars = 0;
+      for (const char* q = ls; q < end; q++) {
+        unsigned char c = static_cast<unsigned char>(*q);
+        if (c < 0x20 || c == ':') return false;
+        if ((c & 0xC0) != 0x80) chars++;  // count characters, not UTF-8 bytes
+      }
+      if (chars == 0 || chars > STOCK_LABEL_CHARS) return false;
+      if (!append(start, static_cast<size_t>(se - start), ls, static_cast<size_t>(end - ls))) return false;
+    } else {  // one or more plain symbols, separated by spaces
+      const char* q = start;
+      while (q < end) {
+        while (q < end && *q == ' ') q++;
+        const char* s0 = q;
+        while (q < end && *q != ' ') {
+          if (!stockSymbolChar(*q)) return false;
+          q++;
+        }
+        if (q > s0 && !append(s0, static_cast<size_t>(q - s0), nullptr, 0)) return false;
+      }
+    }
   }
   return true;
+}
+
+// One entry of the cleaned stocks setting.
+struct StockEntry {
+  char symbol[24];  // for the request
+  char label[52];   // for the screen: the label, else the symbol without a leading ^
+};
+
+// Splits the cleaned setting into entries; returns how many (at most max).
+inline int parseStockEntries(const char* list, StockEntry* out, int max) {
+  int n = 0;
+  const char* p = list;
+  while (p && *p && n < max) {
+    const char* end = std::strchr(p, ',');
+    if (!end) end = p + std::strlen(p);
+    const char* colon = static_cast<const char*>(std::memchr(p, ':', static_cast<size_t>(end - p)));
+    const char* se = colon ? colon : end;
+    StockEntry& e = out[n];
+    std::snprintf(e.symbol, sizeof(e.symbol), "%.*s", static_cast<int>(se - p), p);
+    if (colon) std::snprintf(e.label, sizeof(e.label), "%.*s", static_cast<int>(end - colon - 1), colon + 1);
+    else std::snprintf(e.label, sizeof(e.label), "%s", e.symbol[0] == '^' ? e.symbol + 1 : e.symbol);
+    if (e.symbol[0]) n++;
+    p = *end ? end + 1 : end;
+  }
+  return n;
 }
 
 // MQTT port field: empty = 8883 (the printer's TLS port); -1 if not a port number.

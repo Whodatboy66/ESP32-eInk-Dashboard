@@ -64,3 +64,24 @@ gets its own build, and you check it before the next one starts.
 
 - Classic moves to the new filled clock too.
 - The first-start guide always starts in German.
+
+## Result of part 1 (build 78)
+
+Done in code, checked on the PC (host tests incl. `tests/host/test_i18n.cpp`, which measures German
+texts with the real screen font; web tests incl. `tests/web/i18n.test.cjs`; renders in German and
+English), not yet on the device.
+
+- **Firmware:** `src/i18n/Strings.h` is one list `X(Key, "Deutsch", "English")` (274 texts, in flash);
+  `src/i18n/Dates.h` replaces `strftime` names and formats. Pure headers take the language as a
+  parameter; the log stays English (update results are logged in English and stored for the screen in
+  the screen language).
+- **German texts that had to be shortened to fit** (found by the width test): parcel states,
+  MakerWorld labels, the edit screen's timeout line, "Keine Geburtstage in 60 Tagen".
+- **App:** `web/i18n.js` with both dictionaries, `t()` / `tn()` (plural), German decimal comma; every
+  string of the app goes through it. Word choices: "du", "Felder" for the editor's boxes,
+  "Klassisch" for Classic, "WLAN", "Akku".
+- **Also changed:** the English agenda header is "Friday, 20 November" (was "Friday 20, November");
+  the place search asks Open-Meteo for names in the device's language; the old `/basic` page stays
+  English (it goes away).
+- Bundle 48 KB of the 60 KB limit; firmware 87 % of the app slot.
+

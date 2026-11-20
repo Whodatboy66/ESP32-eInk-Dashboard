@@ -33,7 +33,7 @@ The ESP32 fetches every widget's data itself, directly from each service:
 | Month calendar | your iCal feeds (marks days with events) | iCal URL | every hour |
 | Upcoming events (next 24 h), flights highlighted | up to 3 iCal feeds, merged | iCal URL | every hour (flight countdown: every 10 min) |
 | Weather (4 days) | [Open-Meteo](https://open-meteo.com/) | city or coordinates | every 6 hours |
-| Stocks (up to 5) | Yahoo Finance | ticker symbols | every hour |
+| Stocks (up to 5) | Yahoo Finance | ticker symbols, optionally with your own names | every hour |
 | Bambu Lab printer | the printer, over local MQTT | printer address, serial number, access code | every 4 min while printing, 10 min idle |
 | MakerWorld stats | Bambu's MakerWorld API | MakerWorld user ID | every hour (idle only) |
 | Package tracking (up to 3 lines) | [PKGE](https://business.pkge.net) | PKGE API key | every 2 hours |
@@ -107,7 +107,13 @@ When it closes, the dashboard comes back.
 | **Home** | Preview, problems with what to do about them, "Update available", battery, Wi-Fi, version, **Done** |
 | **Screen** | The layout editor (see [Layouts](#layouts)), 12 / 24-hour clock, **Clock refresh**, quiet hours at night |
 | **Data** | Calendar links (with **Check**), weather place (search), stocks, parcels and flights keys, printer, MakerWorld; tasks, note and birthdays (with the birthday calendar link) |
-| **Device** | Name, Wi-Fi (scan, **Test the connection**; **Change Wi-Fi** in edit mode), time zone, battery capacity, updates (automatic, channel, check now), Diagnostics, board pins (advanced), factory reset |
+| **Device** | Language, name, Wi-Fi (scan, **Test the connection**; **Change Wi-Fi** in edit mode), time zone, battery capacity, updates (automatic, channel, check now), Diagnostics, board pins (advanced), factory reset |
+
+**Language.** German (the default) or English, chosen as the first question of the guided first start
+and on the Device tab. It applies to everything the device shows (the screen, the setup and update
+screens, dates, "heute / morgen", decimal commas in prices) and to the device's messages in the app
+(problems, hints, check results). Your own content (calendar entries, tasks, names) stays as typed;
+the diagnostics log stays in English. Changing it is a normal save (the device restarts).
 
 **Saving.** Every changed setting is checked before anything is saved. If something can't work (an
 unknown time zone, a calendar link that isn't `https://`/`http://`/`webcal://`, characters a stock
@@ -138,7 +144,7 @@ stays until the app has been checked on phones.
 | --- | --- |
 | **Time zone** (Device) | Pick a name from the list (`Europe/Berlin`, `Europe/London`, `America/New_York`, …) or type a POSIX rule including summer time: `CET-1CEST,M3.5.0,M10.5.0/3` (Germany and most of Central Europe), `GMT0BST,M3.5.0/1,M10.5.0` (UK), `EST5EDT,M3.2.0,M11.1.0` (US Eastern). Names are turned into their rule when you save; anything else is refused with a message. Used for everything the device shows and logs; without it the device runs on UTC. [List of rules](https://github.com/nayarsystems/posix_tz_db/blob/master/zones.csv). |
 | **Weather place** | Type a city and pick it from the list, or type a city with a 2-letter country code (`London, GB`), or `latitude,longitude` (`51.51,-0.13`). A city is looked up once with Open-Meteo's geocoding. |
-| **Stock symbols** | Up to 5 Yahoo Finance symbols, separated by commas or spaces: `AAPL,NVDA,^IXIC`. Indexes start with `^`. |
+| **Stock symbols** | Up to 5 Yahoo Finance symbols, separated by commas: `AAPL,NVDA,^IXIC`. Indexes start with `^`; other exchanges have a suffix (`.DE` Xetra, `.L` London, `.AS` Amsterdam), and prices are shown in that exchange's currency. **Own names** (build 78): `SYMBOL:Name`, up to 12 characters, e.g. `EUNL.DE:MSCI World,QYLE.DE:Nasdaq CC,PPFB.DE:Gold`: the screen then shows the name instead of the symbol. Find a symbol with the search on finance.yahoo.com. |
 | **Calendar links** | Up to 3 `.ics` links (`https://`; `webcal://` and `http://` links are turned into `https://`), merged into one calendar. **Check** tries a link (needs internet on the device). See [Getting your Google Calendar link](#getting-your-google-calendar-link). The server's certificate is checked: Google, iCloud, Outlook and servers with a normal certificate work; a self-hosted server with a self-signed certificate, or one that sends an incomplete certificate chain (`cert.pem` instead of `fullchain.pem`), doesn't. |
 | **Birthday calendar link** | Optional `.ics` link with birthdays (e.g. Google Calendar's birthdays), read once a day. |
 | **Parcels key (PKGE)** | The API key of your PKGE Business account, for package tracking (see [Tracking your packages](#tracking-your-packages)). |

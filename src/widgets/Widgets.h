@@ -30,7 +30,7 @@ struct LayoutItem {
 };
 
 struct StockItem {
-  char name[16];
+  char name[52];  // the own label, or the symbol without a leading ^
   float price;
   float dayLow;
   float dayHigh;

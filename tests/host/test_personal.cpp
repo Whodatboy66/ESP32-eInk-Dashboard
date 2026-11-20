@@ -66,8 +66,14 @@ static void test_tasks_parse_and_limits() {
   CHECK(!parseTasks(many.c_str(), many.size(), list, err, sizeof(err)));
   CHECK(std::strstr(err, "30") != nullptr);
 
+  CHECK(!parseTasks(many.c_str(), many.size(), list, err, sizeof(err), nullptr, nullptr, 0, i18n::Lang::De));
+  CHECK_STR(err, "Höchstens 30 Aufgaben.");
+
   const char* badDate = R"({"tasks":[{"title":"x","due":"2026-02-30"}]})";
   CHECK(!parseTasks(badDate, std::strlen(badDate), list, err, sizeof(err)));
+  CHECK_STR(err, "Task \"x\": the due date is not a date.");  // English by default (the log)
+  CHECK(!parseTasks(badDate, std::strlen(badDate), list, err, sizeof(err), nullptr, nullptr, 0, i18n::Lang::De));
+  CHECK_STR(err, "Aufgabe „x“: das Fälligkeitsdatum ist kein Datum.");
   CHECK(!parseTasks("nope", 4, list, err, sizeof(err)));
 
   std::string longTitle = "{\"tasks\":[{\"title\":\"" + std::string(100, 'x') + "\"}]}";
@@ -114,22 +120,34 @@ static void test_task_order_and_labels() {
 
   char lab[16];
   bool over;
-  dueLabel(l.items[2], today, lab, sizeof(lab), &over);
+  const i18n::Lang EN = i18n::Lang::En, DE = i18n::Lang::De;
+  dueLabel(l.items[2], today, lab, sizeof(lab), &over, EN);
   CHECK_STR(lab, "10.11.");
   CHECK(over);
-  dueLabel(l.items[4], today, lab, sizeof(lab), &over);
+  dueLabel(l.items[4], today, lab, sizeof(lab), &over, EN);
   CHECK_STR(lab, "today");
   CHECK(!over);
+  dueLabel(l.items[4], today, lab, sizeof(lab), &over, DE);
+  CHECK_STR(lab, "heute");
   Task t;
   t.due = Date{2026, 11, 18};
-  dueLabel(t, today, lab, sizeof(lab), &over);
+  dueLabel(t, today, lab, sizeof(lab), &over, EN);
   CHECK_STR(lab, "tomorrow");
+  dueLabel(t, today, lab, sizeof(lab), &over, DE);
+  CHECK_STR(lab, "morgen");
   t.due = Date{2026, 11, 20};
-  dueLabel(t, today, lab, sizeof(lab), &over);
+  dueLabel(t, today, lab, sizeof(lab), &over, EN);
   CHECK_STR(lab, "Fri");
-  dueLabel(l.items[1], today, lab, sizeof(lab), &over);
+  dueLabel(t, today, lab, sizeof(lab), &over, DE);
+  CHECK_STR(lab, "Fr");
+  t.due = Date{2026, 11, 22};
+  dueLabel(t, today, lab, sizeof(lab), &over, DE);
+  CHECK_STR(lab, "So");
+  dueLabel(l.items[1], today, lab, sizeof(lab), &over, EN);
   CHECK_STR(lab, "24.11.");
-  dueLabel(l.items[0], today, lab, sizeof(lab), &over);
+  dueLabel(l.items[1], today, lab, sizeof(lab), &over, DE);
+  CHECK_STR(lab, "24.11.");
+  dueLabel(l.items[0], today, lab, sizeof(lab), &over, DE);
   CHECK_STR(lab, "");
 }
 
@@ -168,6 +186,10 @@ static void test_note() {
   CHECK_STR(note, "Wi-Fi for guests:\nSunflower-42");
   std::string tooLong = "{\"note\":\"" + std::string(401, 'a') + "\"}";
   CHECK(!parseNote(tooLong.c_str(), tooLong.size(), note, sizeof(note), err, sizeof(err)));
+  CHECK_STR(err, "The note is too long: at most 400 characters.");
+  CHECK(!parseNote(tooLong.c_str(), tooLong.size(), note, sizeof(note), err, sizeof(err), nullptr, nullptr, 0,
+                   i18n::Lang::De));
+  CHECK_STR(err, "Die Notiz ist zu lang: höchstens 400 Zeichen.");
   char buf[64];
   size_t n = writeNote("a\nb", buf, sizeof(buf));
   CHECK(n > 0);
@@ -206,6 +228,9 @@ static void test_birthdays() {
   CHECK_EQ(manual.count, 4);
   const char* bad = R"({"manual":[{"name":"X","day":31,"month":4}]})";
   CHECK(!parseBirthdays(bad, std::strlen(bad), "manual", manual, err, sizeof(err)));
+  CHECK_STR(err, "Birthday of \"X\": the date is not possible.");
+  CHECK(!parseBirthdays(bad, std::strlen(bad), "manual", manual, err, sizeof(err), nullptr, nullptr, 0, i18n::Lang::De));
+  CHECK_STR(err, "Geburtstag von „X“: das Datum ist nicht möglich.");
   const char* badLeap = R"({"manual":[{"name":"X","day":29,"month":2,"year":2003}]})";
   CHECK(!parseBirthdays(badLeap, std::strlen(badLeap), "manual", feed, err, sizeof(err)));
   CHECK(parseBirthdays(json, std::strlen(json), "manual", manual, err, sizeof(err)));
@@ -238,12 +263,18 @@ static void test_birthdays() {
   CHECK_EQ(up[0].days, 0);
 
   char lab[16];
-  daysLabel(0, lab, sizeof(lab));
+  daysLabel(0, lab, sizeof(lab), i18n::Lang::En);
   CHECK_STR(lab, "Today");
-  daysLabel(1, lab, sizeof(lab));
+  daysLabel(1, lab, sizeof(lab), i18n::Lang::En);
   CHECK_STR(lab, "Tomorrow");
-  daysLabel(12, lab, sizeof(lab));
+  daysLabel(12, lab, sizeof(lab), i18n::Lang::En);
   CHECK_STR(lab, "in 12 d");
+  daysLabel(0, lab, sizeof(lab), i18n::Lang::De);
+  CHECK_STR(lab, "Heute");
+  daysLabel(1, lab, sizeof(lab), i18n::Lang::De);
+  CHECK_STR(lab, "Morgen");
+  daysLabel(12, lab, sizeof(lab), i18n::Lang::De);
+  CHECK_STR(lab, "in 12 T.");
 
   char buf[4096];
   size_t len = writeBirthdays(manual, "manual", buf, sizeof(buf));

@@ -5,6 +5,7 @@
 // Plain C++, tested on the PC.
 #include <ArduinoJson.h>
 
+#include "../i18n/Strings.h"
 #include "PersonalText.h"
 
 namespace personal {
@@ -27,21 +28,21 @@ struct BirthdayList {
 
 // Parses the array under `key` ("manual" or "feed"). Names trimmed and filtered with hasGlyph;
 // entries without a name are dropped. False for broken JSON, too many entries or an impossible
-// day (e.g. 31 April); 29 February is allowed.
+// day (e.g. 31 April); 29 February is allowed. The message in `lang` (as parseTasks).
 inline bool parseBirthdays(const char* json, size_t len, const char* key, BirthdayList& out, char* err,
                            size_t errCap, bool (*hasGlyph)(uint32_t) = nullptr, char* removed = nullptr,
-                           size_t removedCap = 0) {
+                           size_t removedCap = 0, i18n::Lang lang = i18n::Lang::En) {
   out.count = 0;
   if (err && errCap) err[0] = '\0';
   if (removed && removedCap) removed[0] = '\0';
   JsonDocument doc;
   if (deserializeJson(doc, json, len) || !doc[key].is<JsonArrayConst>()) {
-    if (err) std::snprintf(err, errCap, "The birthday list could not be read.");
+    if (err) std::snprintf(err, errCap, "%s", i18n::text(i18n::S::BdaysUnreadable, lang));
     return false;
   }
   JsonArrayConst arr = doc[key].as<JsonArrayConst>();
   if (arr.size() > static_cast<size_t>(MAX_BIRTHDAYS)) {
-    if (err) std::snprintf(err, errCap, "At most %d birthdays.", MAX_BIRTHDAYS);
+    if (err) std::snprintf(err, errCap, i18n::text(i18n::S::BdaysTooMany, lang), MAX_BIRTHDAYS);
     return false;
   }
   for (JsonObjectConst b : arr) {
@@ -59,11 +60,11 @@ inline bool parseBirthdays(const char* json, size_t len, const char* key, Birthd
     copyChars(e.name, sizeof(e.name), raw, BDAY_NAME_CHARS);
     int d = b["day"] | 0, m = b["month"] | 0, y = b["year"] | 0;
     if (m < 1 || m > 12 || d < 1 || d > daysInMonth(2000, m) || (y != 0 && (y < 1900 || y > 2199))) {
-      if (err) std::snprintf(err, errCap, "Birthday of \"%.32s\": the date is not possible.", e.name);
+      if (err) std::snprintf(err, errCap, i18n::text(i18n::S::BdayBadDate, lang), e.name);
       return false;
     }
     if (y != 0 && m == 2 && d == 29 && !isLeap(y)) {  // born on 29 February: a leap year
-      if (err) std::snprintf(err, errCap, "Birthday of \"%.32s\": the date is not possible.", e.name);
+      if (err) std::snprintf(err, errCap, i18n::text(i18n::S::BdayBadDate, lang), e.name);
       return false;
     }
     e.day = static_cast<uint8_t>(d);
@@ -140,11 +141,11 @@ inline int upcomingBirthdays(const BirthdayList& manual, const BirthdayList& fee
   return n;
 }
 
-// "Today", "Tomorrow", "in 12 d".
-inline void daysLabel(int days, char* out, size_t cap) {
-  if (days == 0) std::snprintf(out, cap, "Today");
-  else if (days == 1) std::snprintf(out, cap, "Tomorrow");
-  else std::snprintf(out, cap, "in %d d", days);
+// "Heute" / "Today", "Morgen" / "Tomorrow", "in 12 T." / "in 12 d".
+inline void daysLabel(int days, char* out, size_t cap, i18n::Lang lang) {
+  if (days == 0) std::snprintf(out, cap, "%s", i18n::text(i18n::S::BdayToday, lang));
+  else if (days == 1) std::snprintf(out, cap, "%s", i18n::text(i18n::S::BdayTomorrow, lang));
+  else std::snprintf(out, cap, i18n::text(i18n::S::BdayInDays, lang), days);
 }
 
 }  // namespace personal

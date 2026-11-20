@@ -11,19 +11,20 @@ using layouts::WidgetId;
 
 namespace {
 // Indexed by WidgetId. Metrics and refresh as in the original fixed layout.
+using i18n::S;
 const WidgetInfo WIDGETS[layouts::WIDGET_COUNT] = {
-    {WidgetId::StatusBar, layouts::WIDGET_KEYS[0], "Status bar", 128, "Battery", 0, 0, 60, ""},
-    {WidgetId::Clock, layouts::WIDGET_KEYS[1], "Clock", 1, "Clock", 10, 10, 1, ""},
-    {WidgetId::Weather, layouts::WIDGET_KEYS[2], "Weather", 8, "OpenMeteo", 0, 100, 360, "Weather: set a place in the app"},
-    {WidgetId::Agenda, layouts::WIDGET_KEYS[3], "Upcoming events", 2, "Cal Events", 22, 10, 60, "Agenda: add a calendar link in the app"},
-    {WidgetId::Month, layouts::WIDGET_KEYS[4], "Month calendar", 256, "Calendar", 28, 210, 60, ""},
-    {WidgetId::Stocks, layouts::WIDGET_KEYS[5], "Stocks", 4, "Stocks", 22, 10, 60, "Stocks: add symbols in the app"},
-    {WidgetId::Tracking, layouts::WIDGET_KEYS[6], "Package tracking", 16, "Tracking", 22, 0, 120, "Parcels: add the tracking key in the app"},
-    {WidgetId::Printer, layouts::WIDGET_KEYS[7], "Printer / MakerWorld", 64, "Bambu", 22, 70, 4, "Printer: set its address or a MakerWorld ID in the app"},
+    {WidgetId::StatusBar, layouts::WIDGET_KEYS[0], S::WStatusBar, 128, "Battery", 0, 0, 60, NO_HINT},
+    {WidgetId::Clock, layouts::WIDGET_KEYS[1], S::WClock, 1, "Clock", 10, 10, 1, NO_HINT},
+    {WidgetId::Weather, layouts::WIDGET_KEYS[2], S::WWeather, 8, "OpenMeteo", 0, 100, 360, S::HintWeather},
+    {WidgetId::Agenda, layouts::WIDGET_KEYS[3], S::WAgenda, 2, "Cal Events", 22, 10, 60, S::HintAgenda},
+    {WidgetId::Month, layouts::WIDGET_KEYS[4], S::WMonth, 256, "Calendar", 28, 210, 60, NO_HINT},
+    {WidgetId::Stocks, layouts::WIDGET_KEYS[5], S::WStocks, 4, "Stocks", 22, 10, 60, S::HintStocks},
+    {WidgetId::Tracking, layouts::WIDGET_KEYS[6], S::WTracking, 16, "Tracking", 22, 0, 120, S::HintTracking},
+    {WidgetId::Printer, layouts::WIDGET_KEYS[7], S::WPrinter, 64, "Bambu", 22, 70, 4, S::HintPrinter},
     // Personal widgets (stage 4): local data, drawn on full refreshes and when the date changes.
-    {WidgetId::Tasks, layouts::WIDGET_KEYS[8], "Tasks", 512, "Tasks", 22, 0, 1440, "Tasks: add tasks in the app"},
-    {WidgetId::Notes, layouts::WIDGET_KEYS[9], "Note", 1024, "Note", 22, 0, 1440, "Note: write a note in the app"},
-    {WidgetId::Birthdays, layouts::WIDGET_KEYS[10], "Birthdays", 2048, "Birthdays", 22, 0, 1440, "Birthdays: add birthdays in the app"},
+    {WidgetId::Tasks, layouts::WIDGET_KEYS[8], S::WTasks, 512, "Tasks", 22, 0, 1440, S::HintTasks},
+    {WidgetId::Notes, layouts::WIDGET_KEYS[9], S::WNote, 1024, "Note", 22, 0, 1440, S::HintNote},
+    {WidgetId::Birthdays, layouts::WIDGET_KEYS[10], S::WBirthdays, 2048, "Birthdays", 22, 0, 1440, S::HintBirthdays},
 };
 }  // namespace
 

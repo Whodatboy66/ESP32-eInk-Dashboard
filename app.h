@@ -1,6 +1,7 @@
 #pragma once
 #include "configure.h"
 #include "src/hardware/EpaperDriver.h"
+#include "src/i18n/Strings.h"
 #include <Arduino.h>
 #include <cstring>
 
@@ -13,7 +14,7 @@
 #define CFG_CAL_TITLE_MAX     128u
 #define CFG_TIMEZONE_MAX       65u
 #define CFG_WEATHER_LOC_MAX    65u   // "City, CC" or "lat,lon"
-#define CFG_STOCKS_MAX         81u   // comma separated symbols
+#define CFG_STOCKS_MAX        201u   // up to 5 "SYMBOL" or "SYMBOL:Label", comma separated
 #define CFG_ICS_URL_MAX       257u   // iCal feed URL
 #define CFG_MW_UID_MAX         24u   // MakerWorld user id (digits)
 #define CFG_PRINTER_NAME_MAX   24u   // printer widget title
@@ -49,6 +50,9 @@ extern uint8_t clock_interval;
 extern bool quiet_on;
 extern uint16_t quiet_from, quiet_to;
 extern uint16_t battery_mah;
+// Language of the screen and of the setup app's texts (NVS "lang": "de", the default, or "en").
+extern i18n::Lang ui_lang;
+inline const char* tr(i18n::S key) { return i18n::text(key, ui_lang); }
 
 #define ICS_MAX_FEEDS 3
 extern char ics_urls[ICS_MAX_FEEDS][CFG_ICS_URL_MAX];

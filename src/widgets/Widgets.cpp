@@ -3,9 +3,11 @@
 #include <string.h>
 #include "../../configure.h"
 #include "Widgets.h"
+#include "Personal.h"
 #include "../services/Bambu.h"
 #include "Registry.h"
 #include "Dashboard.h"
+#include "../i18n/Dates.h"
 #include <Preferences.h>
 
 // Arrays to store the data
@@ -33,9 +35,9 @@ static void drawUnavailableMessage(LayoutItem* item) {
     int centerY = item->PosY + item->Height / 2;
 
     drawSparseStringCentered(&epaperFont, centerX, centerY - 8,
-                             "Not available", GxEPD_BLACK);
+                             tr(i18n::S::Unavailable1), GxEPD_BLACK);
     drawSparseStringCentered(&epaperFont, centerX, centerY + 10,
-                             "at the moment", GxEPD_BLACK);
+                             tr(i18n::S::Unavailable2), GxEPD_BLACK);
 }
 
 // The dashboard layout: the configured template with the configured widgets (Registry.cpp).
@@ -134,13 +136,6 @@ static void drawPlaneIcon(int16_t x, int16_t y) {
   canvas().fillTriangle(x + 1, cy, x + 4, cy, x + 1, cy - 4, GxEPD_BLACK);          // tail
 }
 
-// "in 45m", "in 3h05m", "in 2d 4h".
-static void formatCountdown(time_t secs, char* buf, size_t n) {
-  if (secs < 3600)       snprintf(buf, n, "in %ldm", (long)(secs / 60));
-  else if (secs < 86400) snprintf(buf, n, "in %ldh%02ldm", (long)(secs / 3600), (long)((secs % 3600) / 60));
-  else                   snprintf(buf, n, "in %ldd %ldh", (long)(secs / 86400), (long)((secs % 86400) / 3600));
-}
-
 static void formatClock(time_t t, char* buf, size_t n) {
   struct tm lt;
   localtime_r(&t, &lt);
@@ -155,29 +150,31 @@ static void formatLiveFlight(char* buf, size_t n) {
   formatClock(f.arrActual ? f.arrActual : f.arrScheduled, arr, sizeof(arr));
   long delayMin = (f.depActual && f.depScheduled) ? (long)(f.depActual - f.depScheduled) / 60 : 0;
 
-  if (!strcmp(f.status, "Canceled"))          { snprintf(buf, n, "CANCELED"); return; }
-  if (!strcmp(f.status, "CanceledUncertain")) { snprintf(buf, n, "Possibly canceled"); return; }
-  if (!strcmp(f.status, "Diverted"))          { snprintf(buf, n, "Diverted"); return; }
-  if (!strcmp(f.status, "Arrived"))           { snprintf(buf, n, "Landed %s", arr); return; }
+  using i18n::S;
+  if (!strcmp(f.status, "Canceled"))          { snprintf(buf, n, "%s", tr(S::FlightCanceled)); return; }
+  if (!strcmp(f.status, "CanceledUncertain")) { snprintf(buf, n, "%s", tr(S::FlightMaybeCanceled)); return; }
+  if (!strcmp(f.status, "Diverted"))          { snprintf(buf, n, "%s", tr(S::FlightDiverted)); return; }
+  if (!strcmp(f.status, "Arrived"))           { snprintf(buf, n, tr(S::FlightLanded), arr); return; }
   if (!strcmp(f.status, "Departed") || !strcmp(f.status, "EnRoute") || !strcmp(f.status, "Approaching")) {
-    snprintf(buf, n, "In the air, lands %s", arr);
+    snprintf(buf, n, tr(S::FlightInAir), arr);
     return;
   }
 
-  const char* label = "Scheduled";
-  if (!strcmp(f.status, "Expected"))   label = "On time";
-  if (!strcmp(f.status, "CheckIn"))    label = "Check-in";
-  if (!strcmp(f.status, "Boarding"))   label = "Boarding";
-  if (!strcmp(f.status, "GateClosed")) label = "Gate closed";
-  if (!strcmp(f.status, "Delayed") || delayMin >= 5) label = "Delayed";
+  S label = S::FlightScheduled;
+  if (!strcmp(f.status, "Expected"))   label = S::FlightOnTime;
+  if (!strcmp(f.status, "CheckIn"))    label = S::FlightCheckIn;
+  if (!strcmp(f.status, "Boarding"))   label = S::FlightBoarding;
+  if (!strcmp(f.status, "GateClosed")) label = S::FlightGateClosed;
+  if (!strcmp(f.status, "Delayed") || delayMin >= 5) label = S::FlightDelayed;
 
-  int len = snprintf(buf, n, "%s", label);
+  int len = snprintf(buf, n, "%s", tr(label));
   if (delayMin >= 5 && len < (int)n) len += snprintf(buf + len, n - len, " +%ldm", delayMin);
-  if (f.depGate[0] && len < (int)n) len += snprintf(buf + len, n - len, ", gate %s", f.depGate);
+  if (f.depGate[0] && len < (int)n) len += snprintf(buf + len, n - len, tr(S::FlightGate), f.depGate);
   if (f.depTerminal[0] && len < (int)n) {
     bool numeric = true;
     for (const char* c = f.depTerminal; *c; c++) if (!isdigit((unsigned char)*c)) numeric = false;
-    snprintf(buf + len, n - len, numeric ? ", T%s" : ", Terminal %s", f.depTerminal);
+    if (numeric) snprintf(buf + len, n - len, ", T%s", f.depTerminal);
+    else snprintf(buf + len, n - len, tr(S::FlightTerminal), f.depTerminal);
   }
 }
 
@@ -196,7 +193,7 @@ void gCalWidget( LayoutItem* item )
     if (cal.next24hEvents[i].start == flight.start) flightListed = true;
   if (flight.start > now && !flightListed) {
     char countdown[24], line[CFG_CAL_TITLE_MAX + 40];
-    formatCountdown(flight.start - now, countdown, sizeof(countdown));
+    i18n::formatCountdown((long)(flight.start - now), ui_lang, countdown, sizeof(countdown));
     snprintf(line, sizeof(line), "%s  %s", flight.title, countdown);
     drawPlaneIcon(item->PosX, y);
     drawSparseString(&epaperFont, item->PosX + 24, y, line, GxEPD_BLACK);
@@ -216,8 +213,8 @@ void gCalWidget( LayoutItem* item )
       firstLine = false;
       lastDay = t.tm_mday;
 
-      char dayBuf[32];
-      strftime(dayBuf, sizeof(dayBuf), "%A %d, %B", &t);
+      char dayBuf[40];
+      i18n::formatDayHeader(t, ui_lang, dayBuf, sizeof(dayBuf));
 
       drawSparseString(&epaperFont, item->PosX, y, dayBuf, GxEPD_BLACK);
 
@@ -236,7 +233,7 @@ void gCalWidget( LayoutItem* item )
                       liveFlight.arrActual ? liveFlight.arrActual : liveFlight.arrScheduled,
                       timeRange, sizeof(timeRange));
     else if (ev.allDay)
-      snprintf(timeRange, sizeof(timeRange), "All day");
+      snprintf(timeRange, sizeof(timeRange), "%s", tr(i18n::S::AllDay));
     else
       formatTimeRange(ev.start, ev.end, timeRange, sizeof(timeRange));
     char line[CFG_CAL_TITLE_MAX + 64];
@@ -253,7 +250,7 @@ void gCalWidget( LayoutItem* item )
         departs = liveFlight.depActual ? liveFlight.depActual : liveFlight.depScheduled;
       if (departs > now && n > 0 && n < (int)sizeof(line)) {
         char countdown[24];
-        formatCountdown(departs - now, countdown, sizeof(countdown));
+        i18n::formatCountdown((long)(departs - now), ui_lang, countdown, sizeof(countdown));
         snprintf(line + n, sizeof(line) - n, "  %s", countdown);
       }
     }
@@ -302,17 +299,21 @@ void stockWidget( LayoutItem* item )
         // Draw text next to icon
         char buf[128];
 
-        snprintf(buf, sizeof(buf), "%-9s", s.name);
-        drawSparseString(&epaperFont, item->PosX + 30, y, buf, GxEPD_BLACK);
+        // The name (own label up to 12 characters, or the symbol), cut with "..." before the price
+        // column; the price column sits a bit right of the original 130 px to give the name room.
+        const int priceX = col(152);
+        drawFittedString(item->PosX + 30, y, priceX - 30 - 6, s.name, GxEPD_BLACK);
 
-        snprintf(buf, sizeof(buf), "%7.2f",s.price );
-        
-        drawSparseString(&epaperFont, item->PosX + col(130), y, buf, GxEPD_BLACK);
+        snprintf(buf, sizeof(buf), "%.2f", s.price);
+        i18n::localizeNumber(buf, ui_lang);
+        drawSparseString(&epaperFont, item->PosX + priceX, y, buf, GxEPD_BLACK);
 
         snprintf(buf, sizeof(buf), "%7.2f / ",s.dayHigh );
+        i18n::localizeNumber(buf, ui_lang);
         drawSparseString(&epaperFont, item->PosX + col(240), y, buf, GxEPD_BLACK);
 
         snprintf(buf, sizeof(buf), "%7.2f",s.dayLow );
+        i18n::localizeNumber(buf, ui_lang);
 
         drawSparseString(&epaperFont, item->PosX + col(330), y, buf, GxEPD_BLACK);
 
@@ -328,17 +329,18 @@ LayoutItem* getLayout(uint16_t id) {
 
 // ------------------ Weather widget ------------------
 static const char* trackingStatusLabel(int status) {
+    using i18n::S;
     switch (status) {
-        case -1: case 0: case 1: return "Checking";
-        case 2: return "No info yet";
-        case 3: return "In transit";
-        case 4: return "At pickup point";
-        case 5: return "Delivered";
-        case 6: return "Not delivered";
-        case 7: return "Delivery error";
-        case 8: return "Preparing";
-        case 9: return "Route ended";
-        default: return "Unknown";
+        case -1: case 0: case 1: return tr(S::TrackChecking);
+        case 2: return tr(S::TrackNoInfo);
+        case 3: return tr(S::TrackInTransit);
+        case 4: return tr(S::TrackPickup);
+        case 5: return tr(S::TrackDelivered);
+        case 6: return tr(S::TrackNotDelivered);
+        case 7: return tr(S::TrackError);
+        case 8: return tr(S::TrackPreparing);
+        case 9: return tr(S::TrackEnded);
+        default: return tr(S::TrackUnknown);
     }
 }
 
@@ -347,7 +349,7 @@ void trackingWidget(LayoutItem* item) {
     if (!item) return;
     int y = item->PosY + 18;
     if (trackingCount == 0) {
-        drawSparseString(&epaperFont, item->PosX, y, "No packages being tracked", GxEPD_BLACK);
+        drawSparseString(&epaperFont, item->PosX, y, tr(i18n::S::TrackNone), GxEPD_BLACK);
         return;
     }
 
@@ -369,7 +371,9 @@ void trackingWidget(LayoutItem* item) {
         if (t.status != 5 && t.estDelivery > 0 && n > 0 && n < (int)sizeof(line)) {
             struct tm et;
             localtime_r(&t.estDelivery, &et);
-            strftime(line + n, sizeof(line) - n, "  ETA %b %d", &et);
+            char date[16];
+            i18n::formatShortDate(et, ui_lang, date, sizeof(date));
+            snprintf(line + n, sizeof(line) - n, "  %s %s", tr(i18n::S::TrackEta), date);
         }
         drawSparseString(&epaperFont, item->PosX + 28, y, line, GxEPD_BLACK);
         y += item->RowHeight;
@@ -400,7 +404,7 @@ void weatherWidget(LayoutItem* item) {
     for (int i = 0; i < days; i++) {
         WeatherDay &wd = weather.day[i];
 
-        // Weekday above the icon ("Fri", the first day is today)
+        // Weekday above the icon ("Fr" / "Fri", the first day is today)
         if (dayLabels && nowT > 1700000000) {
             struct tm d;
             localtime_r(&nowT, &d);
@@ -408,9 +412,8 @@ void weatherWidget(LayoutItem* item) {
             d.tm_hour = 12;
             d.tm_isdst = -1;
             mktime(&d);
-            char day[8];
-            strftime(day, sizeof(day), "%a", &d);
-            drawSparseStringCentered(&epaperFont, x + 40 + i*item->ColWidth, y - 73, day, GxEPD_BLACK);
+            drawSparseStringCentered(&epaperFont, x + 40 + i*item->ColWidth, y - 73,
+                                     i18n::weekdayShort(d.tm_wday, ui_lang), GxEPD_BLACK);
         }
 
         // Draw icon
@@ -459,29 +462,29 @@ void makerWorldWidget(LayoutItem* item) {
 
     char buf[64];
 
-    drawSparseString(&epaperFont, x, y, "Likes :", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x, y, tr(i18n::S::MwLikes), GxEPD_BLACK);
 
     snprintf(buf, sizeof(buf), "%7d", makerworld.likes);
     drawSparseString(&epaperFont, x+100, y, buf, GxEPD_BLACK);
     // y += item->RowHeight;
 
-    drawSparseString(&epaperFont, x+200, y, "Downloads :", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x+200, y, tr(i18n::S::MwDownloads), GxEPD_BLACK);
     snprintf(buf, sizeof(buf), "%7d", makerworld.downloads);
     drawSparseString(&epaperFont, x+300, y, buf, GxEPD_BLACK);
     y += item->RowHeight;
 
-    drawSparseString(&epaperFont, x, y, "Prints :", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x, y, tr(i18n::S::MwPrints), GxEPD_BLACK);
     snprintf(buf, sizeof(buf), "%7d", makerworld.prints);
     drawSparseString(&epaperFont, x+100, y, buf, GxEPD_BLACK);
     // y += item->RowHeight;
 
-    drawSparseString(&epaperFont, x+200, y, "Collections :", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x+200, y, tr(i18n::S::MwCollections), GxEPD_BLACK);
 
     snprintf(buf, sizeof(buf), "%7d", makerworld.collections);
     drawSparseString(&epaperFont, x+300, y, buf, GxEPD_BLACK);
     y += item->RowHeight;
 
-    drawSparseString(&epaperFont, x, y, "Boosts :", GxEPD_BLACK);
+    drawSparseString(&epaperFont, x, y, tr(i18n::S::MwBoosts), GxEPD_BLACK);
     snprintf(buf, sizeof(buf), "%7d", makerworld.boosts);
     drawSparseString(&epaperFont, x+100, y, buf, GxEPD_BLACK);
 }

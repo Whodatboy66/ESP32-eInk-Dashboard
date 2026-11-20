@@ -260,17 +260,19 @@ InstallResult install(const Manifest& m, ProgressFn progress) {
   return InstallResult::Ok;
 }
 
-const char* describe(InstallResult r) {
+const char* describe(InstallResult r, i18n::Lang lang) {
+  using i18n::S;
+  S key = S::InstUnknown;
   switch (r) {
-    case InstallResult::Ok:             return "installed";
-    case InstallResult::BadUrl:         return "bad file name in the release";
-    case InstallResult::DownloadFailed: return "download failed";
-    case InstallResult::WrongSize:      return "file size does not match";
-    case InstallResult::NoSpace:        return "does not fit - or no update slot: flash once over USB";
-    case InstallResult::HashMismatch:   return "file damaged - checksum wrong";
-    case InstallResult::WriteFailed:    return "writing failed";
+    case InstallResult::Ok:             key = S::InstOk; break;
+    case InstallResult::BadUrl:         key = S::InstBadUrl; break;
+    case InstallResult::DownloadFailed: key = S::InstDownload; break;
+    case InstallResult::WrongSize:      key = S::InstWrongSize; break;
+    case InstallResult::NoSpace:        key = S::InstNoSpace; break;
+    case InstallResult::HashMismatch:   key = S::InstHash; break;
+    case InstallResult::WriteFailed:    key = S::InstWrite; break;
   }
-  return "unknown error";
+  return i18n::text(key, lang);
 }
 
 }  // namespace ota

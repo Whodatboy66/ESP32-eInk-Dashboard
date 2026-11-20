@@ -1,7 +1,7 @@
 #pragma once
 // E-paper screens of the update flow (docs/IMPLEMENTATION_PLAN.md stage 1, "Update screens").
 // The first screen of a session is a full refresh, the following steps are partial refreshes.
-// Texts avoid ( ) ! ' because the e-paper font has no such glyphs.
+// Texts in the screen language (src/i18n/Strings.h).
 
 #include <Arduino.h>
 
@@ -13,12 +13,12 @@ namespace ota {
 struct DeviceInfo {
   const char* version;     // FW_VERSION
   const char* variant;     // FW_VARIANT
-  const char* lastUpdate;  // "2026-11-16" or "never"
+  const char* lastUpdate;  // "2026-11-16" or "nie" / "never"
   int batteryPercent;      // -1: no battery sensor
   bool usbPowered;
   const char* wifi;        // network name
   bool autoInstall;
-  const char* channel;     // "stable" / "beta"
+  const char* channel;     // "stabil" / "stable", "Beta" / "beta"
 };
 
 // Double tap / setup page: device info and "Checking for updates..." (full refresh).

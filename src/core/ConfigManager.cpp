@@ -43,6 +43,7 @@ uint8_t clock_interval = 1;
 bool quiet_on = true;
 uint16_t quiet_from = power::DEFAULT_QUIET_FROM, quiet_to = power::DEFAULT_QUIET_TO;
 uint16_t battery_mah = power::DEFAULT_BATTERY_MAH;
+i18n::Lang ui_lang = i18n::Lang::De;
 
 const char* const ICS_PREF_KEYS[ICS_MAX_FEEDS] = { "ics_url", "ics_url2", "ics_url3" };
 
@@ -114,6 +115,10 @@ void configLoad() {
   quiet_from = preferences.getUShort("quiet_from", power::DEFAULT_QUIET_FROM) % 1440;
   quiet_to = preferences.getUShort("quiet_to", power::DEFAULT_QUIET_TO) % 1440;
   battery_mah = preferences.getUShort("bat_mah", power::DEFAULT_BATTERY_MAH);
+  // German unless "en" was chosen: also for devices from before build 78 (no key).
+  char lang[4] = "";
+  if (preferences.isKey("lang")) preferences.getString("lang", lang, sizeof(lang));
+  ui_lang = i18n::parseLang(lang);
   // "custom" = the boxes of the setup app's editor (an unusable string falls back to Classic later).
   if (layouts::templateIndex(layout_template) < 0 && strcmp(layout_template, "custom") != 0)
     snprintf(layout_template, sizeof(layout_template), "classic");
@@ -193,6 +198,7 @@ void configSave() {
   preferences.putUShort("quiet_from", quiet_from);
   preferences.putUShort("quiet_to", quiet_to);
   preferences.putUShort("bat_mah", battery_mah);
+  preferences.putString("lang", i18n::langCode(ui_lang));
 
   preferences.putInt("cfg_schema", FW_CONFIG_SCHEMA);
   preferences.end();

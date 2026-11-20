@@ -126,12 +126,14 @@ static void test_sha256_hex() {
 
 static void test_sanitize_note() {
   char out[72];
-  sanitizeNote("Fixes (calendar) & weather!", out, sizeof(out));
-  CHECK_STR(out, "Fixes calendar + weather.");
+  sanitizeNote("Fixes (calendar) & weather!", out, sizeof(out));  // the font has these since build 70
+  CHECK_STR(out, "Fixes (calendar) & weather!");
+  sanitizeNote("a {b} `c` $d <e> f|g", out, sizeof(out));         // still missing: dropped / spaces
+  CHECK_STR(out, "a b c d e f g");
   sanitizeNote("  leading spaces ", out, sizeof(out));
   CHECK_STR(out, "leading spaces");
   sanitizeNote("It's \"quoted\"; ok", out, sizeof(out));
-  CHECK_STR(out, "Its quoted, ok");
+  CHECK_STR(out, "It's \"quoted\"; ok");
   sanitizeNote("Line\nbreak\ttab", out, sizeof(out));
   CHECK_STR(out, "Line break tab");
 

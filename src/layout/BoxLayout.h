@@ -37,22 +37,8 @@ inline int widgetFromKey(const char* key, size_t len) {
   return -1;
 }
 
+// Their texts for people: src/web/Api.cpp (in the screen language).
 enum class BoxError : uint8_t { None, Empty, TooMany, Outside, Overlap, Gap, Duplicate, TooSmall, UnknownWidget };
-
-inline const char* boxErrorText(BoxError e) {
-  switch (e) {
-    case BoxError::None: return "";
-    case BoxError::Empty: return "The layout has no boxes.";
-    case BoxError::TooMany: return "At most 12 boxes.";
-    case BoxError::Outside: return "A box reaches outside the screen.";
-    case BoxError::Overlap: return "Two boxes overlap.";
-    case BoxError::Gap: return "Part of the screen is not covered by a box.";
-    case BoxError::Duplicate: return "A widget can be shown only once.";
-    case BoxError::TooSmall: return "A widget is too large for its box.";
-    case BoxError::UnknownWidget: return "Unknown widget.";
-  }
-  return "Invalid layout.";
-}
 
 // Inside the grid, no overlaps, all 12 cells covered, each widget once and within its minimum size.
 inline BoxError validateBoxes(const BoxLayout& l) {

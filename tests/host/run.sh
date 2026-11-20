@@ -19,7 +19,7 @@ if [[ -z "${ARDUINOJSON_INCLUDE:-}" ]]; then
     if [[ -f "$dir/ArduinoJson.h" ]]; then ARDUINOJSON_INCLUDE="$dir"; break; fi
   done
 fi
-INCLUDES=(-I.)
+INCLUDES=(-I. -Itests/host/shim)  # shim: the font headers' glyph type (test_i18n.cpp)
 if [[ -n "${ARDUINOJSON_INCLUDE:-}" ]]; then
   INCLUDES+=(-I"$ARDUINOJSON_INCLUDE")
 else

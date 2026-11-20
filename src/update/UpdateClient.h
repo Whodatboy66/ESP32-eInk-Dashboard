@@ -6,6 +6,7 @@
 
 #include <Arduino.h>
 
+#include "../i18n/Strings.h"
 #include "Manifest.h"
 
 namespace ota {
@@ -44,6 +45,6 @@ enum class InstallResult : uint8_t {
 
 InstallResult install(const Manifest& m, ProgressFn progress);
 
-const char* describe(InstallResult r);
+const char* describe(InstallResult r, i18n::Lang lang);
 
 }  // namespace ota

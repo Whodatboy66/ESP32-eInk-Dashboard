@@ -3,6 +3,7 @@
 // wrapping it into lines for the widget. Plain C++, tested on the PC.
 #include <ArduinoJson.h>
 
+#include "../i18n/Strings.h"
 #include "PersonalText.h"
 
 namespace personal {
@@ -10,19 +11,21 @@ namespace personal {
 constexpr size_t NOTE_CHARS = 400;
 constexpr size_t NOTE_BYTES = 2 * NOTE_CHARS + 1;  // umlauts take 2 bytes (cut by bytes too)
 
-// Parses {"note": "..."}: line breaks kept, cut at NOTE_CHARS, filtered with hasGlyph.
+// Parses {"note": "..."}: line breaks kept, cut at NOTE_CHARS, filtered with hasGlyph. A message in
+// `lang` (as parseTasks).
 inline bool parseNote(const char* json, size_t len, char* note, size_t cap, char* err, size_t errCap,
-                      bool (*hasGlyph)(uint32_t) = nullptr, char* removed = nullptr, size_t removedCap = 0) {
+                      bool (*hasGlyph)(uint32_t) = nullptr, char* removed = nullptr, size_t removedCap = 0,
+                      i18n::Lang lang = i18n::Lang::En) {
   if (err && errCap) err[0] = '\0';
   if (cap) note[0] = '\0';
   JsonDocument doc;
   if (deserializeJson(doc, json, len) || !doc["note"].is<const char*>()) {
-    if (err) std::snprintf(err, errCap, "The note could not be read.");
+    if (err) std::snprintf(err, errCap, "%s", i18n::text(i18n::S::NoteUnreadable, lang));
     return false;
   }
   const char* text = doc["note"].as<const char*>();
   if (utf8Count(text) > NOTE_CHARS) {
-    if (err) std::snprintf(err, errCap, "The note is too long: at most %u characters.", (unsigned)NOTE_CHARS);
+    if (err) std::snprintf(err, errCap, i18n::text(i18n::S::NoteTooLong, lang), (unsigned)NOTE_CHARS);
     return false;
   }
   copyChars(note, cap, text, NOTE_CHARS);

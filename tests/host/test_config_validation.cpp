@@ -47,6 +47,26 @@ static void test_stock_symbols() {
   // Characters a symbol can't have are refused.
   CHECK_STR(stocks("AAPL;NVDA"), "<invalid>");
   CHECK_STR(stocks("AAPL,<script>"), "<invalid>");
+  // Own labels (build 78): "SYMBOL:Label", spaces inside the label, at most 12 characters.
+  CHECK_STR(stocks("EUNL.DE:MSCI World, QYLE.DE : Nasdaq CC ,PPFB.DE:Gold"),
+            "EUNL.DE:MSCI World,QYLE.DE:Nasdaq CC,PPFB.DE:Gold");
+  CHECK_STR(stocks("AAPL MSFT,SAP.DE:SAP"), "AAPL,MSFT,SAP.DE:SAP");
+  CHECK_STR(stocks("PPFB.DE:Gold ä"), "PPFB.DE:Gold ä");          // umlauts count as one character
+  CHECK_STR(stocks("PPFB.DE:Öäüßöäüßöäüß"), "PPFB.DE:Öäüßöäüßöäüß");  // 12 characters, 24 bytes
+  CHECK_STR(stocks("PPFB.DE:Thirteen chars"), "<invalid>");
+  CHECK_STR(stocks("PPFB.DE:"), "<invalid>");
+  CHECK_STR(stocks(":Gold"), "<invalid>");
+  CHECK_STR(stocks("PP FB:Gold"), "<invalid>");                   // no space inside a symbol
+  CHECK_STR(stocks("A:1,B:2,C:3,D:4,E:5,F:6"), "A:1,B:2,C:3,D:4,E:5");  // more than 5: ignored
+  StockEntry e[5];
+  int n = parseStockEntries("EUNL.DE:MSCI World,^IXIC,PPFB.DE:Gold", e, 5);
+  CHECK_EQ(n, 3);
+  CHECK_STR(e[0].symbol, "EUNL.DE");
+  CHECK_STR(e[0].label, "MSCI World");
+  CHECK_STR(e[1].symbol, "^IXIC");
+  CHECK_STR(e[1].label, "IXIC");
+  CHECK_STR(e[2].label, "Gold");
+  CHECK_EQ(parseStockEntries("", e, 5), 0);
 }
 
 static void test_mqtt_port() {

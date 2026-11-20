@@ -1,0 +1,5 @@
+# "What's new" of the current build, shown on the devices' update screen. A push to main with a new
+# FW_BUILD publishes it to beta with the line that starts with that build number:
+#   <build>: line one | line two | line three        (up to 3 lines, max. 70 characters each)
+# Only the line of the current FW_BUILD is used; older lines may stay as history.
+78: Deutsch und Englisch (Deutsch voreingestellt) | Eigene Namen für Aktien, z. B. EUNL.DE:MSCI World | Betas kommen nach jedem neuen Build automatisch

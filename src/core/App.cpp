@@ -136,11 +136,7 @@ static void drawCriticalScreen(float volts) {
   display.firstPage();
   do {
     canvas().fillScreen(GxEPD_WHITE);
-    drawSparseStringCentered(&epaperFont, 400, 200, "Battery empty: please charge", GxEPD_BLACK);
-    char line[48];
-    snprintf(line, sizeof(line), "Battery: %.2f V", volts);
-    drawSparseStringCentered(&epaperFont, 400, 240, line, GxEPD_BLACK);
-    drawSparseStringCentered(&epaperFont, 400, 290, "The dashboard comes back by itself once it charges.", GxEPD_BLACK);
+    drawChargeScreen(volts);
   } while (display.nextPage());
 }
 
@@ -335,7 +331,7 @@ void appSetup() {
   {
     power::Plan shown = powerPlan;
     if (powerPlan.night) shown.mode = power::Mode::Night;  // also after a tap at night
-    power::note(shown, clock_interval, quiet_to, powerNote, sizeof(powerNote));
+    power::note(shown, clock_interval, quiet_to, powerNote, sizeof(powerNote), ui_lang);
   }
   if (textHash(powerNote) != powerNoteShown) forceUpdateStatusBar = true;
   // The counter advances in steps of the wake interval: keep it on a multiple of it (the step
@@ -362,7 +358,7 @@ void appSetup() {
   if (powerPlan.mode == power::Mode::Night) {
     bool drew = false;
     if (!nightShown) {  // first wake of the night: the note in the status bar, then one long sleep
-      DBGF("[Power] %s", powerNote);
+      DBGF("[Power] night until %02d:%02d", quiet_to / 60, quiet_to % 60);
       LayoutItem* bar = getLayout(128);
       if (bar) {
         initDisplay(false);

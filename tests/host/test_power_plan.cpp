@@ -115,20 +115,27 @@ static void test_hm_and_notes() {
   CHECK_STR(hm, "06:05");
 
   char n[48];
+  const i18n::Lang EN = i18n::Lang::En, DE = i18n::Lang::De;
   Plan p;
   p.mode = Mode::Night;
-  note(p, 1, 360, n, sizeof(n));
+  note(p, 1, 360, n, sizeof(n), EN);
   CHECK_STR(n, "Night until 06:00");
+  note(p, 1, 360, n, sizeof(n), DE);
+  CHECK_STR(n, "Nacht bis 06:00");
   p = Plan();
   p.mode = Mode::Saver;
   p.saverOn = true;
   p.stepMin = 15;
-  note(p, 1, 360, n, sizeof(n));
+  note(p, 1, 360, n, sizeof(n), EN);
   CHECK_STR(n, "Battery saver: every 15 min");
+  note(p, 1, 360, n, sizeof(n), DE);
+  CHECK_STR(n, "Akku-Sparen: alle 15 Min.");
   p = Plan();
-  note(p, 5, 360, n, sizeof(n));
+  note(p, 5, 360, n, sizeof(n), EN);
   CHECK_STR(n, "Clock every 5 min");
-  note(p, 1, 360, n, sizeof(n));
+  note(p, 5, 360, n, sizeof(n), DE);
+  CHECK_STR(n, "Uhr alle 5 Min.");
+  note(p, 1, 360, n, sizeof(n), DE);
   CHECK_STR(n, "");
 }
 

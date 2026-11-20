@@ -23,15 +23,17 @@
 
 #include <HTTPClient.h>
 
+using i18n::Lang;
+using i18n::S;
+
 // File-internal functions, in the order they are defined below.
 static bool otaBatteryOk();
-static void otaSaveResult(const char* fmt, ...);
+static void otaText(Lang lang, S key, char* out, size_t cap, ...);
 static void otaSetAvailable(const ota::Manifest* m);
 static void otaProgress(ota::InstallStage stage, int quarter);
 static void otaInstallAndRestart(const ota::Manifest& m);
-static void otaShowResult(const char* title, const char* detail);
 static bool waitForConfirmTap(uint32_t timeoutMs);
-static void describeFetchFailure(const ota::FetchOutcome& f, char* out, size_t cap);
+static void describeFetchFailure(const ota::FetchOutcome& f, Lang lang, char* out, size_t cap);
 static void otaMarkValid(const char* why);
 
 
@@ -88,7 +90,7 @@ struct LocalTimezone {
 
 void formatDate(uint32_t t, char* out, size_t cap) {
   if (t < 1700000000UL) {
-    snprintf(out, cap, "never");
+    snprintf(out, cap, "%s", tr(S::UpdNever));
     return;
   }
   LocalTimezone tz;
@@ -98,18 +100,43 @@ void formatDate(uint32_t t, char* out, size_t cap) {
   strftime(out, cap, "%Y-%m-%d", &tmv);
 }
 
-// Last result, shown on the setup page.
-static void otaSaveResult(const char* fmt, ...) {
-  char text[96];
+// A text of the table, printf-formatted, in a language.
+static void otaText(Lang lang, S key, char* out, size_t cap, ...) {
   va_list args;
-  va_start(args, fmt);
-  vsnprintf(text, sizeof(text), fmt, args);
+  va_start(args, cap);
+  vsnprintf(out, cap, i18n::text(key, lang), args);
   va_end(args);
+}
+
+// Results go to the setup app ("ota_result") and the screen in the screen language, and to the log
+// in English: compose(lang, out, cap) writes the text in a language and is called for both.
+constexpr size_t OTA_TEXT_LEN = 112;
+
+template <typename Compose>
+static void otaSaveResult(Compose compose) {
+  char text[2 * OTA_TEXT_LEN + 4];  // a title, " - " and a detail
+  compose(Lang::En, text, sizeof(text));
   logPrintf("[OTA] %s\n", text);
+  compose(ui_lang, text, sizeof(text));
   preferences.begin("config", false);
   preferences.putString("ota_result", text);
   preferences.putUInt("ota_rtime", (uint32_t)time(nullptr));
   preferences.end();
+}
+
+// A result screen: compose(lang, title, detail) writes both (OTA_TEXT_LEN each, detail may stay "").
+template <typename Compose>
+static void otaShowResult(Compose compose) {
+  char title[OTA_TEXT_LEN], detail[OTA_TEXT_LEN];
+  otaSaveResult([&](Lang lang, char* out, size_t cap) {
+    title[0] = detail[0] = '\0';
+    compose(lang, title, detail);
+    snprintf(out, cap, "%s%s%s", title, detail[0] ? " - " : "", detail);
+  });
+  title[0] = detail[0] = '\0';
+  compose(ui_lang, title, detail);
+  ota::showMessage(title, detail);
+  delay(OTA_RESULT_SCREEN_MS);
 }
 
 // "Update available" mark in the status bar (nullptr clears it).
@@ -134,7 +161,10 @@ static void otaProgress(ota::InstallStage stage, int quarter) {
 static void otaInstallAndRestart(const ota::Manifest& m) {
   snprintf(otaSessionVersion, sizeof(otaSessionVersion), "%s", m.version);
   if (otaPendingVerify) {  // never overwrite the fallback slot while this image is unconfirmed
-    otaShowResult("Update postponed", "This version is still starting up: try again in a minute");
+    otaShowResult([](Lang l, char* t, char* d) {
+      otaText(l, S::OtaPostponed, t, OTA_TEXT_LEN);
+      otaText(l, S::OtaStillStarting, d, OTA_TEXT_LEN);
+    });
     return;
   }
 
@@ -148,21 +178,15 @@ static void otaInstallAndRestart(const ota::Manifest& m) {
     for (int i = 0; i < ota::MAX_NOTES; i++)
       preferences.putString(OTA_NOTE_KEYS[i], i < m.noteCount ? m.notes[i] : "");
     preferences.end();
-    otaSaveResult("Installed %s, restarting", m.version);
+    otaSaveResult([&](Lang l, char* out, size_t cap) { otaText(l, S::OtaInstalledRestarting, out, cap, m.version); });
     ota::showRestarting(m.version);
     logFlush(true);
     delay(300);
     ESP.restart();
   }
 
-  otaSaveResult("Update to %s failed: %s", m.version, ota::describe(r));
-  ota::showMessage("Update failed: previous version kept", ota::describe(r));
-  delay(OTA_RESULT_SCREEN_MS);
-}
-
-static void otaShowResult(const char* title, const char* detail) {
-  otaSaveResult("%s%s%s", title, detail[0] ? " - " : "", detail);
-  ota::showMessage(title, detail);
+  otaSaveResult([&](Lang l, char* out, size_t cap) { otaText(l, S::OtaFailedTo, out, cap, m.version, ota::describe(r, l)); });
+  ota::showMessage(tr(S::OtaFailedKept), ota::describe(r, ui_lang));
   delay(OTA_RESULT_SCREEN_MS);
 }
 
@@ -182,15 +206,17 @@ static bool waitForConfirmTap(uint32_t timeoutMs) {
   return false;
 }
 
-static void describeFetchFailure(const ota::FetchOutcome& f, char* out, size_t cap) {
+static void describeFetchFailure(const ota::FetchOutcome& f, Lang lang, char* out, size_t cap) {
   switch (f.result) {
-    case ota::FetchResult::NoRelease:   snprintf(out, cap, "No %s release on GitHub yet", ota::channelName(otaBeta)); break;
-    case ota::FetchResult::BadSignature: snprintf(out, cap, "Release signature not valid: not installed"); break;
-    case ota::FetchResult::BadManifest: snprintf(out, cap, "Release information not readable, error %d", (int)f.manifestError); break;
+    case ota::FetchResult::NoRelease:
+      otaText(lang, S::OtaNoRelease, out, cap, i18n::text(otaBeta ? S::UpdBeta : S::UpdStable, lang));
+      break;
+    case ota::FetchResult::BadSignature: otaText(lang, S::OtaBadSignature, out, cap); break;
+    case ota::FetchResult::BadManifest: otaText(lang, S::OtaBadManifest, out, cap, (int)f.manifestError); break;
     default:
-      if (f.httpCode == HTTPC_ERROR_TOO_LESS_RAM) snprintf(out, cap, "Not enough memory: try again later");
-      else if (f.httpCode < 0) snprintf(out, cap, "No connection to GitHub");
-      else snprintf(out, cap, "GitHub answered %d", f.httpCode);
+      if (f.httpCode == HTTPC_ERROR_TOO_LESS_RAM) otaText(lang, S::OtaNoMemory, out, cap);
+      else if (f.httpCode < 0) otaText(lang, S::OtaNoGithub, out, cap);
+      else otaText(lang, S::OtaGithubAnswered, out, cap, f.httpCode);
       break;
   }
 }
@@ -208,54 +234,63 @@ void runUpdateSession(OtaTrigger trigger) {
   char lastUpdateText[16];
   formatDate(lastUpdate, lastUpdateText, sizeof(lastUpdateText));
   ota::DeviceInfo info{FW_VERSION, FW_VARIANT, lastUpdateText, batteryPercentNow(), usbPowered(),
-                       wifi_ssid, otaAutoInstall, ota::channelName(otaBeta)};
+                       wifi_ssid, otaAutoInstall, tr(otaBeta ? S::UpdBeta : S::UpdStable)};
   ota::showInfo(info);
 
   if (!wifi_ssid[0] || !startWiFiReliable(wifi_ssid, wifi_pass)) {
-    otaShowResult("No Wi-Fi: try again later", wifi_ssid[0] ? "" : "Set up Wi-Fi on the setup page first");
+    otaShowResult([](Lang l, char* t, char* d) {
+      otaText(l, S::OtaNoWifi, t, OTA_TEXT_LEN);
+      if (!wifi_ssid[0]) otaText(l, S::OtaSetUpWifi, d, OTA_TEXT_LEN);
+    });
   } else {
     otaWifiOk = true;
     wifiFailures = 0;
     setProblem(PROBLEM_WIFI, false);
     ota::Manifest m;
     ota::FetchOutcome f = ota::fetchManifest(otaBeta, m);
-    char detail[80];
     if (f.result != ota::FetchResult::Ok) {
-      describeFetchFailure(f, detail, sizeof(detail));
-      otaShowResult("Update check failed: try again later", detail);
+      otaShowResult([&](Lang l, char* t, char* d) {
+        otaText(l, S::OtaCheckFailed, t, OTA_TEXT_LEN);
+        describeFetchFailure(f, l, d, OTA_TEXT_LEN);
+      });
     } else {
       switch (ota::availabilityFor(m, OTA_DEVICE)) {
-        case ota::Availability::UpToDate: {
+        case ota::Availability::UpToDate:
           otaSetAvailable(nullptr);
-          char title[40];
-          snprintf(title, sizeof(title), "Up to date: %s", FW_VERSION);
-          otaShowResult(title, "");
+          otaShowResult([](Lang l, char* t, char*) { otaText(l, S::OtaUpToDate, t, OTA_TEXT_LEN, FW_VERSION); });
           break;
-        }
         case ota::Availability::NotForThisBoard:
-          snprintf(detail, sizeof(detail), "Release %s has no file for %s", m.version, FW_VARIANT);
-          otaShowResult("No update for this device", detail);
+          otaShowResult([&](Lang l, char* t, char* d) {
+            otaText(l, S::OtaNoUpdate, t, OTA_TEXT_LEN);
+            otaText(l, S::OtaNoFile, d, OTA_TEXT_LEN, m.version, FW_VARIANT);
+          });
           break;
         case ota::Availability::WrongDisplay:
-          snprintf(detail, sizeof(detail), "Release %s is built for display %s, this one is %s", m.version,
-                   m.fileDisplay, FW_DISPLAY);
-          otaShowResult("No update for this device", detail);
+          otaShowResult([&](Lang l, char* t, char* d) {
+            otaText(l, S::OtaNoUpdate, t, OTA_TEXT_LEN);
+            otaText(l, S::OtaWrongDisplay, d, OTA_TEXT_LEN, m.version, m.fileDisplay, FW_DISPLAY);
+          });
           break;
         case ota::Availability::IncompatibleSettings:
-          snprintf(detail, sizeof(detail), "Release %s can't read this device's settings", m.version);
-          otaShowResult("No update for this device", detail);
+          otaShowResult([&](Lang l, char* t, char* d) {
+            otaText(l, S::OtaNoUpdate, t, OTA_TEXT_LEN);
+            otaText(l, S::OtaBadSettings, d, OTA_TEXT_LEN, m.version);
+          });
           break;
         case ota::Availability::NeedsNewerFirmware:
-          snprintf(detail, sizeof(detail), "Release %s needs build %u or newer: install it over USB",
-                   m.version, (unsigned)m.minBuild);
-          otaShowResult("Update needs a USB install", detail);
+          otaShowResult([&](Lang l, char* t, char* d) {
+            otaText(l, S::OtaNeedsUsb, t, OTA_TEXT_LEN);
+            otaText(l, S::OtaNeedsNewer, d, OTA_TEXT_LEN, m.version, (unsigned)m.minBuild);
+          });
           break;
         case ota::Availability::Newer:
           if (!otaBatteryOk()) {
             otaSetAvailable(&m);
-            snprintf(detail, sizeof(detail), "Battery %d %% - an update needs %d %% or USB power",
-                     batteryPercentNow(), OTA_BATTERY_MIN_PCT);
-            otaShowResult("Battery too low for an update: please charge", detail);
+            const int pct = batteryPercentNow();
+            otaShowResult([pct](Lang l, char* t, char* d) {
+              otaText(l, S::OtaBatteryLow, t, OTA_TEXT_LEN);
+              otaText(l, S::OtaBatteryDetail, d, OTA_TEXT_LEN, pct, OTA_BATTERY_MIN_PCT);
+            });
           } else if (trigger == OtaTrigger::DoubleTap) {
             ota::showAvailable(m, FW_VERSION, true, OTA_CONFIRM_MS);
             if (waitForConfirmTap(OTA_CONFIRM_MS)) {
@@ -263,7 +298,7 @@ void runUpdateSession(OtaTrigger trigger) {
               otaInstallAndRestart(m);  // returns only after a failure
             } else {
               otaSetAvailable(&m);  // no tap: back to the dashboard, the mark stays
-              otaSaveResult("%s available, not installed", m.version);
+              otaSaveResult([&](Lang l, char* out, size_t cap) { otaText(l, S::OtaNotInstalled, out, cap, m.version); });
             }
           } else {
             ota::showAvailable(m, FW_VERSION, false, 0);
@@ -301,9 +336,11 @@ bool runNightCheck(int todayKey) {
   ota::Manifest m;
   ota::FetchOutcome f = ota::fetchManifest(otaBeta, m);
   if (f.result != ota::FetchResult::Ok) {
-    char detail[80];
-    describeFetchFailure(f, detail, sizeof(detail));
-    otaSaveResult("Night check failed: %s", detail);
+    otaSaveResult([&](Lang l, char* out, size_t cap) {
+      char detail[OTA_TEXT_LEN];
+      describeFetchFailure(f, l, detail, sizeof(detail));
+      otaText(l, S::OtaNightFailed, out, cap, detail);
+    });
     return false;
   }
   ota::Availability a = ota::availabilityFor(m, OTA_DEVICE);
@@ -311,16 +348,19 @@ bool runNightCheck(int todayKey) {
   switch (ota::nightAction(a, otaAutoInstall, otaBatteryOk(), failed)) {
     case ota::NightAction::Nothing:
       if (a == ota::Availability::UpToDate) otaSetAvailable(nullptr);
-      otaSaveResult("Night check: %s", a == ota::Availability::UpToDate ? "up to date" : "no installable update");
+      otaSaveResult([a](Lang l, char* out, size_t cap) {
+        otaText(l, a == ota::Availability::UpToDate ? S::OtaNightUpToDate : S::OtaNightNothing, out, cap);
+      });
       return false;
     case ota::NightAction::NotifyOnly:
       otaSetAvailable(&m);
-      otaSaveResult(failed ? "Night check: %s available, failed before - install it with a double tap"
-                           : "Night check: %s available", m.version);
+      otaSaveResult([&](Lang l, char* out, size_t cap) {
+        otaText(l, failed ? S::OtaNightFailedBefore : S::OtaNightAvailable, out, cap, m.version);
+      });
       return false;
     case ota::NightAction::WaitForCharge:
       otaSetAvailable(&m);
-      otaSaveResult("Night check: %s waits, battery too low", m.version);
+      otaSaveResult([&](Lang l, char* out, size_t cap) { otaText(l, S::OtaNightWaits, out, cap, m.version); });
       return false;
     case ota::NightAction::Install:
       initDisplay(false);
@@ -354,7 +394,7 @@ static void otaMarkValid(const char* why) {
   p.putUInt("ota_done", 0);
   p.putUInt("ota_avail", 0);
   char text[48];
-  snprintf(text, sizeof(text), "Updated to %s", FW_VERSION);
+  snprintf(text, sizeof(text), tr(S::UpdUpdatedTo), FW_VERSION);  // for the setup app
   p.putString("ota_result", text);
   p.putUInt("ota_rtime", (uint32_t)time(nullptr));
   p.end();
@@ -438,9 +478,9 @@ void otaBootCheck() {
   }
   preferences.end();
   if (doneBuild > FW_BUILD) {
-    otaSaveResult("Update to build %u failed after the restart: %s kept", (unsigned)doneBuild, FW_VERSION);
+    otaSaveResult([&](Lang l, char* out, size_t cap) { otaText(l, S::OtaRolledBack, out, cap, (unsigned)doneBuild, FW_VERSION); });
     initDisplay(true);
-    ota::showMessage("Update failed: previous version kept", "The new version did not start correctly.", true);
+    ota::showMessage(tr(S::OtaFailedKept), tr(S::OtaDidNotStart), true);
     delay(OTA_RESULT_SCREEN_MS);  // a cold start: the dashboard is fully redrawn next
   }
 }

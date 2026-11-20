@@ -134,8 +134,9 @@ inline void toHex(const uint8_t* data, size_t len, char* out, size_t cap) {
   if (cap) out[o] = '\0';
 }
 
-// Makes a release-notes line displayable with the e-paper font (which has no ( ) ! ' " ; & etc.):
-// drops or replaces those characters, turns line breaks and tabs into spaces, collapses spaces and
+// Makes a release-notes line displayable with the e-paper font: since build 70 the font has
+// ! " & ' ( ) ; @ [ ] and umlauts; characters it still lacks ({ } ` $ < > \ ^ |) are dropped or
+// replaced, turns line breaks and tabs into spaces, collapses spaces and
 // trims, and cuts to cap-1 bytes without splitting a UTF-8 character.
 inline void sanitizeNote(const char* in, char* out, size_t cap) {
   if (!cap) return;
@@ -148,18 +149,11 @@ inline void sanitizeNote(const char* in, char* out, size_t cap) {
       rep = static_cast<char>(c);  // UTF-8 byte: the font has a few accented letters
     } else if (c == '\n' || c == '\r' || c == '\t' || c == ' ') {
       rep = ' ';
-    } else if (c == '(' || c == ')' || c == '[' || c == ']' || c == '{' || c == '}' ||
-               c == '\'' || c == '"' || c == '`') {
+    } else if (c == '{' || c == '}' || c == '`') {
       continue;
-    } else if (c == '!') {
-      rep = '.';
-    } else if (c == '&') {
-      rep = '+';
-    } else if (c == ';') {
-      rep = ',';
     } else if (c < 0x20 || c == 0x7F) {
       continue;
-    } else if (c == '$' || c == '<' || c == '>' || c == '@' || c == '\\' || c == '^' || c == '|') {
+    } else if (c == '$' || c == '<' || c == '>' || c == '\\' || c == '^' || c == '|') {
       rep = ' ';
     } else {
       rep = static_cast<char>(c);

@@ -9,6 +9,7 @@
 #include "HttpJson.h"
 #include "SecureClient.h"
 #include "../widgets/MonthView.h"
+#include "../core/ConfigValidation.h"
 
 // ----------------------- Stocks (Yahoo Finance) -----------------------
 
@@ -27,11 +28,12 @@ bool fetchStocksDirect(int* failed) {
   meta["fiftyTwoWeekHigh"] = true;
   meta["fiftyTwoWeekLow"] = true;
 
-  char list[CFG_STOCKS_MAX];
-  snprintf(list, sizeof(list), "%s", stock_symbols);
+  // "SYMBOL" or "SYMBOL:Label" (ConfigValidation.h): the symbol for the request, the label on screen.
+  StockEntry entries[STOCK_MAX_ENTRIES];
+  int entryCount = parseStockEntries(stock_symbols, entries, STOCK_MAX_ENTRIES);
 
-  char* save = nullptr;
-  for (char* sym = strtok_r(list, ", ", &save); sym && stockCount < MAX_STOCKS; sym = strtok_r(nullptr, ", ", &save)) {
+  for (int k = 0; k < entryCount && stockCount < MAX_STOCKS; k++) {
+    const char* sym = entries[k].symbol;
     char encoded[48];
     urlEncode(sym, encoded, sizeof(encoded));
 
@@ -50,8 +52,7 @@ bool fetchStocksDirect(int* failed) {
     }
 
     StockItem& s = stocks[stockCount++];
-    // Drop the index prefix for display, e.g. "^IXIC" -> "IXIC".
-    snprintf(s.name, sizeof(s.name), "%s", sym[0] == '^' ? sym + 1 : sym);
+    snprintf(s.name, sizeof(s.name), "%s", entries[k].label);  // own label, or the symbol without ^
     s.price = m["regularMarketPrice"] | 0.0f;
     s.prevClose = m["chartPreviousClose"] | (m["previousClose"] | 0.0f);
     s.dayHigh = m["regularMarketDayHigh"] | 0.0f;

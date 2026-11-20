@@ -23,7 +23,17 @@ SAFE_NAME = re.compile(r"^[A-Za-z0-9_-][A-Za-z0-9._-]{0,62}$")  # same rule as o
 MAX_NOTES = 3
 NOTE_MAX_CHARS = 70
 # Characters of the e-paper font (fonts/epaperFont.h), plus space: anything else shows as a gap.
-FONT_CHARS = set(" #%*+,-./0123456789:=?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~°³µÀÇÈÉàçèé")
+FONT_FILE = pathlib.Path(__file__).resolve().parents[2] / "src/ui/fonts/epaperFont.h"
+
+
+def font_chars():
+    """The characters the device's text font can draw (its code point table), plus the space."""
+    text = FONT_FILE.read_text(encoding="utf-8")
+    table = text.split("_CharMap[]")[1].split("};")[0]
+    return {" "} | {chr(int(h, 16)) for h in re.findall(r"0x[0-9A-Fa-f]+", table)}
+
+
+FONT_CHARS = font_chars()
 
 
 def fail(msg):
@@ -56,7 +66,7 @@ def main():
         bad = sorted(set(n) - FONT_CHARS)
         if bad:
             fail(f"What's new line {n!r} uses characters the e-paper font doesn't have: "
-                 f"{' '.join(bad)} (allowed: letters, digits, space and #%*+,-./:=?_~)")
+                 f"{' '.join(bad)} (the font: src/ui/fonts/epaperFont.h)")
 
     files = {}
     for vj in sorted(pathlib.Path(args.dir).rglob("variant.json")):

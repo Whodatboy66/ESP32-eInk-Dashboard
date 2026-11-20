@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="de">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -7,12 +7,13 @@
 <!-- Development page: the real app with a fake device (mock.js answers every /api/ call).
      Options in the address: ?first=1 first start, ?home=1 home network (code 123456),
      ?offline=1 no internet on the device, ?slow=1 slow answers, ?down=1 device doesn't answer,
-     ?classic=1 Classic layout, ?mem=1 exact preview fails (503), ?lowbat=1 diagnostics without a battery, ?saver=1 battery saver on. Not part of the bundle. -->
+     ?classic=1 Classic layout, ?mem=1 exact preview fails (503), ?lowbat=1 diagnostics without a battery, ?saver=1 battery saver on, ?lang=en device in English (default German). Not part of the bundle. -->
 <link rel="stylesheet" href="../app.css">
 </head>
 <body class="t-paper">
-<div id="app"><div class="full"><p><span class="spin"></span>Loading…</p></div></div>
+<div id="app"><div class="full"><p><span class="spin"></span>Lade… / Loading…</p></div></div>
 <script src="../layout.js"></script>
+<script src="../i18n.js"></script>
 <script src="mock.js"></script>
 <script src="../app.js"></script>
 </body>

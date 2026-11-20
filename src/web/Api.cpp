@@ -35,8 +35,10 @@
 #include "../widgets/Registry.h"
 #include "SetupMode.h"
 
+using i18n::S;
 using layouts::WidgetId;
 
+// Every text for people in the answers is in the screen language (tr(), src/i18n/Strings.h).
 namespace {
 
 constexpr size_t MAX_BODY = 8 * 1024;
@@ -68,7 +70,7 @@ void sendOffline() {
   JsonDocument doc;
   doc["ok"] = false;
   doc["offline"] = true;
-  doc["error"] = "The device has no internet connection: save or test your Wi-Fi first.";
+  doc["error"] = tr(S::ApiOffline);
   sendJson(200, doc);
 }
 
@@ -79,12 +81,12 @@ void sendOffline() {
 bool allow(bool needSession = true) {
   if (setupKind == SetupKind::Ap) {
     if (!setupFromHotspot()) {
-      sendError(403, "Only from the setup hotspot");
+      sendError(403, tr(S::ApiHotspotOnly));
       return false;
     }
   } else if (setupKind == SetupKind::Home) {
     if (!setupHostOk()) {
-      sendError(403, "Wrong address");
+      sendError(403, tr(S::ApiWrongAddress));
       return false;
     }
     if (needSession && !setupSessionOk()) {
@@ -104,7 +106,7 @@ bool allow(bool needSession = true) {
 // device never answers).
 bool jsonType() {
   if (srv->header("Content-Type").startsWith("application/json")) return true;
-  sendError(415, "JSON expected");
+  sendError(415, tr(S::ApiJsonExpected));
   return false;
 }
 
@@ -113,12 +115,12 @@ bool jsonType() {
 bool readBody(String& body) {
   if (!jsonType()) return false;
   if (!srv->hasArg("plain")) {
-    sendError(400, "Empty request");
+    sendError(400, tr(S::ApiEmptyRequest));
     return false;
   }
   body = srv->arg("plain");
   if (body.length() > MAX_BODY) {
-    sendError(413, "Too much data");
+    sendError(413, tr(S::ApiTooMuchData));
     return false;
   }
   return true;
@@ -128,7 +130,7 @@ bool readJson(JsonDocument& doc) {
   String body;
   if (!readBody(body)) return false;
   if (deserializeJson(doc, body) || !doc.is<JsonObject>()) {  // strings are copied into doc
-    sendError(400, "The request could not be read.");
+    sendError(400, tr(S::ApiUnreadable));
     return false;
   }
   return true;
@@ -138,22 +140,48 @@ bool readJson(JsonDocument& doc) {
 struct ProblemText {
   uint16_t flag;
   const char* key;
-  const char* text;
-  const char* fix;
+  S text;
+  S fix;
 };
 const ProblemText PROBLEM_TEXTS[] = {
-    {PROBLEM_WIFI, "wifi", "The Wi-Fi network can't be reached", "Check the network and password on the Device tab."},
-    {PROBLEM_TIME, "time", "The clock could not be set from the internet", "It usually fixes itself; check the Wi-Fi if it stays."},
-    {PROBLEM_WEATHER, "weather", "The weather can't be loaded", "Check the place on the Data tab."},
-    {PROBLEM_STOCKS, "stocks", "Some stock prices can't be loaded", "Check the stock symbols on the Data tab."},
-    {PROBLEM_CALENDAR, "calendar", "A calendar can't be read", "Check the calendar links on the Data tab."},
-    {PROBLEM_PRINTER, "printer", "The printer doesn't answer", "Is it switched on? Check its address on the Data tab."},
-    {PROBLEM_PRINTER_CODE, "printer_code", "The printer refused the access code", "Copy the access code from the printer's screen."},
-    {PROBLEM_MAKERWORLD, "makerworld", "MakerWorld can't be loaded", "Check the MakerWorld user ID on the Data tab."},
-    {PROBLEM_TRACKING, "tracking", "Parcel tracking can't be loaded", "Check the tracking key on the Data tab."},
-    {PROBLEM_FLIGHT, "flight", "The flight status can't be loaded", "Check the flight key on the Data tab."},
-    {PROBLEM_BIRTHDAYS, "birthdays", "The birthday calendar can't be read", "Check the birthday calendar link on the Data tab."},
+    {PROBLEM_WIFI, "wifi", S::PtWifi, S::PfWifi},
+    {PROBLEM_TIME, "time", S::PtTime, S::PfTime},
+    {PROBLEM_WEATHER, "weather", S::PtWeather, S::PfWeather},
+    {PROBLEM_STOCKS, "stocks", S::PtStocks, S::PfStocks},
+    {PROBLEM_CALENDAR, "calendar", S::PtCalendar, S::PfCalendar},
+    {PROBLEM_PRINTER, "printer", S::PtPrinter, S::PfPrinter},
+    {PROBLEM_PRINTER_CODE, "printer_code", S::PtPrinterCode, S::PfPrinterCode},
+    {PROBLEM_MAKERWORLD, "makerworld", S::PtMakerWorld, S::PfMakerWorld},
+    {PROBLEM_TRACKING, "tracking", S::PtTracking, S::PfTracking},
+    {PROBLEM_FLIGHT, "flight", S::PtFlight, S::PfFlight},
+    {PROBLEM_BIRTHDAYS, "birthdays", S::PtBirthdays, S::PfBirthdays},
 };
+
+// The layout engine's errors (src/layout/BoxLayout.h) for people.
+const char* boxErrorText(layouts::BoxError e) {
+  using layouts::BoxError;
+  switch (e) {
+    case BoxError::None: return "";
+    case BoxError::Empty: return tr(S::BoxEmpty);
+    case BoxError::TooMany: return tr(S::BoxTooMany);
+    case BoxError::Outside: return tr(S::BoxOutside);
+    case BoxError::Overlap: return tr(S::BoxOverlap);
+    case BoxError::Gap: return tr(S::BoxGap);
+    case BoxError::Duplicate: return tr(S::BoxDuplicate);
+    case BoxError::TooSmall: return tr(S::BoxTooSmall);
+    case BoxError::UnknownWidget: return tr(S::BoxUnknownWidget);
+  }
+  return tr(S::BoxInvalid);
+}
+
+// Names of the editor's starting points (src/layout/Templates.h keys).
+const char* templateName(const layouts::Template& t) {
+  if (!strcmp(t.key, "planner")) return tr(S::TplPlanner);
+  if (!strcmp(t.key, "minimal")) return tr(S::TplMinimal);
+  if (!strcmp(t.key, "technical")) return tr(S::TplTechnical);
+  if (!strcmp(t.key, "personal")) return tr(S::TplPersonal);
+  return t.name;
+}
 
 void secret(JsonObject o, const char* key, const char* value) { o[key].to<JsonObject>()["set"] = value[0] != '\0'; }
 
@@ -212,8 +240,8 @@ void handleState() {
     if (!(problems & p.flag)) continue;
     JsonObject o = probs.add<JsonObject>();
     o["key"] = p.key;
-    o["text"] = p.text;
-    o["fix"] = p.fix;
+    o["text"] = tr(p.text);
+    o["fix"] = tr(p.fix);
   }
   {
     Preferences prefs;
@@ -227,7 +255,7 @@ void handleState() {
   else dev["updateAvailable"] = nullptr;
 
   layouts::Result current = loadLayout();
-  if (current.fellBack) dev["layoutFallback"] = "The saved layout could not be used: Classic is shown.";
+  if (current.fellBack) dev["layoutFallback"] = tr(S::ApiLayoutFallback);
   else dev["layoutFallback"] = nullptr;
 
   JsonObject s = doc["settings"].to<JsonObject>();
@@ -259,6 +287,7 @@ void handleState() {
   power::formatHm(quiet_to, hm, sizeof(hm));
   s["quiet_to"] = hm;
   s["battery_mah"] = battery_mah;
+  s["lang"] = i18n::langCode(ui_lang);
   s["pin_preset"] = pinPresetValue(activePinPreset);
   JsonObject pins = s["pins"].to<JsonObject>();
   pins["epd_cs"] = customPins.epdCs;
@@ -277,7 +306,7 @@ void handleState() {
   for (PinPreset p : all) {
     JsonObject o = presets.add<JsonObject>();
     o["key"] = pinPresetValue(p);
-    o["name"] = pinPresetLabel(p);
+    o["name"] = p == PinPreset::Custom ? tr(S::PinsCustom) : pinPresetLabel(p);
   }
 
   JsonObject lay = doc["layout"].to<JsonObject>();
@@ -302,12 +331,12 @@ void handleState() {
     WidgetId id = static_cast<WidgetId>(w);
     JsonObject o = widgets.add<JsonObject>();
     o["key"] = layouts::WIDGET_KEYS[w];
-    o["name"] = widgetInfo(id).name;
+    o["name"] = tr(widgetInfo(id).name);
     o["minW"] = layouts::limitsOf(id).minCols;
     o["minH"] = layouts::limitsOf(id).minRows;
     bool ok = configured & layouts::widgetBit(id);
     o["configured"] = ok;
-    o["hint"] = ok ? "" : widgetInfo(id).hint;
+    o["hint"] = ok ? "" : tr(widgetInfo(id).hint);
   }
 
   JsonArray structures = doc["structures"].to<JsonArray>();
@@ -316,7 +345,7 @@ void handleState() {
     if (tt.pixels) continue;
     JsonObject o = structures.add<JsonObject>();
     o["key"] = tt.key;
-    o["name"] = tt.name;
+    o["name"] = templateName(tt);
     addBoxes(o["boxes"].to<JsonArray>(),
              layouts::boxesFromResult(layouts::buildLayout(tt, layouts::ALL_WIDGETS)));
   }
@@ -343,13 +372,13 @@ void handleState() {
     power::Plan pp = power::decide(pin);
     if (pp.night) pp.mode = power::Mode::Night;
     char note[48];
-    power::note(pp, clock_interval, quiet_to, note, sizeof(note));
+    power::note(pp, clock_interval, quiet_to, note, sizeof(note), ui_lang);
     pw["note"] = note;
     pw["saver"] = pp.saverOn;
     pw["night"] = pp.night;
     pw["stepMin"] = pp.stepMin;
   }
-  pw["estimateNote"] = "Estimate from the first measurements (2026-11-20); real current measurements follow.";
+  pw["estimateNote"] = tr(S::ApiEstimateNote);
   JsonArray est = pw["estimates"].to<JsonArray>();
   double qh = power::quietHours(quiet_on, quiet_from, quiet_to);
   double base = power::estimateDays(1, qh, battery_mah);
@@ -406,48 +435,48 @@ void handleSettings() {
   int port = mqtt_port;
   JsonObjectConst o = in.as<JsonObjectConst>();
 
-  auto plainText = [&](const char* key, char* out, size_t cap, const char* current, const char* label) {
+  auto plainText = [&](const char* key, char* out, size_t cap, const char* current, S label) {
     copyStr(out, cap, current);
     JsonVariantConst v = o[key];
     if (v.isUnbound()) return;
     if (!v.is<const char*>() || !fits(v.as<const char*>(), cap)) {
       char msg[80];
-      snprintf(msg, sizeof(msg), "%s: at most %u characters.", label, (unsigned)(cap - 1));
+      snprintf(msg, sizeof(msg), tr(S::FieldMaxChars), tr(label), (unsigned)(cap - 1));
       fail(key, msg);
       return;
     }
     copyStr(out, cap, v.as<const char*>());
   };
-  plainText("device_name", name, sizeof(name), device_name, "Name");
-  plainText("wifi_ssid", ssid, sizeof(ssid), wifi_ssid, "Wi-Fi name");
-  plainText("weather_loc", loc, sizeof(loc), weather_location, "Place");
-  plainText("mqtt_sn", mqttSn, sizeof(mqttSn), mqtt_sn, "Serial number");
-  plainText("printer_name", pname, sizeof(pname), printer_name, "Printer name");
-  plainText("makerworld_uid", mw, sizeof(mw), makerworld_uid, "MakerWorld user ID");
+  plainText("device_name", name, sizeof(name), device_name, S::LabelName);
+  plainText("wifi_ssid", ssid, sizeof(ssid), wifi_ssid, S::LabelWifiName);
+  plainText("weather_loc", loc, sizeof(loc), weather_location, S::LabelPlace);
+  plainText("mqtt_sn", mqttSn, sizeof(mqttSn), mqtt_sn, S::LabelSerial);
+  plainText("printer_name", pname, sizeof(pname), printer_name, S::LabelPrinterName);
+  plainText("makerworld_uid", mw, sizeof(mw), makerworld_uid, S::LabelMakerWorld);
 
   // Power (stage 6).
   int clockInt = clock_interval, qFrom = quiet_from, qTo = quiet_to, batMah = battery_mah;
   if (!o["clock_interval"].isUnbound()) {
     clockInt = o["clock_interval"] | 0;
-    if (!power::validClockInterval(clockInt)) fail("clock_interval", "Choose 1, 2, 5, 10, 15 or 30 minutes.");
+    if (!power::validClockInterval(clockInt)) fail("clock_interval", tr(S::ErrClockInterval));
   }
   if (!o["quiet_from"].isUnbound() && !power::parseHm(o["quiet_from"] | "", qFrom))
-    fail("quiet_from", "A time like 23:00.");
+    fail("quiet_from", tr(S::ErrQuietFrom));
   if (!o["quiet_to"].isUnbound() && !power::parseHm(o["quiet_to"] | "", qTo))
-    fail("quiet_to", "A time like 06:00.");
+    fail("quiet_to", tr(S::ErrQuietTo));
   if (!o["battery_mah"].isUnbound()) {
     batMah = o["battery_mah"] | 0;
-    if (batMah < 100 || batMah > 20000) fail("battery_mah", "Between 100 and 20000 mAh.");
+    if (batMah < 100 || batMah > 20000) fail("battery_mah", tr(S::ErrBatteryMah));
   }
 
   copyStr(tz, sizeof(tz), device_timezone);
   if (!o["timezone"].isUnbound() &&
       !normalizeTimezone(o["timezone"] | "", tz, sizeof(tz)))
-    fail("timezone", "Time zone not recognized: use a name like Europe/Berlin or CET, or a rule like CET-1CEST,M3.5.0,M10.5.0/3.");
+    fail("timezone", tr(S::ErrTimezone));
 
   copyStr(stocks, sizeof(stocks), stock_symbols);
   if (!o["stocks"].isUnbound() && !normalizeStockSymbols(o["stocks"] | "", stocks, sizeof(stocks)))
-    fail("stocks", "Yahoo Finance symbols (letters, digits, ^ . = -) separated by commas, e.g. AAPL,NVDA,^IXIC.");
+    fail("stocks", tr(S::ErrStocks));
 
   for (int i = 0; i < ICS_MAX_FEEDS; i++) copyStr(ics[i], sizeof(ics[i]), ics_urls[i]);
   if (!o["ics"].isUnbound()) {
@@ -456,26 +485,26 @@ void handleSettings() {
       SecretOp op = secretOp(arr[i]);
       if (op == SecretOp::Clear) ics[i][0] = '\0';
       else if (op == SecretOp::Set && !validateIcsUrl(arr[i].as<const char*>(), ics[i], sizeof(ics[i])))
-        fail(i == 0 ? "ics.0" : i == 1 ? "ics.1" : "ics.2", "Not an https://, http:// or webcal:// address.");
+        fail(i == 0 ? "ics.0" : i == 1 ? "ics.1" : "ics.2", tr(S::ErrLink));
     }
   }
   copyStr(bday, sizeof(bday), bday_url);
   SecretOp bop = secretOp(o["bday_url"]);
   if (bop == SecretOp::Clear) bday[0] = '\0';
   else if (bop == SecretOp::Set && !validateIcsUrl(o["bday_url"].as<const char*>(), bday, sizeof(bday)))
-    fail("bday_url", "Not an https://, http:// or webcal:// address.");
+    fail("bday_url", tr(S::ErrLink));
 
   copyStr(mqttIp, sizeof(mqttIp), mqtt_ip);
   if (!o["mqtt_ip"].isUnbound()) {
     const char* ip = o["mqtt_ip"] | "";
     if (!fits(ip, sizeof(mqttIp)) || !validatePrinterAddress(ip))
-      fail("mqtt_ip", "An address in your home network (e.g. 192.168.1.100) or the printer's name there.");
+      fail("mqtt_ip", tr(S::ErrPrinterAddress));
     else copyStr(mqttIp, sizeof(mqttIp), ip);
   }
   if (!o["mqtt_port"].isUnbound()) {
     long p = o["mqtt_port"].is<const char*>() ? parseMqttPort(o["mqtt_port"].as<const char*>()) : (long)(o["mqtt_port"] | -1);
     if (p < 1 || p > 65535) {
-      if (mqttIp[0]) fail("mqtt_port", "A number from 1 to 65535 (usually 8883).");
+      if (mqttIp[0]) fail("mqtt_port", tr(S::ErrPort));
       else p = 8883;
     }
     if (p >= 1 && p <= 65535) port = (int)p;
@@ -493,7 +522,7 @@ void handleSettings() {
   for (const SecretField& f : secrets) {
     SecretOp op = secretOp(o[f.key]);
     if (op == SecretOp::Bad || (op == SecretOp::Set && !fits(o[f.key].as<const char*>(), f.cap)))
-      fail(f.key, "Too long or not text.");
+      fail(f.key, tr(S::ErrSecret));
   }
 
   PinPreset preset = activePinPreset;
@@ -501,7 +530,7 @@ void handleSettings() {
   if (!o["pin_preset"].isUnbound()) {
     const char* key = o["pin_preset"] | "";
     preset = parsePinPreset(String(key));
-    if (strcmp(pinPresetValue(preset), key) != 0) fail("pin_preset", "Unknown board preset.");
+    if (strcmp(pinPresetValue(preset), key) != 0) fail("pin_preset", tr(S::ErrPinPreset));
   }
   if (o["pins"].is<JsonObjectConst>()) {
     JsonObjectConst p = o["pins"];
@@ -522,12 +551,19 @@ void handleSettings() {
     pins.demoButton = pin("demo_button", pins.demoButton);
   }
   if (preset == PinPreset::Custom && !hasRequiredDisplayPins(pins))
-    fail("pins", "Custom pins: CS, DC, RST, BUSY, SCK and MOSI are required.");
+    fail("pins", tr(S::ErrPins));
+
+  i18n::Lang lang = ui_lang;
+  if (!o["lang"].isUnbound()) {
+    const char* code = o["lang"] | "";
+    lang = i18n::parseLang(code);
+    if (strcmp(code, i18n::langCode(lang)) != 0) fail("lang", tr(S::ErrLang));
+  }
 
   if (errors.size()) {
     JsonDocument out;
     out["ok"] = false;
-    out["error"] = "Nothing was saved: please correct the marked fields.";
+    out["error"] = tr(S::ErrNothingSaved);
     out["errors"] = errors;
     sendJson(400, out);
     return;
@@ -559,6 +595,7 @@ void handleSettings() {
   quiet_from = (uint16_t)qFrom;
   quiet_to = (uint16_t)qTo;
   battery_mah = (uint16_t)batMah;
+  ui_lang = lang;
   activePinPreset = preset;
   customPins = pins;
   applyStoredPinSelection();
@@ -587,7 +624,7 @@ bool parseLayoutRequest(const JsonDocument& in, char* tpl, size_t tplCap, char* 
     l.statusBar = in["statusBar"] | true;
     JsonArrayConst arr = in["boxes"].as<JsonArrayConst>();
     if (arr.size() > (size_t)layouts::MAX_BOXES) {
-      sendError(400, layouts::boxErrorText(layouts::BoxError::TooMany));
+      sendError(400, boxErrorText(layouts::BoxError::TooMany));
       return false;
     }
     for (JsonObjectConst b : arr) {
@@ -596,31 +633,31 @@ bool parseLayoutRequest(const JsonDocument& in, char* tpl, size_t tplCap, char* 
         const char* wk = b["widget"] | "";
         widget = layouts::widgetFromKey(wk, strlen(wk));
         if (widget < 0) {
-          sendError(400, layouts::boxErrorText(layouts::BoxError::UnknownWidget));
+          sendError(400, boxErrorText(layouts::BoxError::UnknownWidget));
           return false;
         }
       }
       int c = b["c"] | -1, r = b["r"] | -1, w = b["w"] | 0, h = b["h"] | 0;
       if (c < 0 || r < 0 || c > 9 || r > 9 || w < 1 || h < 1 || w > 9 || h > 9) {
-        sendError(400, layouts::boxErrorText(layouts::BoxError::Outside));
+        sendError(400, boxErrorText(layouts::BoxError::Outside));
         return false;
       }
       l.boxes[l.count++] = layouts::Box{(uint8_t)c, (uint8_t)r, (uint8_t)w, (uint8_t)h, (int8_t)widget};
     }
     layouts::BoxError e = layouts::validateBoxes(l);
     if (e != layouts::BoxError::None) {
-      sendError(400, layouts::boxErrorText(e));
+      sendError(400, boxErrorText(e));
       return false;
     }
     if (!layouts::writeBoxes(l, boxes, boxCap)) {
-      sendError(400, "The layout is too long.");
+      sendError(400, tr(S::ApiLayoutTooLong));
       return false;
     }
     copyStr(tpl, tplCap, "custom");
     return true;
   }
   if (layouts::templateIndex(key) < 0) {
-    sendError(400, "Unknown layout.");
+    sendError(400, tr(S::ApiUnknownLayout));
     return false;
   }
   copyStr(tpl, tplCap, key);
@@ -662,7 +699,7 @@ void handlePreview() {
   GFXcanvas1* img = new (std::nothrow) GFXcanvas1(800, 480);
   if (!img || !img->getBuffer()) {
     delete img;
-    sendError(503, "Not enough memory for the preview right now: try again.");
+    sendError(503, tr(S::ApiPreviewMemory));
     return;
   }
   // The app's current (maybe unsaved) 12 / 24-hour choice, only for this picture.
@@ -749,7 +786,7 @@ void handleWifiTest() {
   // No "pass": the saved password (same network); "" = an open network.
   const char* pass = in["pass"].is<const char*>() ? in["pass"].as<const char*>() : nullptr;
   if (!ssid[0]) {
-    sendError(400, "Choose a network first.");
+    sendError(400, tr(S::ApiChooseNetwork));
     return;
   }
   if (setupKind == SetupKind::Home) {
@@ -757,11 +794,11 @@ void handleWifiTest() {
     // very request (and a wrong password would leave edit mode unreachable).
     JsonDocument out;
     if (strcmp(ssid, wifi_ssid) != 0) {
-      sendError(400, "Another network can only be tested in setup mode: use \"Change Wi-Fi\".");
+      sendError(400, tr(S::ApiOtherNetwork));
       return;
     }
     out["ok"] = !pass || strcmp(pass, wifi_pass) == 0;
-    if (!(out["ok"] | false)) out["error"] = "Not the saved password: a new one can be tested in setup mode (\"Change Wi-Fi\").";
+    if (!(out["ok"] | false)) out["error"] = tr(S::ApiNotSavedPass);
     sendJson(200, out);
     return;
   }
@@ -781,18 +818,18 @@ void handleCheckCalendar() {
   if (in["index"].is<int>()) {
     int i = in["index"];
     if (i < 0 || i >= ICS_MAX_FEEDS || !ics_urls[i][0]) {
-      sendError(400, "No saved link there.");
+      sendError(400, tr(S::ApiNoSavedLink));
       return;
     }
     copyStr(url, sizeof(url), ics_urls[i]);
   } else if (in["bday"] | false) {
     if (!bday_url[0]) {
-      sendError(400, "No saved link there.");
+      sendError(400, tr(S::ApiNoSavedLink));
       return;
     }
     copyStr(url, sizeof(url), bday_url);
   } else if (!validateIcsUrl(in["url"] | "", url, sizeof(url)) || !url[0]) {
-    sendError(400, "Not an https://, http:// or webcal:// address.");
+    sendError(400, tr(S::ErrLink));
     return;
   }
   if (!setupEnsureOnline()) {
@@ -825,7 +862,7 @@ void handlePlaces() {
   PlaceResult found[5];
   int n = searchPlaces(q.c_str(), found, 5);
   if (n < 0) {
-    sendError(502, "The place search didn't answer: try again or type the place.");
+    sendError(502, tr(S::ApiPlacesNoAnswer));
     return;
   }
   JsonDocument out;
@@ -862,12 +899,12 @@ void handlePutTasks() {
   size_t len = bodyStr.length();
   std::unique_ptr<personal::TaskList> listP(new (std::nothrow) personal::TaskList());
   if (!listP) {
-    sendError(503, "Not enough memory right now: try again.");
+    sendError(503, tr(S::ApiNoMemory));
     return;
   }
   personal::TaskList& list = *listP;
   char err[96], removed[32];
-  if (!personal::parseTasks(body, len, list, err, sizeof(err), screenFontHas, removed, sizeof(removed))) {
+  if (!personal::parseTasks(body, len, list, err, sizeof(err), screenFontHas, removed, sizeof(removed), ui_lang)) {
     sendError(400, err);
     return;
   }
@@ -876,7 +913,7 @@ void handlePutTasks() {
   personal::stampDoneDates(list, userTasks(), today);
   personal::purgeDoneTasks(list, today);
   if (!saveUserTasks(list)) {
-    sendError(500, "The tasks could not be saved.");
+    sendError(500, tr(S::ApiTasksNotSaved));
     return;
   }
   sendOk(removed);
@@ -891,17 +928,18 @@ void handlePutNote() {
   size_t len = bodyStr.length();
   std::unique_ptr<char[]> noteP(new (std::nothrow) char[personal::NOTE_BYTES]);
   if (!noteP) {
-    sendError(503, "Not enough memory right now: try again.");
+    sendError(503, tr(S::ApiNoMemory));
     return;
   }
   char* note = noteP.get();
   char err[96], removed[32];
-  if (!personal::parseNote(body, len, note, personal::NOTE_BYTES, err, sizeof(err), screenFontHas, removed, sizeof(removed))) {
+  if (!personal::parseNote(body, len, note, personal::NOTE_BYTES, err, sizeof(err), screenFontHas, removed,
+                           sizeof(removed), ui_lang)) {
     sendError(400, err);
     return;
   }
   if (!saveUserNote(note)) {
-    sendError(500, "The note could not be saved.");
+    sendError(500, tr(S::ApiNoteNotSaved));
     return;
   }
   sendOk(removed);
@@ -944,17 +982,18 @@ void handlePutBirthdays() {
   size_t len = bodyStr.length();
   std::unique_ptr<personal::BirthdayList> listP(new (std::nothrow) personal::BirthdayList());
   if (!listP) {
-    sendError(503, "Not enough memory right now: try again.");
+    sendError(503, tr(S::ApiNoMemory));
     return;
   }
   personal::BirthdayList& list = *listP;
   char err[96], removed[32];
-  if (!personal::parseBirthdays(body, len, "manual", list, err, sizeof(err), screenFontHas, removed, sizeof(removed))) {
+  if (!personal::parseBirthdays(body, len, "manual", list, err, sizeof(err), screenFontHas, removed, sizeof(removed),
+                                ui_lang)) {
     sendError(400, err);
     return;
   }
   if (!saveUserBirthdays(list)) {
-    sendError(500, "The birthdays could not be saved.");
+    sendError(500, tr(S::ApiBdaysNotSaved));
     return;
   }
   sendOk(removed);
@@ -1028,19 +1067,19 @@ void handleDiagnostics() {
   struct Svc {
     Service s;
     const char* key;
-    const char* name;
+    S name;
     WidgetId widget;
   };
-  const Svc svcs[] = {{Service::Weather, "weather", "Weather", WidgetId::Weather},
-                      {Service::Stocks, "stocks", "Stocks", WidgetId::Stocks},
-                      {Service::Calendar, "calendar", "Calendar", WidgetId::Agenda},
-                      {Service::Tracking, "tracking", "Parcels", WidgetId::Tracking}};
+  const Svc svcs[] = {{Service::Weather, "weather", S::ProbWeather, WidgetId::Weather},
+                      {Service::Stocks, "stocks", S::ProbStocks, WidgetId::Stocks},
+                      {Service::Calendar, "calendar", S::ProbCalendar, WidgetId::Agenda},
+                      {Service::Tracking, "tracking", S::SvcParcels, WidgetId::Tracking}};
   JsonArray services = doc["services"].to<JsonArray>();
   for (const Svc& v : svcs) {
     const ServiceState& st = serviceStates[(int)v.s];
     JsonObject o = services.add<JsonObject>();
     o["key"] = v.key;
-    o["name"] = v.name;
+    o["name"] = tr(v.name);
     o["lastOk"] = (long)st.lastOk;
     o["failures"] = st.failures;
     o["retryAt"] = st.failures ? (long)st.retryAt : 0;
@@ -1065,7 +1104,7 @@ void handleLogText() {
   if (!allow()) return;
   std::unique_ptr<char[]> text(new (std::nothrow) char[LOG_READ_MAX]);
   if (!text) {
-    sendError(503, "Not enough memory right now: try again.");
+    sendError(503, tr(S::ApiNoMemory));
     return;
   }
   size_t len = logReadAll(text.get(), LOG_READ_MAX);
@@ -1091,7 +1130,7 @@ void handleLogin() {
   if (!readJson(in)) return;
   String cookie;
   if (!setupLogin(in["code"] | "", cookie)) {
-    sendError(400, "Wrong code: type the 6 digits shown on the display.");
+    sendError(400, tr(S::ApiWrongCode));
     return;
   }
   setupNoteActivity();
@@ -1102,7 +1141,7 @@ void handleLogin() {
 void handleUpdate() {
   if (!allow() || !jsonType()) return;
   if (!wifi_ssid[0]) {
-    sendError(400, "Save your Wi-Fi settings first.");
+    sendError(400, tr(S::ApiSaveWifiFirst));
     return;
   }
   updateRequest = UPDATE_REQUEST_MAGIC;

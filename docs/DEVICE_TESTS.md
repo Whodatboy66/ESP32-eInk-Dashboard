@@ -1,7 +1,7 @@
 # Device test session: everything still open
 
 Everything implemented so far that has only been checked on the PC (host tests, PC renderer, CI)
-and still needs the real device: stages 0-6, builds 63-77. Made to be done in **one session**, in
+and still needs the real device: stages 0-6, builds 63-78. Made to be done in **one session**, in
 this order (each block builds on the one before). Tick the boxes, note what the screen showed, and
 copy the results into the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log).
 
@@ -220,6 +220,20 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
 - [ ] Agenda: today's and tomorrow's events (in the evening too: tomorrow's appear under their own date)
       (build 77)
 - [ ] Exact preview after switching to 12 h (not saved yet): shows AM/PM where it fits
+
+### Build 78: German / English, stock names, automatic beta
+
+- [ ] After the update the screen is German (dates "Di 17. Nov", "Dienstag, 17. November", weekdays,
+      "Heute / Morgen", status notes, update screens); the app is German (tabs Start / Bildschirm /
+      Daten / Gerät)
+- [ ] Gerät → Sprache: English → the device restarts, screen and app in English; back to Deutsch
+- [ ] Device messages in the app (problems, field errors, check results) in the chosen language
+- [ ] Factory reset → first start begins in German with the language as step 1
+- [ ] Stocks `EUNL.DE:MSCI World,QYLE.DE:Nasdaq CC,PPFB.DE:Gold`: the screen shows the names, German
+      prices with a decimal comma; a name over 12 characters is refused with a message
+- [ ] The push of build 78 published `firmware-.78` as a beta pre-release by itself (GitHub
+      Releases); the update screen shows the German "What's new" lines with "(", ")" and "ü"
+- [ ] Later: Run workflow with release + channel stable promotes it (it becomes "Latest")
 
 ## 6b. Stage 6 part 1: power (build 75)
 

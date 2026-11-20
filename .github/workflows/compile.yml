@@ -1,7 +1,11 @@
 name: Build firmware
 
 # Every push and pull request: host tests + firmware build for every sketch.yaml profile with a
-# size check. A GitHub release is only published when started by hand from main with "release".
+# size check. Releases:
+#   - a push to main whose FW_BUILD isn't released yet publishes it to the BETA channel by itself,
+#     with the "What's new" lines from .github/whats_new.txt (build 78 on);
+#   - by hand (Run workflow, "release"): any channel, own "What's new"; for a build that is already
+#     out on beta, channel "stable" PROMOTES it (no rebuild): stable devices then get it.
 # The release carries manifest.json + manifest.sig (signed with the OTA_SIGNING_KEY secret):
 # devices install it over the air (docs/OTA_UPDATES.md). Channel "stable" = a regular release
 # ("latest"); "beta" = a pre-release. Both refresh the fixed "beta" pre-release that beta devices read.
@@ -11,7 +15,7 @@ on:
   workflow_dispatch:
     inputs:
       release:
-        description: Publish a GitHub release (main only; FW_BUILD must not be released yet)
+        description: "Publish (main only). Not released yet: a new release. Already on beta + channel stable: promote it to stable"
         type: boolean
         default: false
       whats_new:
@@ -36,7 +40,8 @@ on:
 # own group, so a push never cancels or replaces a release in progress.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'workflow_dispatch' && 'manual' || 'auto' }}
-  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
+  # Pushes to main may publish a beta release: never cancelled halfway; other branches are.
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' && github.ref != 'refs/heads/main' }}
 
 env:
   # Same as the developer machines (docs/PROJECT_INFO.md). Core and library versions are NOT
@@ -54,6 +59,11 @@ jobs:
     outputs:
       version: ${{ steps.read.outputs.version }}
       build: ${{ steps.read.outputs.build }}
+      release: ${{ steps.read.outputs.release }}
+      promote: ${{ steps.read.outputs.promote }}
+      channel: ${{ steps.read.outputs.channel }}
+      whats_new: ${{ steps.read.outputs.whats_new }}
+      min_build: ${{ steps.read.outputs.min_build }}
     steps:
       - uses: actions/checkout@v7
         with:
@@ -63,7 +73,13 @@ jobs:
       - name: Read firmware version
         id: read
         env:
-          RELEASE: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          MANUAL: ${{ github.event_name == 'workflow_dispatch' && inputs.release }}
+          IN_CHANNEL: ${{ inputs.channel }}
+          IN_WHATS_NEW: ${{ inputs.whats_new }}
+          IN_MIN_BUILD: ${{ inputs.min_build }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           BUILD=$(sed -n 's/^#define FW_BUILD *\([0-9][0-9]*\).*/\1/p' configure.h)
           if ! [[ "$BUILD" =~ ^[0-9]+$ ]]; then
@@ -71,13 +87,43 @@ jobs:
             exit 1
           fi
           VERSION=".$BUILD"  # FW_VERSION in configure.h
-          if [[ "$RELEASE" == "true" ]] && git rev-parse -q --verify "refs/tags/firmware-$VERSION" >/dev/null; then
-            echo "::error::firmware-$VERSION is already released: bump FW_BUILD in configure.h"
-            exit 1
+          TAG="firmware-$VERSION"
+          EXISTS=false
+          git rev-parse -q --verify "refs/tags/$TAG" >/dev/null && EXISTS=true
+          RELEASE=false; PROMOTE=false; CHANNEL=beta; WHATS_NEW=""; MIN_BUILD=0
+          if [[ "$MANUAL" == "true" ]]; then
+            if [[ "$EXISTS" == "true" ]]; then
+              PRE=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease 2>/dev/null || echo "")
+              if [[ "$IN_CHANNEL" == "stable" && "$PRE" == "true" ]]; then
+                PROMOTE=true
+                echo "$TAG is on beta: promoting it to stable (no rebuild)"
+              else
+                echo "::error::$TAG is already released${PRE:+ (pre-release: $PRE)}: bump FW_BUILD, or promote a beta build with channel stable"
+                exit 1
+              fi
+            else
+              RELEASE=true; CHANNEL="$IN_CHANNEL"; WHATS_NEW="$IN_WHATS_NEW"; MIN_BUILD="${IN_MIN_BUILD:-0}"
+            fi
+          elif [[ "$EVENT" == "push" && "$REF" == "refs/heads/main" && "$EXISTS" == "false" ]]; then
+            # A new FW_BUILD on main: to beta by itself. "What's new" from .github/whats_new.txt
+            # ("<build>: line | line | line"), only if it belongs to this build.
+            RELEASE=true; CHANNEL=beta
+            LINE=$(grep -v '^#' .github/whats_new.txt 2>/dev/null | grep -m1 "^$BUILD:" || true)
+            WHATS_NEW="${LINE#*:}"
+            WHATS_NEW="$(echo "$WHATS_NEW" | sed 's/^ *//')"
+            [[ -z "$WHATS_NEW" ]] && WHATS_NEW="Firmware $VERSION"
+            echo "New build $BUILD on main: beta release, what's new: $WHATS_NEW"
           fi
-          echo "Firmware version $VERSION (build $BUILD)"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "build=$BUILD" >> "$GITHUB_OUTPUT"
+          echo "Firmware version $VERSION (build $BUILD), release=$RELEASE promote=$PROMOTE channel=$CHANNEL"
+          {
+            echo "version=$VERSION"
+            echo "build=$BUILD"
+            echo "release=$RELEASE"
+            echo "promote=$PROMOTE"
+            echo "channel=$CHANNEL"
+            echo "whats_new=$WHATS_NEW"
+            echo "min_build=$MIN_BUILD"
+          } >> "$GITHUB_OUTPUT"
 
   # --------------------------------------------------
   # Hardware-independent logic, compiled and run on the PC
@@ -226,7 +272,7 @@ jobs:
   release:
     needs: [version, host-tests, build]
     runs-on: ubuntu-24.04
-    if: github.event_name == 'workflow_dispatch' && inputs.release && github.ref == 'refs/heads/main'
+    if: needs.version.outputs.release == 'true' && github.ref == 'refs/heads/main'
     permissions:
       contents: write
 
@@ -267,9 +313,9 @@ jobs:
         env:
           BUILD: ${{ needs.version.outputs.build }}
           VERSION: ${{ needs.version.outputs.version }}
-          WHATS_NEW: ${{ inputs.whats_new }}
-          MIN_BUILD: ${{ inputs.min_build }}
-          CHANNEL: ${{ inputs.channel }}
+          WHATS_NEW: ${{ needs.version.outputs.whats_new }}
+          MIN_BUILD: ${{ needs.version.outputs.min_build }}
+          CHANNEL: ${{ needs.version.outputs.channel }}
         run: |
           python3 -I tools/ota/make_manifest.py --build "$BUILD" --version "$VERSION" \
             --tag "firmware-$VERSION" --min-build "${MIN_BUILD:-0}" --notes "$WHATS_NEW" \
@@ -302,10 +348,10 @@ jobs:
         uses: softprops/action-gh-release@v3
         with:
           tag_name: firmware-${{ needs.version.outputs.version }}
-          name: ESP32 Firmware Build ${{ needs.version.outputs.version }}${{ inputs.channel == 'beta' && ' (beta)' || '' }}
+          name: ESP32 Firmware Build ${{ needs.version.outputs.version }}${{ needs.version.outputs.channel == 'beta' && ' (beta)' || '' }}
           body_path: release_notes.md
-          prerelease: ${{ inputs.channel == 'beta' }}
-          make_latest: ${{ inputs.channel == 'beta' && 'false' || 'true' }}
+          prerelease: ${{ needs.version.outputs.channel == 'beta' }}
+          make_latest: ${{ needs.version.outputs.channel == 'beta' && 'false' || 'true' }}
           files: |
             firmware/**/*.bin
             manifest.json
@@ -325,3 +371,23 @@ jobs:
           gh release upload beta manifest.json manifest.sig --repo "$GITHUB_REPOSITORY" --clobber
           gh release edit beta --repo "$GITHUB_REPOSITORY" --prerelease \
             --notes "Channel file for devices set to beta: currently firmware $VERSION. Not a firmware release."
+
+  # A build that is out on beta, promoted to stable by hand (Run workflow: release + channel stable):
+  # the same files, now the "latest" release, which stable devices read. No rebuild, no new signature.
+  promote:
+    needs: [version]
+    runs-on: ubuntu-24.04
+    if: needs.version.outputs.promote == 'true' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    steps:
+      - name: Promote the beta release to stable
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.version.outputs.version }}
+        run: |
+          TAG="firmware-$VERSION"
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest \
+            --title "ESP32 Firmware Build $VERSION"
+          echo "$TAG is now the stable release (releases/latest)."
+

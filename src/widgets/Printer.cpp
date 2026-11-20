@@ -10,6 +10,17 @@ static inline int fanPercent(int raw) {
   return (int)(ceil(raw * 10.0f / 15.0f) * 10);
 }
 
+// The printer's state word ("RUNNING", ...) in the screen language; unknown ones as they come.
+static const char* printerState(const char* state) {
+  using i18n::S;
+  static const struct { const char* word; S text; } STATES[] = {
+      {"RUNNING", S::PrinterRunning}, {"PREPARE", S::PrinterPrepare}, {"PAUSE", S::PrinterPause},
+      {"FINISH", S::PrinterFinish},   {"FAILED", S::PrinterFailed},   {"IDLE", S::PrinterIdle}};
+  for (const auto& s : STATES)
+    if (!strcmp(state, s.word)) return tr(s.text);
+  return state;
+}
+
 void drawFanStat(uint32_t icon, int x, int y, int rawSpeed) {
   char buf[8];
   sprintf(buf, "%d%%", fanPercent(rawSpeed));
@@ -39,7 +50,7 @@ void bambuWidget(LayoutItem* item)
   
   // Completed
   X_POS+=90;
-  sprintf(buf, "C: %d%%", printer.percent );  
+  snprintf(buf, sizeof(buf), tr(i18n::S::PrinterDone), printer.percent );  
   drawSparseString(&epaperFont, X_POS, y, buf,GxEPD_BLACK );
 
   // Bed Temperature
@@ -79,7 +90,8 @@ void bambuWidget(LayoutItem* item)
 
     // AMS Temperature
     X_POS+=70;
-    sprintf(buf, "%.1f°", printer.ams[0].temp ); 
+    sprintf(buf, "%.1f°", printer.ams[0].temp );
+    i18n::localizeNumber(buf, ui_lang);
     drawSparseString(&epaperFont, X_POS+25, y, buf, GxEPD_BLACK );
     drawSparseChar(&MDI_22_Sparse, X_POS, y+2, MDI_THERMOMETER, GxEPD_BLACK);
 
@@ -91,7 +103,7 @@ void bambuWidget(LayoutItem* item)
   sprintf(buf, "%02d:%02d", printer.remainTime/60, printer.remainTime%60 ); 
   drawSparseString(&epaperFont, item->PosX+30, y, buf,GxEPD_BLACK );
 
-  drawSparseString(&epaperFont, item->PosX, y+20, printer.gcode_state ,GxEPD_BLACK );
+  drawSparseString(&epaperFont, item->PosX, y+20, printerState(printer.gcode_state), GxEPD_BLACK );
 
   for (int i = 0; i < printer.amsCount; i++) {
 
@@ -113,7 +125,7 @@ void bambuWidget(LayoutItem* item)
         } else if (tray.tray_type[0] != '\0') {
           drawSparseStringCentered(&epaperFont, item->PosX+item->ColWidth*j+160, y+item->RowHeight, "--", GxEPD_BLACK);
         } else {
-          drawSparseStringCentered(&epaperFont, item->PosX+item->ColWidth*j+160, y+item->RowHeight, "EMPTY", GxEPD_BLACK);
+          drawSparseStringCentered(&epaperFont, item->PosX+item->ColWidth*j+160, y+item->RowHeight, tr(i18n::S::PrinterEmpty), GxEPD_BLACK);
         }
       }
     }

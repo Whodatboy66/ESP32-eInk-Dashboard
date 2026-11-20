@@ -1,7 +1,9 @@
 // Renders the dashboard on the PC into an image, with the firmware's own drawing code (src/widgets,
 // src/ui) drawing on an in-memory canvas (src/ui/Canvas.h). Sample data, fixed time.
 //
-//   tools/render/render.sh            -> docs/images/layouts/*.png
+//   tools/render/render.sh            -> docs/images/layouts/*.png (German)
+//   tools/render/render.sh out en     -> out/*.png in English
+//   tools/render/render.sh out de screens -> also the setup, update and charge screens
 //
 // Used to check layouts before the device (stage 3) and, later, for the phone preview (stage 5).
 #include <Adafruit_GFX.h>
@@ -16,6 +18,7 @@
 #include "src/widgets/Widgets.h"
 #include "src/widgets/MonthView.h"
 #include "src/core/AppState.h"
+#include "src/core/PowerPlan.h"
 #include "src/core/Problems.h"
 #include "src/services/Bambu.h"
 #include "src/ui/Canvas.h"
@@ -23,6 +26,8 @@
 #include "src/widgets/Dashboard.h"
 #include "src/widgets/Registry.h"
 #include "src/widgets/StatusBar.h"
+#include "src/update/UpdateScreens.h"
+#include "src/web/SetupScreen.h"
 
 // ---- What the drawing code expects from the rest of the firmware ----
 HardwareSerialStub Serial;
@@ -50,6 +55,7 @@ char powerNote[48] = "";
 uint32_t powerNoteShown = 0;
 uint16_t widget_show_mask = 0xFFFF;
 bool clock_24h = true;
+i18n::Lang ui_lang = i18n::Lang::De;
 ServiceState serviceStates[SERVICE_COUNT];
 PinConfig activePins = makePinPreset(PinPreset::Esp32C6Default);
 uint16_t bootCount = 0;
@@ -58,6 +64,12 @@ PrinterStatus printer;
 uint32_t otaAvailBuild = 0;
 char otaAvailVersion[16] = "";
 bool showPrintView() { return false; }
+// The e-paper display of the screens that do their own refresh (setup, update): an 800 x 480
+// bitmap here; they draw on canvas(), which is the image being written.
+DashboardDisplay& getDisplay() {
+  static DashboardDisplay d(DashboardPanel(0, 0, 0, 0));
+  return d;
+}
 
 float readBattery() { return 3.95f; }
 void batteryNoteQuiet(float) {}
@@ -132,7 +144,7 @@ static void sampleData() {
   cal.nextFlight = cal.next24hEvents[3];
 
   struct St { const char* n; float p, prev; };
-  const St st[] = {{"AAPL", 231.5f, 229.0f}, {"NVDA", 141.2f, 145.9f}, {"^IXIC", 18920.0f, 18800.0f}};
+  const St st[] = {{"MSCI World", 98.12f, 97.6f}, {"Nasdaq CC", 14.85f, 14.95f}, {"Gold (phys.)", 52.31f, 51.9f}};
   stockCount = 0;
   for (const St& s : st) {
     StockItem& it = stocks[stockCount++];
@@ -156,9 +168,52 @@ static void sampleData() {
   saveMakerWorld();  // the widget reloads its numbers from NVS
 }
 
-// render <out.pbm> [template] [hide]   hide: comma-separated widget keys switched off (Registry.cpp)
+// The screens outside the dashboard, with sample values (the longest texts where it matters).
+static bool drawScreen(const std::string& name) {
+  using i18n::S;
+  ota::Manifest m;
+  snprintf(m.version, sizeof(m.version), ".78");
+  m.noteCount = 3;
+  snprintf(m.notes[0], ota::NOTE_LEN, "German and English for the screen and the setup app");
+  snprintf(m.notes[1], ota::NOTE_LEN, "Status bar: date, weather weekdays");
+  snprintf(m.notes[2], ota::NOTE_LEN, "Agenda for today and tomorrow");
+  char detail[112];
+  if (name == "setup-ap") drawSetupScreenAp("Dashboard-Setup", "k7m2p9x4");
+  else if (name == "setup-home") drawSetupScreenHome("kuechen-display.local", "192.168.178.123", "482913");
+  else if (name == "update-info")
+    ota::showInfo(ota::DeviceInfo{".77", "esp32c6_firebeetle", "2026-11-17", 82, true, "Home Network 5G", false,
+                                  tr(S::UpdStable)});
+  else if (name == "update-available") ota::showAvailable(m, ".77", true, 30000);
+  else if (name == "update-progress") ota::showProgress(ota::InstallStage::Downloading, 2, ".78");
+  else if (name == "update-failed") {
+    snprintf(detail, sizeof(detail), tr(S::OtaNeedsNewer), ".78", 75u);
+    ota::showMessage(tr(S::OtaCheckFailed), detail);
+  } else if (name == "update-battery") {
+    snprintf(detail, sizeof(detail), tr(S::OtaBatteryDetail), 18, 30);
+    ota::showMessage(tr(S::OtaBatteryLow), detail);
+  } else if (name == "update-done") ota::showUpdated(".78", m.notes, m.noteCount);
+  else if (name == "charge") drawChargeScreen(3.42f);
+  else return false;
+  return true;
+}
+
+// render <out.pbm> [template] [hide] [variant] [lang]
+//   template: a template key, a box string (v1;...) or screen:<name> (drawScreen)
+//   hide: comma-separated widget keys switched off (Registry.cpp); lang: de (default) or en
 int main(int argc, char** argv) {
   const char* out = argc > 1 ? argv[1] : "classic.pbm";
+  if (argc > 5) ui_lang = i18n::parseLang(argv[5]);
+  if (argc > 2 && std::strncmp(argv[2], "screen:", 7) == 0) {
+    GFXcanvas1 screen(800, 480);
+    setCanvas(&screen);
+    screen.fillScreen(GxEPD_WHITE);
+    if (!drawScreen(argv[2] + 7)) {
+      fprintf(stderr, "unknown screen %s\n", argv[2] + 7);
+      return 1;
+    }
+    writePbm(screen, out);
+    return 0;
+  }
   if (argc > 2 && std::strncmp(argv[2], "v1;", 3) == 0) {  // a custom layout (box string)
     snprintf(layout_template, sizeof(layout_template), "custom");
     snprintf(layout_boxes, sizeof(layout_boxes), "%s", argv[2]);
@@ -171,8 +226,17 @@ int main(int argc, char** argv) {
   }
   if (argc > 4 && std::string(argv[4]).rfind("12h", 0) == 0) clock_24h = false;
   if (argc > 4 && std::string(argv[4]) == "empty") renderSample = 1;
-  if (argc > 4 && std::string(argv[4]) == "night") snprintf(powerNote, sizeof(powerNote), "Night until 06:00");
-  if (argc > 4 && std::string(argv[4]) == "saver") snprintf(powerNote, sizeof(powerNote), "Battery saver: every 15 min");
+  if (argc > 4 && std::string(argv[4]) == "night") {  // the status bar's note at night
+    power::Plan p;
+    p.mode = power::Mode::Night;
+    power::note(p, 1, power::DEFAULT_QUIET_TO, powerNote, sizeof(powerNote), ui_lang);
+  }
+  if (argc > 4 && std::string(argv[4]) == "saver") {
+    power::Plan p;
+    p.saverOn = true;
+    p.stepMin = power::SAVER_INTERVAL_MIN;
+    power::note(p, 1, power::DEFAULT_QUIET_TO, powerNote, sizeof(powerNote), ui_lang);
+  }
   if (argc > 4 && std::string(argv[4]) == "problems") {  // weather place missing, calendar failing
     weather_location[0] = '\0';
     problems = PROBLEM_CALENDAR | PROBLEM_WEATHER;

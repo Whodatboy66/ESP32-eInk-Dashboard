@@ -51,13 +51,13 @@ its own password).
     "wifi_ssid": "Home", "wifi_pass": {"set": true},
     "timezone": "CET-1CEST,M3.5.0,M10.5.0/3",
     "weather_loc": "Berlin, DE",
-    "stocks": "AAPL,NVDA,^IXIC",
+    "stocks": "EUNL.DE:MSCI World,PPFB.DE:Gold,^IXIC",
     "ics": [{"set": true, "hint": "calendar.google.com"}, {"set": false}, {"set": false}],
     "bday_url": {"set": false},
     "pkge_key": {"set": false}, "adb_key": {"set": false},
     "mqtt_ip": "192.168.1.50", "mqtt_sn": "01S00A123456789", "mqtt_pass": {"set": true},
     "mqtt_port": 8883, "printer_name": "X1C", "makerworld_uid": "123",
-    "ota_auto": true, "ota_beta": false, "clock_24h": true,
+    "ota_auto": true, "ota_beta": false, "clock_24h": true, "lang": "de",
     "pin_preset": "esp32_c6",
     "pins": {"epd_cs": 1, "epd_dc": 8, "epd_rst": 14, "epd_busy": 7, "epd_sck": 23, "epd_mosi": 22,
              "display_power": 4, "battery": 0, "demo_button": 2}
@@ -91,6 +91,13 @@ its own password).
   settings are filled in (`hint` says what's missing).
 - `structures`: starting points for the editor (built-in templates as boxes, plus Full, Halves, …).
 - `pinPresets`: board presets for the Device tab (advanced).
+- **Language (build 78):** setting `lang`: `"de"` (default, also for devices updated from older
+  builds) or `"en"`. Every text the device sends to the app (problems with their fix, field errors,
+  hints, check results, `power.note`, `estimateNote`) comes in that language; the app shows its own
+  texts in the same language. Changing it is a normal settings save (the device restarts and draws
+  the screen in the new language); another value than `"de"` / `"en"` is a field error under `lang`.
+  The answer of that save is still in the old language. `lastUpdate` stays in the language it was
+  written in. Place names from `/api/places` come in that language too ("Berlin, Deutschland").
 - **Power (build 75, stage 6):** settings `clock_interval` (minutes: 1, 2, 5, 10, 15 or 30),
   `quiet_enabled` (bool), `quiet_from` / `quiet_to` ("HH:MM", default "23:00" / "06:00"; equal = no
   window), `battery_mah` (100-20000, default 3000, only for the estimate). `power` in the state:
@@ -109,10 +116,11 @@ its own password).
 
 ## Settings
 
-`POST /api/settings`: only the changed fields, names as in `settings` above; `ics` is an array of up
+`POST /api/settings`: only the changed fields, names as in `settings` above (`stocks`: up to 5
+entries, comma-separated, each `SYMBOL` or `SYMBOL:Name` with a name of up to 12 characters, build 78); `ics` is an array of up
 to three entries: a string = new link, `null` = remove, anything else (`{}`) = keep, e.g.
 `[{}, "https://…"]` changes only the second link. `pins` is sent whole when a pin changed (`-1` =
-not used). Field errors use the keys of the request (`ics.1`, `pins`). Validation as on the old page (timezone
+not used). Field errors use the keys of the request (`ics.1`, `pins`, `lang`). Validation as on the old page (timezone
 names, calendar links, stock symbols, printer address, port, custom pins).
 → `{"ok": true, "restart": true, "stay": true}`; the device restarts about 3 s later (time for a
 following `/api/layout` in the first-start guide). With `stay` it comes back in the **same mode**

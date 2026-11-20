@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds the setup app (web/) into src/web/generated/WebApp.h (docs/plans/STAGE5_SETUP_APP.md).
 
-Inlines app.css and the <script src> files into web/index.html, strips comments, gzips the result
+Inlines app.css and the <script src> files (layout.js, i18n.js, app.js) into web/index.html, strips comments, gzips the result
 and writes it as a byte array. Standard library only.
 
     python3 tools/web/build.py           write the header
@@ -53,8 +53,8 @@ def bundle():
 
     html, n_css = re.subn(r'<link rel="stylesheet" href="([^"]+)">', css, html)
     html, n_js = re.subn(r'<script src="([^"]+)"></script>', js, html)
-    if n_css != 1 or n_js != 2:
-        sys.exit("build.py: expected 1 stylesheet and 2 scripts in web/index.html, found %d and %d" % (n_css, n_js))
+    if n_css != 1 or n_js != 3:
+        sys.exit("build.py: expected 1 stylesheet and 3 scripts in web/index.html, found %d and %d" % (n_css, n_js))
     html = "\n".join(line.strip() for line in html.splitlines() if line.strip())
     return html.encode("utf-8")
 

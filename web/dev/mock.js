@@ -1,11 +1,13 @@
 // Fake device for developing the setup app without hardware (web/dev/index.html). Replaces
 // window.fetch and answers every /api/ route of docs/SETUP_API.md with sample data. Not part of
-// the bundle. Address options: ?first=1 ?home=1 ?offline=1 ?slow=1 ?down=1 ?classic=1 ?mem=1 ?lowbat=1 ?saver=1
+// the bundle. Address options: ?first=1 ?home=1 ?offline=1 ?slow=1 ?down=1 ?classic=1 ?mem=1 ?lowbat=1 ?saver=1 ?lang=en
 (function () {
   'use strict';
   function opt(k) { return new RegExp('[?&]' + k + '=1').test(location.search); }
   var FIRST = opt('first'), HOME = opt('home'), OFFLINE = opt('offline'), SLOW = opt('slow'), DOWN = opt('down');
   var CLASSIC = opt('classic'), MEM = opt('mem'), LOWBAT = opt('lowbat'), SAVER = opt('saver');
+  // Device texts come in the device's language (setting lang, build 78): German unless ?lang=en.
+  function L(de, en) { return settings.lang === 'en' ? en : de; }
   var loggedIn = !HOME, wrongCodes = 0, code = '123456', downUntil = 0;
 
   var settings = {
@@ -19,6 +21,7 @@
     mqtt_ip: FIRST ? '' : '192.168.1.50', mqtt_sn: FIRST ? '' : '01S00A123456789', mqtt_pass: FIRST ? null : '12345678',
     mqtt_port: 8883, printer_name: FIRST ? '' : 'X1C', makerworld_uid: '',
     ota_auto: true, ota_beta: false, clock_24h: true,
+    lang: /[?&]lang=en/.test(location.search) ? 'en' : 'de',
     clock_interval: 1, quiet_enabled: true, quiet_from: '23:00', quiet_to: '06:00', battery_mah: 3000,
     pin_preset: 'esp32c6_default',
     pins: { epd_cs: 1, epd_dc: 8, epd_rst: 14, epd_busy: 7, epd_sck: 23, epd_mosi: 22, display_power: 4, battery: 0, demo_button: 2 }
@@ -53,6 +56,12 @@
     }
     return true;
   }
+  function hint(k) { return L(HINTS_DE[k], HINTS[k]); }
+  var HINTS_DE = { weather: 'Ort im Tab Daten eintragen', agenda: 'Kalender-Link im Tab Daten eintragen', month: 'Kalender-Link im Tab Daten eintragen',
+    stocks: 'Aktien im Tab Daten eintragen', tracking: 'Pakete-Schlüssel im Tab Daten eintragen', printer: 'Drucker im Tab Daten eintragen',
+    tasks: 'Aufgaben im Tab Daten eintragen', notes: 'Notiz im Tab Daten schreiben', birthdays: 'Geburtstage im Tab Daten eintragen' };
+  var NAMES_DE = { clock: 'Uhr', weather: 'Wetter', agenda: 'Termine', month: 'Monatskalender', stocks: 'Aktien', tracking: 'Pakete',
+    printer: '3D-Drucker', tasks: 'Aufgaben', notes: 'Notiz', birthdays: 'Geburtstage' };
   var HINTS = { weather: 'Set a place on the Data tab', agenda: 'Add a calendar link on the Data tab', month: 'Add a calendar link on the Data tab',
     stocks: 'Add stock symbols on the Data tab', tracking: 'Add the parcels key on the Data tab', printer: 'Add the printer on the Data tab',
     tasks: 'Add tasks on the Data tab', notes: 'Write a note on the Data tab', birthdays: 'Add birthdays on the Data tab' };
@@ -78,9 +87,9 @@
     function days(n, q) { return Math.round((q ? DAYS_QUIET : DAYS_ALL)[n] * scale); }
     var first = days(1, quiet), n = settings.clock_interval;
     return {
-      note: SAVER ? 'Battery saver: every 15 min' : n !== 1 ? 'Clock every ' + n + ' min' : '',
+      note: SAVER ? L('Akku sparen: alle 15 Min.', 'Battery saver: every 15 min') : n !== 1 ? L('Uhr alle ' + n + ' Min.', 'Clock every ' + n + ' min') : '',
       saver: SAVER, night: false, stepMin: SAVER ? Math.max(15, n) : n,
-      estimateNote: 'Estimate from the first measurements (2026-11-20); real current measurements follow.',
+      estimateNote: L('Schätzung aus den ersten Messungen (20.11.2026); echte Strommessungen folgen.', 'Estimate from the first measurements (2026-11-20); real current measurements follow.'),
       estimates: [1, 2, 5, 10, 15, 30].map(function (i) {
         var d = days(i, quiet);
         return { interval: i, days: d, gainPercent: Math.round((d / first - 1) * 100) };
@@ -103,26 +112,26 @@
         wifi: { ssid: settings.wifi_ssid, connected: HOME, rssi: HOME ? -58 : 0 },
         time: HOME ? Math.floor(Date.now() / 1000) : 0,
         problems: settings.ics[1] && /bad/.test(settings.ics[1]) || !FIRST ?
-          [{ key: 'calendar', text: 'A calendar can\'t be read', fix: 'Check the calendar links on the Data tab.' }] : [],
-        lastUpdate: 'Updated to .70', updateAvailable: FIRST ? null : '.72', layoutFallback: null
+          [{ key: 'calendar', text: L('Ein Kalender kann nicht gelesen werden', 'A calendar can\'t be read'), fix: L('Prüfe die Kalender-Links im Tab Daten.', 'Check the calendar links on the Data tab.') }] : [],
+        lastUpdate: L('Aktualisiert auf .70', 'Updated to .70'), updateAvailable: FIRST ? null : '.72', layoutFallback: null
       },
       power: powerState(),
       settings: s,
-      pinPresets: [{ key: 'esp32c6_default', name: 'ESP32-C6 FireBeetle' }, { key: 'custom', name: 'Custom pins' }],
+      pinPresets: [{ key: 'esp32c6_default', name: 'ESP32-C6 FireBeetle' }, { key: 'custom', name: L('Eigene Pins', 'Custom pins') }],
       layout: JSON.parse(JSON.stringify(layout)),
       widgets: WIDGETS.map(function (w) {
         var c = configured(w[0]);
-        return { key: w[0], name: w[1], minW: w[2], minH: w[3], configured: c, hint: c ? '' : HINTS[w[0]] };
+        return { key: w[0], name: L(NAMES_DE[w[0]], w[1]), minW: w[2], minH: w[3], configured: c, hint: c ? '' : hint(w[0]) };
       }),
       structures: [
-        { key: 'planner', name: 'Planner', boxes: [{ c: 0, r: 0, w: 2, h: 1, widget: 'clock' }, { c: 2, r: 0, w: 2, h: 1, widget: 'weather' },
+        { key: 'planner', name: L('Planer', 'Planner'), boxes: [{ c: 0, r: 0, w: 2, h: 1, widget: 'clock' }, { c: 2, r: 0, w: 2, h: 1, widget: 'weather' },
           { c: 0, r: 1, w: 2, h: 2, widget: 'agenda' }, { c: 2, r: 1, w: 2, h: 2, widget: 'month' }] },
         { key: 'minimal', name: 'Minimal', boxes: [{ c: 0, r: 0, w: 4, h: 2, widget: 'clock' }, { c: 0, r: 2, w: 2, h: 1, widget: 'weather' },
           { c: 2, r: 2, w: 2, h: 1, widget: 'agenda' }] },
-        { key: 'technical', name: 'Technical', boxes: [{ c: 0, r: 0, w: 2, h: 1, widget: 'clock' }, { c: 2, r: 0, w: 2, h: 1, widget: 'printer' },
+        { key: 'technical', name: L('Technik', 'Technical'), boxes: [{ c: 0, r: 0, w: 2, h: 1, widget: 'clock' }, { c: 2, r: 0, w: 2, h: 1, widget: 'printer' },
           { c: 0, r: 1, w: 2, h: 1, widget: 'stocks' }, { c: 2, r: 1, w: 2, h: 1, widget: 'tracking' }, { c: 0, r: 2, w: 2, h: 1, widget: 'weather' },
           { c: 2, r: 2, w: 2, h: 1, widget: 'agenda' }] },
-        { key: 'personal', name: 'Personal', boxes: [{ c: 0, r: 0, w: 2, h: 1, widget: 'clock' }, { c: 2, r: 0, w: 2, h: 1, widget: 'notes' },
+        { key: 'personal', name: L('Persönlich', 'Personal'), boxes: [{ c: 0, r: 0, w: 2, h: 1, widget: 'clock' }, { c: 2, r: 0, w: 2, h: 1, widget: 'notes' },
           { c: 0, r: 1, w: 2, h: 2, widget: 'tasks' }, { c: 2, r: 1, w: 2, h: 1, widget: 'birthdays' }, { c: 2, r: 2, w: 2, h: 1, widget: 'weather' }] }
       ],
       grid: { cols: 4, rows: 3, cellW: 200, cellH: 150, statusH: 28 }
@@ -162,19 +171,19 @@
   function validTz(t) { return !t || /^(Europe|America)\/\w+$|^UTC$|^CET$/.test(t) || /^<?[A-Za-z+\-0-9]{3,}>?[+-]?\d/.test(t); }
   function applySettings(b) {
     var errors = {};
-    if ('timezone' in b && !validTz(b.timezone)) errors.timezone = 'Unknown time zone "' + b.timezone + '". Use a name like Europe/Berlin or a rule like CET-1CEST,M3.5.0,M10.5.0/3.';
-    if ('mqtt_port' in b && !(b.mqtt_port >= 1 && b.mqtt_port <= 65535)) errors.mqtt_port = 'The port is a number from 1 to 65535 (usually 8883).';
-    if ('device_name' in b && !/^[\w \-äöüÄÖÜß]{1,32}$/.test(b.device_name)) errors.device_name = 'Use letters, digits, spaces and hyphens (up to 32).';
-    if ('stocks' in b && String(b.stocks).split(',').filter(Boolean).length > 5) errors.stocks = 'Up to 5 symbols.';
-    if ('clock_interval' in b && [1, 2, 5, 10, 15, 30].indexOf(b.clock_interval) < 0) errors.clock_interval = 'Choose 1, 2, 5, 10, 15 or 30 minutes.';
+    if ('timezone' in b && !validTz(b.timezone)) errors.timezone = L('Unbekannte Zeitzone „' + b.timezone + '“. Nutze einen Namen wie Europe/Berlin oder eine Regel wie CET-1CEST,M3.5.0,M10.5.0/3.', 'Unknown time zone "' + b.timezone + '". Use a name like Europe/Berlin or a rule like CET-1CEST,M3.5.0,M10.5.0/3.');
+    if ('mqtt_port' in b && !(b.mqtt_port >= 1 && b.mqtt_port <= 65535)) errors.mqtt_port = L('Der Port ist eine Zahl von 1 bis 65535 (meist 8883).', 'The port is a number from 1 to 65535 (usually 8883).');
+    if ('device_name' in b && !/^[\w \-äöüÄÖÜß]{1,32}$/.test(b.device_name)) errors.device_name = L('Nutze Buchstaben, Ziffern, Leerzeichen und Bindestriche (bis 32).', 'Use letters, digits, spaces and hyphens (up to 32).');
+    if ('stocks' in b && String(b.stocks).split(',').filter(Boolean).length > 5) errors.stocks = L('Bis zu 5 Symbole.', 'Up to 5 symbols.');
+    if ('clock_interval' in b && [1, 2, 5, 10, 15, 30].indexOf(b.clock_interval) < 0) errors.clock_interval = L('Wähle 1, 2, 5, 10, 15 oder 30 Minuten.', 'Choose 1, 2, 5, 10, 15 or 30 minutes.');
     ['quiet_from', 'quiet_to'].forEach(function (k) {
-      if (k in b && !/^([01]\d|2[0-3]):[0-5]\d$/.test(b[k])) errors[k] = 'Type a time like 23:00.';
+      if (k in b && !/^([01]\d|2[0-3]):[0-5]\d$/.test(b[k])) errors[k] = L('Gib eine Uhrzeit wie 23:00 ein.', 'Type a time like 23:00.');
     });
-    if ('battery_mah' in b && !(b.battery_mah >= 100 && b.battery_mah <= 20000)) errors.battery_mah = 'Type the capacity in mAh, from 100 to 20000 (printed on the battery).';
+    if ('battery_mah' in b && !(b.battery_mah >= 100 && b.battery_mah <= 20000)) errors.battery_mah = L('Gib die Kapazität in mAh ein, 100 bis 20000 (steht auf dem Akku).', 'Type the capacity in mAh, from 100 to 20000 (printed on the battery).');
     if (b.ics) b.ics.forEach(function (v, i) {
-      if (typeof v === 'string' && v && !/^(https?|webcals?):\/\//i.test(v.trim())) errors['ics.' + i] = 'A calendar link starts with https:// or webcal://.';
+      if (typeof v === 'string' && v && !/^(https?|webcals?):\/\//i.test(v.trim())) errors['ics.' + i] = L('Ein Kalender-Link beginnt mit https:// oder webcal://.', 'A calendar link starts with https:// or webcal://.');
     });
-    if (Object.keys(errors).length) return { status: 400, body: { ok: false, error: 'Some fields need a fix.', errors: errors } };
+    if (Object.keys(errors).length) return { status: 400, body: { ok: false, error: L('Einige Felder müssen korrigiert werden.', 'Some fields need a fix.'), errors: errors } };
     // stay: back in the same mode after the restart; finish (or the end of the first start): dashboard.
     var stay = typeof b.stay === 'boolean' ? b.stay : b.finish ? false : !!settings.wifi_ssid;
     delete b.stay;
@@ -240,10 +249,10 @@
         { sensor: true, mv: 3850, plausible: true, percent: 60, usb: false, minMv: 3000, history: hist,
           quietMv: 3910, quietPercent: 68, quietAt: NOW - 25 * 60 },
       services: [
-        { key: 'weather', name: 'Weather', lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },
-        { key: 'stocks', name: 'Stocks', lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },
-        { key: 'calendar', name: 'Calendar', lastOk: NOW - 3 * 3600, failures: 2, retryAt: NOW + 4 * 60, stale: true },
-        { key: 'tracking', name: 'Parcels', lastOk: 0, failures: 0, retryAt: 0, stale: false }
+        { key: 'weather', name: L('Wetter', 'Weather'), lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },
+        { key: 'stocks', name: L('Aktien', 'Stocks'), lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },
+        { key: 'calendar', name: L('Kalender', 'Calendar'), lastOk: NOW - 3 * 3600, failures: 2, retryAt: NOW + 4 * 60, stale: true },
+        { key: 'tracking', name: L('Pakete', 'Parcels'), lastOk: 0, failures: 0, retryAt: 0, stale: false }
       ],
       problems: ['calendar'],
       wifi: { failures: 0, retryAfter: 0, rssi: -61 },
@@ -264,27 +273,28 @@
         if (body.code === code) { loggedIn = true; return json(200, { ok: true }); }
         wrongCodes++;
         if (wrongCodes >= 5) { wrongCodes = 0; code = '654321'; console.log('[mock] new code on the display: 654321'); }
-        return json(400, { ok: false, error: 'Wrong code' });
+        return json(400, { ok: false, error: L('Falscher Code', 'Wrong code') });
       case 'GET /api/state': return json(200, state());
       case 'GET /api/networks':
         return json(200, { networks: [{ ssid: 'Home', rssi: -52, secure: true }, { ssid: 'Home-Guest', rssi: -61, secure: false },
           { ssid: 'Neighbour 5G', rssi: -77, secure: true }, { ssid: 'FRITZ!Box 7590 XY', rssi: -84, secure: true }] });
       case 'POST /api/wifi-test':
-        if (body.ssid === 'Nowhere') return json(200, { ok: false, error: 'Network not found' });
-        if (body.pass === 'wrong' || (body.pass === undefined && body.ssid !== settings.wifi_ssid)) return json(200, { ok: false, error: 'Wrong password' });
+        if (body.ssid === 'Nowhere') return json(200, { ok: false, error: L('Netz nicht gefunden', 'Network not found') });
+        if (body.pass === 'wrong' || (body.pass === undefined && body.ssid !== settings.wifi_ssid)) return json(200, { ok: false, error: L('Falsches Passwort', 'Wrong password') });
         OFFLINE = false;
         return json(200, { ok: true });
       case 'POST /api/check-calendar':
         if (OFFLINE) return json(200, { ok: false, offline: true });
-        if (body.url && /bad/.test(body.url)) return json(200, { ok: false, error: 'The link answered with an error (404). Copy it again from your calendar.' });
-        if (body.bday) return settings.bday_url ? json(200, { ok: true, events: 23 }) : json(200, { ok: false, error: 'No birthday link is saved.' });
+        if (body.url && /bad/.test(body.url)) return json(200, { ok: false, error: L('Der Link antwortet mit einem Fehler (404). Kopiere ihn noch einmal aus deinem Kalender.', 'The link answered with an error (404). Copy it again from your calendar.') });
+        if (body.bday) return settings.bday_url ? json(200, { ok: true, events: 23 }) : json(200, { ok: false, error: L('Es ist kein Geburtstags-Link gespeichert.', 'No birthday link is saved.') });
         return json(200, { ok: true, events: body.index !== undefined ? 12 : 7 });
       case 'GET /api/places': {
         if (OFFLINE) return json(200, { ok: false, offline: true });
         var q = (url.searchParams.get('q') || '').toLowerCase();
-        var all = [['Berlin, DE', 'Berlin, Germany'], ['Berlingen, CH', 'Thurgau, Switzerland'], ['Bern, CH', 'Bern, Switzerland'],
-          ['London, GB', 'England, United Kingdom'], ['Londonderry, GB', 'Northern Ireland, United Kingdom'], ['Munich, DE', 'Bavaria, Germany'],
-          ['New York, US', 'New York, United States']];
+        var all = [['Berlin, DE', L('Berlin, Deutschland', 'Berlin, Germany')], ['Berlingen, CH', L('Thurgau, Schweiz', 'Thurgau, Switzerland')],
+          ['Bern, CH', L('Bern, Schweiz', 'Bern, Switzerland')], ['London, GB', L('England, Großbritannien', 'England, United Kingdom')],
+          ['Londonderry, GB', L('Nordirland, Großbritannien', 'Northern Ireland, United Kingdom')], ['München, DE', L('Bayern, Deutschland', 'Bavaria, Germany')],
+          ['New York, US', L('New York, USA', 'New York, United States')]];
         return json(200, { places: all.filter(function (x) { return x[0].toLowerCase().indexOf(q) === 0; }).slice(0, 5)
           .map(function (x) { return { name: x[0], detail: x[1] }; }) });
       }
@@ -296,11 +306,11 @@
         return json(200, { ok: true });
       }
       case 'POST /api/preview.bmp':
-        if (MEM) return json(503, { ok: false, error: 'Not enough memory for the preview right now.' });
+        if (MEM) return json(503, { ok: false, error: L('Gerade nicht genug Speicher für die Vorschau.', 'Not enough memory for the preview right now.') });
         return new Response(bmp(body), { status: 200, headers: { 'Content-Type': 'image/bmp' } });
       case 'GET /api/tasks': return json(200, { tasks: tasks });
       case 'PUT /api/tasks':
-        if ((body.tasks || []).length > 30) return json(400, { ok: false, error: 'At most 30 tasks.' });
+        if ((body.tasks || []).length > 30) return json(400, { ok: false, error: L('Höchstens 30 Aufgaben.', 'At most 30 tasks.') });
         tasks = body.tasks.map(function (t) {
           if (t.done && !t.doneAt) t.doneAt = new Date().toISOString().slice(0, 10);
           if (!t.done) delete t.doneAt;
@@ -309,12 +319,12 @@
         return json(200, tasks.some(function (t) { return /✓/.test(t.title); }) ? { ok: true, removed: '✓' } : { ok: true });
       case 'GET /api/notes': return json(200, { note: note });
       case 'PUT /api/notes':
-        if (String(body.note).length > 400) return json(400, { ok: false, error: 'The note is longer than 400 characters.' });
+        if (String(body.note).length > 400) return json(400, { ok: false, error: L('Die Notiz ist länger als 400 Zeichen.', 'The note is longer than 400 characters.') });
         note = body.note;
         return json(200, { ok: true });
       case 'GET /api/birthdays': return json(200, { manual: manual, upcoming: upcoming() });
       case 'PUT /api/birthdays':
-        if ((body.manual || []).length > 50) return json(400, { ok: false, error: 'At most 50 birthdays.' });
+        if ((body.manual || []).length > 50) return json(400, { ok: false, error: L('Höchstens 50 Geburtstage.', 'At most 50 birthdays.') });
         manual = body.manual;
         return json(200, { ok: true });
       case 'GET /api/diagnostics': return json(200, diagnostics());

@@ -1,10 +1,14 @@
 #!/usr/bin/env bash
 # Renders the dashboard on the PC (tools/render/render.cpp) into PNG images.
-# Usage: tools/render/render.sh [out-dir]   (default docs/images/layouts; needs g++, python3)
+# Usage: tools/render/render.sh [out-dir] [de|en] [screens]
+#   default docs/images/layouts in German; "screens" adds the setup, update and charge screens
+#   (screen-*.png). Needs g++, python3.
 set -euo pipefail
 cd "$(dirname "$0")/../.."
 CXX="${CXX:-g++}"
 OUT="${1:-docs/images/layouts}"
+LANG_ARG="${2:-de}"
+SCREENS="${3:-}"
 GFX="$(ls -d "$HOME"/.arduino15/internal/Adafruit_GFX_Library_*/"Adafruit GFX Library" | head -1)"
 AJ="$(ls -d "$HOME"/.arduino15/internal/ArduinoJson_*/ArduinoJson/src | head -1)"
 BUILD="$(mktemp -d)"
@@ -17,13 +21,14 @@ mkdir -p "$OUT"
   src/ui/SparseFont.cpp src/ui/Fonts.cpp src/widgets/Widgets.cpp src/widgets/MonthView.cpp \
   src/widgets/Clock.cpp src/widgets/StatusBar.cpp src/widgets/Printer.cpp src/widgets/Registry.cpp \
   src/widgets/Dashboard.cpp src/widgets/Personal.cpp tools/render/UserStoreSample.cpp \
-  src/ui/Canvas.cpp src/core/Problems.cpp \
+  src/ui/Canvas.cpp src/core/Problems.cpp src/update/UpdateScreens.cpp src/web/SetupScreen.cpp \
+  -x c src/ui/qr/qrcodegen.c -x none \
   -Wl,--wrap=time -o "$BUILD/render"
 # name template hidden-widgets
 while read -r name tpl hide variant; do
   [[ -z "$name" ]] && continue
   [[ "$hide" == "-" ]] && hide=""
-  "$BUILD/render" "$BUILD/$name.pbm" "$tpl" "$hide" "${variant:-}" 2>/dev/null
+  "$BUILD/render" "$BUILD/$name.pbm" "$tpl" "$hide" "${variant:-}" "$LANG_ARG" 2>/dev/null
   python3 -I tools/render/pbm_to_png.py "$BUILD/$name.pbm" "$OUT/$name.png"
   echo "$OUT/$name.png"
 done <<'LIST'
@@ -44,3 +49,11 @@ custom-no-status-bar v1;sb0;0,0,2,1,clock;2,0,2,1,weather;0,1,2,2,agenda;2,1,2,2
 planner-night planner - night
 classic-saver classic - saver
 LIST
+if [[ "$SCREENS" == "screens" ]]; then
+  for screen in setup-ap setup-home update-info update-available update-progress update-failed update-battery \
+                update-done charge; do
+    "$BUILD/render" "$BUILD/screen-$screen.pbm" "screen:$screen" "" "" "$LANG_ARG" 2>/dev/null
+    python3 -I tools/render/pbm_to_png.py "$BUILD/screen-$screen.pbm" "$OUT/screen-$screen.png"
+    echo "$OUT/screen-$screen.png"
+  done
+fi

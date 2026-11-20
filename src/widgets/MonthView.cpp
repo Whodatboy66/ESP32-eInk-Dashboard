@@ -1,15 +1,10 @@
 #include "MonthView.h"
 #include <time.h>
 
+#include "../i18n/Dates.h"
+
 #define COLS 7
 #define ROWS 6
-
-const char* daysHeader[7] = {"M","T","W","T","F","S","S"};
-
-const char* months[12] = {
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December"
-};
 
 int daysInMonth(int year,int month)
 {
@@ -48,14 +43,14 @@ void drawCalendar(LayoutItem* item)
 
   // ---- Month Title ----
   char title[24];
-  sprintf(title, "%s %d", months[month - 1], year);
+  i18n::formatMonthTitle(year, month - 1, ui_lang, title, sizeof(title));
   drawSparseStringCentered(&epaperFont, item->PosX + item->Width / 2, item->PosY + textSpace, title, GxEPD_BLACK);
 
   // ---- Weekday headers ----
   for (int i = 0; i < 7; i++)
   {
     int x = item->PosX + i * cellW + cellW / 2;
-    drawSparseStringCentered(&epaperFont, x, item->PosY + dowY, daysHeader[i], GxEPD_BLACK);
+    drawSparseStringCentered(&epaperFont, x, item->PosY + dowY, i18n::weekdayInitial(i, ui_lang), GxEPD_BLACK);
   }
 
   // ---- First weekday of month ----
@@ -77,8 +72,8 @@ void drawCalendar(LayoutItem* item)
         // Text baseline: the circles (drawn at y - 5) are centered in their cell.
         int y = item->PosY + headerH + r * cellH + cellH / 2 + 5;
 
-        char buf[4];
-        sprintf(buf, "%d", d);
+        char buf[12];
+        snprintf(buf, sizeof(buf), "%d", d);
 
         bool isToday = (d == today);
         bool hasEvent = false;

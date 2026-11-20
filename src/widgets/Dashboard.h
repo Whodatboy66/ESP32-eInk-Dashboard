@@ -22,3 +22,5 @@ void drawFullScreen(const FullScreenParts& parts);
 void drawStaleMark(LayoutItem* item, Service service, bool bottom = false);
 // One widget, clipped to its place.
 void drawWidget(LayoutItem* item, void (*draw)(LayoutItem*));
+// Below 5 % battery (src/core/App.cpp): "please charge" and the voltage, on the whole screen.
+void drawChargeScreen(float volts);

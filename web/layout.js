@@ -165,22 +165,22 @@ var Layout = (function () {
   function isInt(v) { return typeof v === 'number' && isFinite(v) && Math.floor(v) === v; }
 
   // Check a box layout ({boxes: [...]}) with the firmware's rules. Returns {ok, errors}; each
-  // error is {code, text, box} with code one of: count, outside, overlap, gap, unknown,
+  // error is {code, text, box, p} (p: values for a translated text) with code one of: count, outside, overlap, gap, unknown,
   // duplicate, size. `box` is the 0-based box index (-1 for the whole layout).
   function validate(layout, widgets, grid) {
     var g = gridOf(grid), t = table(widgets), errors = [];
     var boxes = (layout && layout.boxes) || [];
     var cells = [], used = {}, i, x, y;
-    function err(code, text, box) { errors.push({ code: code, text: text, box: box }); }
+    function err(code, text, box, p) { errors.push({ code: code, text: text, box: box, p: p || {} }); }
 
-    if (boxes.length > MAX_BOXES) err('count', 'At most ' + MAX_BOXES + ' boxes fit on the screen; merge some.', -1);
+    if (boxes.length > MAX_BOXES) err('count', 'At most ' + MAX_BOXES + ' boxes fit on the screen; merge some.', -1, { max: MAX_BOXES });
     for (i = 0; i < g.cols * g.rows; i++) cells.push(-1);
 
     boxes.forEach(function (b, n) {
       var name = 'Box ' + (n + 1);
       if (!b || !isInt(b.c) || !isInt(b.r) || !isInt(b.w) || !isInt(b.h) ||
           b.w < 1 || b.h < 1 || b.c < 0 || b.r < 0 || b.c + b.w > g.cols || b.r + b.h > g.rows) {
-        err('outside', name + ' is outside the ' + g.cols + ' × ' + g.rows + ' grid.', n);
+        err('outside', name + ' is outside the ' + g.cols + ' × ' + g.rows + ' grid.', n, { n: n + 1, cols: g.cols, rows: g.rows });
         return;
       }
       var overlap = -1;
@@ -191,25 +191,27 @@ var Layout = (function () {
           else if (cells[k] < 0) cells[k] = n;
         }
       }
-      if (overlap >= 0) err('overlap', name + ' overlaps box ' + (overlap + 1) + '.', n);
+      if (overlap >= 0) err('overlap', name + ' overlaps box ' + (overlap + 1) + '.', n, { n: n + 1, other: overlap + 1 });
 
       var key = b.widget;
       if (key === null || key === undefined || key === '') return;
       var w = t[key];
-      if (!w) { err('unknown', name + ' shows an unknown widget ("' + key + '").', n); return; }
+      if (!w) { err('unknown', name + ' shows an unknown widget ("' + key + '").', n, { n: n + 1, key: key }); return; }
       if (used[key] !== undefined) {
-        err('duplicate', (w.name || key) + ' is in box ' + (used[key] + 1) + ' and box ' + (n + 1) + '; a widget can be shown once.', n);
+        err('duplicate', (w.name || key) + ' is in box ' + (used[key] + 1) + ' and box ' + (n + 1) + '; a widget can be shown once.', n,
+          { name: w.name || key, other: used[key] + 1, n: n + 1 });
       } else {
         used[key] = n;
       }
       if (!fits(w, b)) {
-        err('size', (w.name || key) + ' needs ' + (w.minW || 1) + ' × ' + (w.minH || 1) + ' cells; box ' + (n + 1) + ' is ' + b.w + ' × ' + b.h + '.', n);
+        err('size', (w.name || key) + ' needs ' + (w.minW || 1) + ' × ' + (w.minH || 1) + ' cells; box ' + (n + 1) + ' is ' + b.w + ' × ' + b.h + '.', n,
+          { name: w.name || key, minW: w.minW || 1, minH: w.minH || 1, n: n + 1, w: b.w, h: b.h });
       }
     });
 
     var free = 0;
     for (i = 0; i < cells.length; i++) if (cells[i] < 0) free++;
-    if (free) err('gap', free + (free === 1 ? ' cell isn\'t' : ' cells aren\'t') + ' covered by a box.', -1);
+    if (free) err('gap', free + (free === 1 ? ' cell isn\'t' : ' cells aren\'t') + ' covered by a box.', -1, { free: free });
     return { ok: errors.length === 0, errors: errors };
   }
 

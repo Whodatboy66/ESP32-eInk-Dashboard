@@ -3,17 +3,21 @@
 // metrics, and when it counts as configured (its setting is filled in).
 #include <stdint.h>
 
+#include "../i18n/Strings.h"
 #include "../layout/Templates.h"
+
+// No hint: the widget needs no settings (text() of it is "").
+constexpr i18n::S NO_HINT = i18n::S::Count;
 
 struct WidgetInfo {
   layouts::WidgetId id;
   const char* key;           // setup page / NVS ("weather")
-  const char* name;          // shown on the setup page
+  i18n::S name;              // shown in the setup app (tr())
   int layoutId;              // ID in the layout table (getLayout())
   const char* description;
   int rowHeight, colWidth;   // text line height / column width the drawing code uses
   int refresh;               // refresh interval in wakes (minutes)
-  const char* hint;          // what to set up when its settings are missing (box layouts, the app)
+  i18n::S hint;              // what to set up when its settings are missing (box layouts, the app)
 };
 
 // A widget placed in a box layout whose settings are missing: its box shows the hint instead.

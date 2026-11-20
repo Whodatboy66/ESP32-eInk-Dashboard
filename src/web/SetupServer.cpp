@@ -215,9 +215,10 @@ bool setupStaConnect(const char* ssid, const char* pass, char* err, size_t cap) 
     initTime();  // for the birthdays' "today" and dates in the checks
     return true;
   }
-  if (st == WL_NO_SSID_AVAIL) snprintf(err, cap, "Network not found: is it in range?");
-  else if (st == WL_CONNECT_FAILED) snprintf(err, cap, "Wrong password");
-  else snprintf(err, cap, "No connection: check the password and that the network is in range.");
+  // For the setup app: in its language.
+  if (st == WL_NO_SSID_AVAIL) snprintf(err, cap, "%s", tr(i18n::S::WifiNotFound));
+  else if (st == WL_CONNECT_FAILED) snprintf(err, cap, "%s", tr(i18n::S::WifiWrongPass));
+  else snprintf(err, cap, "%s", tr(i18n::S::WifiNoConnection));
   WiFi.disconnect(false);
   return false;
 }
@@ -804,7 +805,7 @@ for (int w = 0; w < layouts::WIDGET_COUNT; w++) {
   html += "\" value=\"1\" style=\"width:auto\"";
   if (widget_show_mask & layouts::widgetBit(id)) html += " checked";
   html += "> ";
-  html += widgetInfo(id).name;
+  html += tr(widgetInfo(id).name);
   html += "</label>\n";
 }
 

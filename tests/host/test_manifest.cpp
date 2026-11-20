@@ -35,7 +35,7 @@ static void test_valid_manifest() {
   CHECK_STR(m.tag, "firmware-.65");
   CHECK_EQ(m.noteCount, 2);
   CHECK_STR(m.notes[0], "Faster calendar");
-  CHECK_STR(m.notes[1], "Fix weather.");  // made displayable
+  CHECK_STR(m.notes[1], "Fix (weather)!");  // the font has ( ) ! since build 70
   CHECK(m.hasFile);
   CHECK_STR(m.fileName, "ESP32C6-FireBeetle.bin");
   CHECK_EQ(m.fileSize, 1359040u);

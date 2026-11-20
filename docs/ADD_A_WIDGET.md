@@ -12,12 +12,24 @@ drawing function plus a few facts the engine and the wake cycle need.
    sparse fonts (`src/ui/SparseFont.h`) inside `item->PosX/PosY/Width/Height`. Drawing is clipped
    to that rectangle; use the size to decide how much to show (rows = `Height / RowHeight`, …).
    Call `drawStaleMark(item, Service::...)` at the end if the data can get old.
+
+   **Texts** (German and English): user content (titles, names) is drawn as it is; every other text
+   comes from the text table. Add a line per text to `I18N_TEXTS` in `src/i18n/Strings.h`:
+   `X(MyKey, "German", "English")` (a screen text before `ApiOffline`, the setup app's texts after
+   it), and draw `tr(i18n::S::MyKey)` (`app.h`, the chosen language). A text with printf
+   conversions has the same ones in both languages, in the same order (`snprintf(buf, n,
+   tr(i18n::S::MyKey), value)`). Dates and weekday / month names: `src/i18n/Dates.h` (not
+   `strftime`, whose names are English only); prices with `i18n::localizeNumber()` (German decimal
+   comma). German is usually longer: render both languages (step 6), and if the text sits in a
+   fixed place, add a width check to `tests/host/test_i18n.cpp` (it measures with the screen font
+   and checks that every screen text only uses characters the font has).
 3. **Registry.** Add a `WidgetId` **at the end** (`src/layout/LayoutEngine.h`; its bit position is
    stored in NVS `show_mask`, at most 16 widgets) with its size limits in cells (`limitsOf`) and
    its key in `WIDGET_KEYS` (used by the setup app, saved box layouts and the registry: never rename
-   a key, saved layouts refer to it), and a line in `src/widgets/Registry.cpp`: name, layout ID, row
-   height, column width, refresh interval in minutes, and the hint shown in its box when its
-   settings are missing ("Weather: set a place in the app"); in `configuredWidgets()` say when it
+   a key, saved layouts refer to it), and a line in `src/widgets/Registry.cpp`: name (a text key),
+   layout ID, row height, column width, refresh interval in minutes, and the hint (a text key, or
+   `NO_HINT`) shown in its box when its settings are missing ("Wetter: Ort in der App eintragen" /
+   "Weather: set a place in the app"); in `configuredWidgets()` say when it
    counts as set up. The setup app gets it automatically (`/api/state` lists every widget with its
    size limits); for its sketch preview add a `case` to `widgetSvg()` in `web/app.js` and run
    `python3 tools/web/build.py`.
@@ -31,4 +43,5 @@ drawing function plus a few facts the engine and the wake cycle need.
    `drawFullScreen()` (`src/widgets/Dashboard.cpp`).
 6. **Check it.** `tests/host/run.sh` (the layout tests check every template with every widget on and
    off), then render on the PC: add sample data in `tools/render/render.cpp`, run
-   `tools/render/render.sh`, look at `docs/images/layouts/*.png`. Classic must not change.
+   `tools/render/render.sh` (German, into `docs/images/layouts/`) and `tools/render/render.sh /tmp/en en`
+   (English), look at the images. Classic must not change.

@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "../../app.h"
 #include "../hardware/EpaperDriver.h"
 #include "../hardware/PinMapping.h"
 #include "../ui/Canvas.h"
@@ -13,6 +14,8 @@
 #include "../ui/qr/qrcodegen.h"
 
 namespace {
+
+using i18n::S;
 
 constexpr int QR_MAX_VERSION = 8;  // up to ~150 characters: Wi-Fi strings and addresses
 
@@ -68,19 +71,15 @@ void drawAp(const void* p) {
   strncat(qr, ";;", sizeof(qr) - strlen(qr) - 1);
   drawQrCode(qr, 460, 70, 320);
 
-  drawSparseString(&epaperFont, 40, 70, "Setup mode", GxEPD_BLACK);
+  // Text left of the QR code (x 460).
+  drawSparseString(&epaperFont, 40, 70, tr(S::SetupTitle), GxEPD_BLACK);
   canvas().fillRect(40, 80, 380, 3, GxEPD_BLACK);
   char net[64], pass[64];
-  snprintf(net, sizeof(net), "Wi-Fi:  %s", a.ssid);
-  snprintf(pass, sizeof(pass), "Password:  %s", a.password);
-  const char* lines[] = {"1. Scan the code with your phone's camera,",
-                         "   or join this Wi-Fi by hand:",
-                         net,
-                         pass,
-                         "2. The setup page opens by itself.",
-                         "   If not, open http://192.168.4.1"};
+  snprintf(net, sizeof(net), tr(S::SetupWifi), a.ssid);
+  snprintf(pass, sizeof(pass), tr(S::SetupPassword), a.password);
+  const char* lines[] = {tr(S::SetupStep1), tr(S::SetupStep1b), net, pass, tr(S::SetupStep2), tr(S::SetupStep2b)};
   drawLines(40, 130, lines, 6);
-  drawSparseString(&epaperFont, 40, 440, "Leaves setup mode after 5 minutes without use.", GxEPD_BLACK);
+  drawSparseString(&epaperFont, 40, 440, tr(S::SetupTimeout), GxEPD_BLACK);
 }
 
 void drawHome(const void* p) {
@@ -89,18 +88,19 @@ void drawHome(const void* p) {
   snprintf(url, sizeof(url), "http://%s/", h.ip);
   drawQrCode(url, 520, 40, 250);
 
-  drawSparseString(&epaperFont, 40, 60, "Edit mode", GxEPD_BLACK);
+  // Text left of the QR code (x 520).
+  drawSparseString(&epaperFont, 40, 60, tr(S::EditTitle), GxEPD_BLACK);
   canvas().fillRect(40, 70, 440, 3, GxEPD_BLACK);
   char a1[80], a2[80];
   snprintf(a1, sizeof(a1), "http://%s", h.host);
-  snprintf(a2, sizeof(a2), "or http://%s", h.ip);
-  const char* lines[] = {"On a phone or computer in this Wi-Fi,", "scan the code or open:", a1, a2};
+  snprintf(a2, sizeof(a2), tr(S::EditOr), h.ip);
+  const char* lines[] = {tr(S::EditLine1), tr(S::EditLine2), a1, a2};
   drawLines(40, 115, lines, 4);
-  drawSparseString(&epaperFont, 40, 300, "Code to type in:", GxEPD_BLACK);
+  drawSparseString(&epaperFont, 40, 300, tr(S::EditCode), GxEPD_BLACK);
   // The code in the clock digits (they have 0-9).
   drawSparseString(&HighSpeed_130, 40, 450, h.code, GxEPD_BLACK);
   // Below the QR code, above the code digits (they span x 40-550, y 346-477).
-  drawSparseString(&epaperFont, 520, 318, "Closes after 10 min unused.", GxEPD_BLACK);
+  drawSparseString(&epaperFont, 520, 318, tr(S::EditTimeout), GxEPD_BLACK);
 }
 
 }  // namespace

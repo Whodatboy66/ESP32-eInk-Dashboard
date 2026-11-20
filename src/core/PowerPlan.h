@@ -7,6 +7,8 @@
 #include <cstdio>
 #include <ctime>
 
+#include "../i18n/Strings.h"
+
 namespace power {
 
 constexpr int CLOCK_CHOICES[] = {1, 2, 5, 10, 15, 30};  // minutes; all divide 60 and 1440
@@ -114,18 +116,18 @@ inline bool parseHm(const char* s, int& minutes) {
   return true;
 }
 
-// The note in the status bar: "Night until 06:00", "Battery saver: every 15 min", "Clock every
-// 5 min"; empty when nothing special.
-inline void note(const Plan& p, int chosenInterval, int quietTo, char* out, size_t cap) {
+// The note in the status bar: "Nacht bis 06:00" / "Night until 06:00", "Akku-Sparen: alle 15 Min." /
+// "Battery saver: every 15 min", "Uhr alle 5 Min." / "Clock every 5 min"; empty when nothing special.
+inline void note(const Plan& p, int chosenInterval, int quietTo, char* out, size_t cap, i18n::Lang lang) {
   if (cap) out[0] = '\0';
   char hm[8];
   if (p.mode == Mode::Night) {
     formatHm(quietTo, hm, sizeof(hm));
-    std::snprintf(out, cap, "Night until %s", hm);
+    std::snprintf(out, cap, i18n::text(i18n::S::NoteNight, lang), hm);
   } else if (p.saverOn) {
-    std::snprintf(out, cap, "Battery saver: every %d min", p.stepMin);
+    std::snprintf(out, cap, i18n::text(i18n::S::NoteSaver, lang), p.stepMin);
   } else if (chosenInterval > 1 && validClockInterval(chosenInterval)) {
-    std::snprintf(out, cap, "Clock every %d min", chosenInterval);
+    std::snprintf(out, cap, i18n::text(i18n::S::NoteClock, lang), chosenInterval);
   }
 }
 

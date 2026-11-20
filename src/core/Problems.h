@@ -2,6 +2,8 @@
 // Problems shown in the status bar (which sources failed), kept in RTC memory across deep sleep.
 #include <stdint.h>
 
+#include "../i18n/Strings.h"
+
 // Problems listed in the top bar. Each flag is set when that source fails, cleared on its
 // next success, and kept across deep sleep.
 enum : uint16_t {
@@ -17,8 +19,11 @@ enum : uint16_t {
   PROBLEM_FLIGHT       = 1 << 9,
   PROBLEM_BIRTHDAYS    = 1 << 10,
 };
-inline const char* const PROBLEM_LABELS[] = {
-  "WiFi", "Time", "Weather", "Stocks", "Calendar", "Printer", "Access code", "MakerWorld", "Tracking", "Flight", "Birthdays"
+// Their names in the status bar (tr(), app.h), in flag order.
+inline const i18n::S PROBLEM_LABELS[] = {
+  i18n::S::ProbWifi, i18n::S::ProbTime, i18n::S::ProbWeather, i18n::S::ProbStocks, i18n::S::ProbCalendar,
+  i18n::S::ProbPrinter, i18n::S::ProbPrinterCode, i18n::S::ProbMakerWorld, i18n::S::ProbTracking,
+  i18n::S::ProbFlight, i18n::S::ProbBirthdays
 };
 extern uint16_t problems;       // RTC memory
 extern uint16_t problemsShown;  // what the status bar shows now (RTC memory)

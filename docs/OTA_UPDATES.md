@@ -70,14 +70,27 @@ channel is set per device in the setup app (Device tab, **Update channel**).
 
 Needs the `OTA_SIGNING_KEY` secret (see Signing).
 
-1. Raise `FW_BUILD` in `configure.h` (e.g. 76 -> 77; `FW_VERSION` becomes ".77"), commit, push; CI must be green.
-2. GitHub -> Actions -> "Build firmware" -> Run workflow on `main`: tick **release**, pick the
-   **channel** (beta first for your own device, stable for everyone), fill **whats_new** (up to 3
-   lines separated by `|`, max. 70 characters each, letters/digits/spaces and `#%*+,-./:=?_~` only),
-   leave **min_build** at 0 unless older builds must not update directly.
-3. The release `firmware-.77` gets every board's images, `manifest.json` and `manifest.sig`.
-   Auto-install devices on that channel install it with the next daily check, the others show
-   "Update available"; a double tap installs it at once.
+**To beta, automatically (from build 78):**
+
+1. Raise `FW_BUILD` in `configure.h` (e.g. 77 -> 78; `FW_VERSION` becomes ".78") and put the
+   "What's new" line for that build into [.github/whats_new.txt](../.github/whats_new.txt):
+   `78: line one | line two | line three` (up to 3 lines, max. 70 characters each, only characters
+   the screen font has: letters incl. umlauts, digits and the usual punctuation; the release fails
+   with a message otherwise).
+2. Commit and push to `main`. When the host tests and all builds are green, the release
+   `firmware-.78` is published as a **beta** pre-release with every board's images, `manifest.json`
+   and `manifest.sig`. Beta devices with auto install get it at the next daily check, the others show
+   "Update available"; a double tap installs it at once. A push without a new `FW_BUILD` (docs,
+   plans) publishes nothing.
+
+**To stable, by hand, after testing the beta:** GitHub -> Actions -> "Build firmware" -> Run
+workflow on `main`: tick **release**, channel **stable**. For a build that is already out on beta
+this **promotes** it (no rebuild): it becomes the latest release, which stable devices read. Leave
+**rotate_key** unticked.
+
+**A release by hand** (e.g. stable without a beta first, or other "What's new" text): the same Run
+workflow with a build that isn't released yet: tick **release**, pick the **channel**, fill
+**whats_new**, leave **min_build** at 0 unless older builds must not update directly.
 
 Devices with build 64/65 don't know channels or signatures and only read the latest regular
 release; from 66 on, beta works. (64/65 also don't check the display: a 4-color device on 64/65
