@@ -46,6 +46,7 @@ static long clockDrawnMinute = -1;
 // Personal widgets (stage 4): the day they were drawn for (due labels, "in 3 d"), and the birthday
 // calendar link: the day it was read, and when to try again after a failure.
 RTC_DATA_ATTR static long personalDrawnDay = 0;
+RTC_DATA_ATTR static long tasksPurgedDay = 0;  // done tasks older than 30 days: removed once a day
 RTC_DATA_ATTR static long bdayFeedDay = 0;
 RTC_DATA_ATTR static time_t bdayFeedRetryAt = 0;
 RTC_DATA_ATTR static uint32_t bdayFeedUrlHash = 0;
@@ -478,6 +479,10 @@ void appSetup() {
   const personal::Date today = localToday();
   const long todayNum = today.valid() ? personal::dayNumber(today) : 0;
   bool personalRedraw = todayNum && todayNum != personalDrawnDay && (infoTasks || infoNote || infoBirthdays);
+  if (todayNum && todayNum != tasksPurgedDay) {
+    tasksPurgedDay = todayNum;
+    purgeOldDoneTasks();  // also when only done tasks are left (they don't set USER_HAS_TASKS)
+  }
   const uint32_t bdayHash = textHash(bday_url);
   if (bdayHash != bdayFeedUrlHash) bdayFeedRetryAt = 0;
   bool bdayFeedDue = infoBirthdays && bday_url[0] && todayNum &&

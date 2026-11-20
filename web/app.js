@@ -228,7 +228,7 @@ function chooseStructure(s) {
   else {
     S.lay.classic = false;
     S.lay.key = s.key;
-    S.lay.boxes = Layout.fromStructure(s, widgetList());
+    S.lay.boxes = isGeneric(s) ? Layout.copyBoxes(s.boxes).map(function (b) { b.widget = null; return b; }) : Layout.fromStructure(s, widgetList());
     S.sel = 0;
   }
   layChanged();
@@ -455,14 +455,40 @@ function structIcon(s) {
   return '<svg viewBox="0 0 60 42" aria-hidden="true">' + g + '</svg>';
 }
 
-function structStrip() {
-  return h('div', { class: 'strip', role: 'group', 'aria-label': 'Structure' }, structures().map(function (s) {
+// Short widget names for the layout thumbnails.
+var SHORT = { clock: 'Clock', weather: 'Weather', agenda: 'Agenda', month: 'Month', stocks: 'Stocks', tracking: 'Parcels',
+  printer: 'Printer', tasks: 'Tasks', notes: 'Note', birthdays: 'Birthdays' };
+function isGeneric(s) { return !s.classic && Layout.GENERIC.some(function (g) { return g.key === s.key; }); }
+// Thumbnail of a ready-made layout: its boxes with the widget names (120 x 84).
+function layoutThumb(s) {
+  var g = '', rects = s.classic ?
+    CLASSIC.map(function (c) { return [c[1] * 120 / 800, c[2] * 84 / 480, c[3] * 120 / 800, c[4] * 84 / 480, c[0]]; }) :
+    s.boxes.map(function (b) { return [b.c * 30, b.r * 26 + 5, b.w * 30, b.h * 26, b.widget]; });
+  if (!s.classic) g = '<rect x="1" y="1" width="118" height="2.5" fill="currentColor"/>';
+  rects.forEach(function (r) {
+    var w = r[2] - 2, hh = r[3] - 2, name = r[4] ? SHORT[r[4]] || r[4] : '', max = Math.floor((w - 2) / 4.9);
+    if (name.length > max) name = name.slice(0, Math.max(1, max - 1)) + '.';
+    g += '<rect x="' + (r[0] + 1).toFixed(1) + '" y="' + (r[1] + 1).toFixed(1) + '" width="' + w.toFixed(1) + '" height="' + hh.toFixed(1) +
+      '" rx="1.5" fill="none" stroke="currentColor" stroke-width="1.4"/>';
+    if (name) g += '<text x="' + (r[0] + r[2] / 2).toFixed(1) + '" y="' + (r[1] + r[3] / 2 + 3).toFixed(1) + '" font-size="8.5" text-anchor="middle" fill="currentColor">' + esc(name) + '</text>';
+  });
+  return '<svg viewBox="0 0 120 84" aria-hidden="true">' + g + '</svg>';
+}
+function stripOf(list, big, label) {
+  return h('div', { class: 'strip' + (big ? ' big' : ''), role: 'group', 'aria-label': label }, list.map(function (s) {
     var on = S.lay.classic ? !!s.classic : (!s.classic && S.lay.key === s.key);
     var b = h('button', { type: 'button', 'aria-pressed': String(on), 'data-f': 'st:' + s.key, onclick: function () { chooseStructure(s); } });
-    b.innerHTML = structIcon(s);
+    b.innerHTML = big ? layoutThumb(s) : structIcon(s);
     add(b, s.name);
     return b;
   }));
+}
+// Two rows: the device's ready-made layouts (with widgets) + Classic, then the empty structures.
+function structStrip() {
+  var all = structures(), ready = all.filter(function (s) { return !isGeneric(s); }), empty = all.filter(isGeneric);
+  return [lbl('Ready-made layouts'), stripOf(ready, true, 'Ready-made layouts'),
+    lbl('Empty structures'), stripOf(empty, false, 'Empty structures'),
+    h('p', { class: 'note' }, 'Empty structures have only boxes: choose what each one shows below.')];
 }
 
 // ---------- fields ----------
@@ -935,7 +961,9 @@ function exactPreview() {
   S.preview = { busy: true };
   S.scrollPv = true;
   render();
-  api('POST', '/api/preview.bmp', layoutBody(), { blob: true, timeout: 30000 }).then(function (r) {
+  var body = layoutBody();
+  body.clock_24h = cur('clock_24h') !== false;   // the unsaved choice counts for the preview
+  api('POST', '/api/preview.bmp', body, { blob: true, timeout: 30000 }).then(function (r) {
     if (r.ok && r.blob) S.preview = { url: URL.createObjectURL(r.blob) };
     else if (r.login) S.preview = null;
     else S.preview = { err: r.status === 503 ? (r.error || 'The device is short of memory.') + ' Try again in a moment.' : r.error };
@@ -1131,12 +1159,12 @@ function previewCard() {
   if (p.err) return h('div', { class: 'card', id: 'pv' }, h('p', { class: 'err', role: 'alert' }, 'No exact preview: ' + p.err), close);
   return h('div', { class: 'card', id: 'pv' }, h('p', { class: 'big' }, 'Exact preview'),
     h('div', { class: 'epd' }, h('img', { src: p.url, alt: 'Exact picture of the layout, drawn by the device', width: 800, height: 480 })),
-    h('p', { class: 'note' }, 'Drawn by the device with its own data (sample data where it has none). Not on the display yet.'), close);
+    h('p', { class: 'note' }, 'Drawn by the device with the data it has right now. After a restart some data (e.g. the weather) appears only after the next update. Not on the display yet.'), close);
 }
 function screenTab() {
   var out = [lbl('Preview'), sketchEl(S.lay.classic ? -1 : S.sel)];
   if (S.preview) out.push(previewCard());
-  out.push(lbl('Structure'), structStrip());
+  out.push(structStrip());
   if (S.lay.classic) out.push(lbl('Show on Classic'), showList());
   else {
     out.push(lbl('Boxes: tap one to choose what it shows'), boxList(), toolsRow(false));
@@ -1221,13 +1249,14 @@ function putPersonal(kind, path, body, savedKey, value) {
     if (r.ok) {
       S.p[savedKey] = value;
       S.res[kind] = { ok: true, text: 'Saved.' + removedText(r) };
-      if (r.removed || kind === 'bd') loadPersonal(kind);
+      if (r.removed || kind !== 'note') loadPersonal(kind);   // new doneAt dates, upcoming birthdays
     }
     else S.res[kind] = r.login ? null : { ok: false, text: r.error || 'Saving didn\'t work. Try again.' };
     render();
   });
 }
 
+function dmText(ymd) { var p = String(ymd).split('-'); return p.length === 3 ? (+p[2]) + '.' + (+p[1]) + '.' : ymd; }
 function tasksCard() {
   if (!S.p.tasks) return notLoaded('tasks');
   var list = S.p.tasks;
@@ -1241,7 +1270,8 @@ function tasksCard() {
       [1, 2, 3].map(function (p) { return h('option', { value: String(p), selected: (t.prio || 2) === p }, ['High', 'Normal', 'Low'][p - 1]); }));
     return h('div', { class: 'task' + (t.done ? ' done' : '') },
       h('div', { class: 'row' }, h('button', { type: 'button', class: 'chk', role: 'checkbox', 'aria-checked': String(!!t.done), 'aria-label': 'Task ' + n + ' done', 'data-f': 'td' + i,
-        onclick: function () { t.done = !t.done; render(); } }, h('span', { 'aria-hidden': 'true' }, t.done ? '✓︎' : '')), title),
+        onclick: function () { t.done = !t.done; if (!t.done) delete t.doneAt; render(); } }, h('span', { 'aria-hidden': 'true' }, t.done ? '✓︎' : '')), title),
+      t.done ? h('p', { class: 'note', style: 'margin:4px 0 0 52px' }, 'done' + (t.doneAt ? ' ' + dmText(t.doneAt) : '') + ' · removed after 30 days') : null,
       h('div', { class: 'row' }, due, prio, h('button', { type: 'button', class: 'x', 'aria-label': 'Delete task ' + n,
         onclick: function () { list.splice(i, 1); render(); focusF('addtask'); } }, '✕︎')));
   });
@@ -1633,7 +1663,7 @@ function guideView() {
       h('p', { class: 'note' }, 'Google Calendar: Settings → your calendar → Integrate calendar → secret address in iCal format.')));
   } else if (step === 3) {
     var W = widgetsByKey();
-    body.push(lbl('Pick a structure'), structStrip(), lbl('Preview'), sketchEl(-1),
+    body.push(structStrip(), lbl('Preview'), sketchEl(-1),
       card(S.lay.classic ? h('p', null, 'Classic: the original screen.') : S.lay.boxes.map(function (b, i) {
         return kv('Box ' + (i + 1), b.widget ? ((W[b.widget] && W[b.widget].name) || b.widget) : 'Empty');
       }), h('p', { class: 'note' }, 'You can change the boxes and what they show later, on the Screen tab.')));

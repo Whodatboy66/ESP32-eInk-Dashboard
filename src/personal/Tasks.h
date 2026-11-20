@@ -19,7 +19,10 @@ struct Task {
   Date due;
   uint8_t prio = PRIO_NORMAL;
   bool done = false;
+  Date doneAt;  // when it was ticked off (done tasks are removed after DONE_KEEP_DAYS)
 };
+
+constexpr int DONE_KEEP_DAYS = 30;
 
 struct TaskList {
   Task items[MAX_TASKS];
@@ -64,6 +67,7 @@ inline bool parseTasks(const char* json, size_t len, TaskList& out, char* err, s
     int prio = t["prio"] | 2;
     task.prio = static_cast<uint8_t>(prio < 1 ? 1 : prio > 3 ? 3 : prio);
     task.done = t["done"] | false;
+    if (task.done) parseIsoDate(t["doneAt"] | "", task.doneAt);  // a bad date: unknown (set on save)
     out.count++;
   }
   return true;
@@ -82,6 +86,11 @@ inline size_t writeTasks(const TaskList& list, char* out, size_t cap) {
     o["due"] = due;
     o["prio"] = t.prio;
     o["done"] = t.done;
+    if (t.done && t.doneAt.valid()) {
+      char d[11];
+      formatIsoDate(t.doneAt, d, sizeof(d));
+      o["doneAt"] = d;
+    }
   }
   size_t need = measureJson(doc);
   if (need + 1 > cap) return 0;
@@ -145,6 +154,43 @@ inline void dueLabel(const Task& t, const Date& today, char* out, size_t cap, bo
   } else {
     std::snprintf(out, cap, "%d.%d.", t.due.d, t.due.m);
   }
+}
+
+// Saving an edited list: a done task keeps the date it was ticked off (the app may not send it
+// back: taken from the stored list by title), a newly ticked one gets today.
+inline void stampDoneDates(TaskList& list, const TaskList& stored, const Date& today) {
+  for (int i = 0; i < list.count; i++) {
+    Task& t = list.items[i];
+    if (!t.done) {
+      t.doneAt = Date{};
+      continue;
+    }
+    if (t.doneAt.valid()) continue;
+    for (int k = 0; k < stored.count; k++)
+      if (stored.items[k].done && stored.items[k].doneAt.valid() && std::strcmp(stored.items[k].title, t.title) == 0) {
+        t.doneAt = stored.items[k].doneAt;
+        break;
+      }
+    if (!t.doneAt.valid()) t.doneAt = today;
+  }
+}
+
+// Removes done tasks ticked off DONE_KEEP_DAYS or more days ago (order kept). Returns how many.
+inline int purgeDoneTasks(TaskList& list, const Date& today, int keepDays = DONE_KEEP_DAYS) {
+  if (!today.valid()) return 0;
+  int w = 0, removed = 0;
+  long todayN = dayNumber(today);
+  for (int r = 0; r < list.count; r++) {
+    const Task& t = list.items[r];
+    if (t.done && t.doneAt.valid() && todayN - dayNumber(t.doneAt) >= keepDays) {
+      removed++;
+      continue;
+    }
+    if (w != r) list.items[w] = list.items[r];
+    w++;
+  }
+  list.count = w;
+  return removed;
 }
 
 }  // namespace personal

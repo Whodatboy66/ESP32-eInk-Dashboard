@@ -133,6 +133,34 @@ static void test_task_order_and_labels() {
   CHECK_STR(lab, "");
 }
 
+static void test_done_tasks_are_removed_after_30_days() {
+  Date today{2026, 11, 20};
+  TaskList stored, edited;
+  char err[64];
+  const char* json = R"({"tasks":[{"title":"old","done":true,"doneAt":"2026-10-20"},)"
+                     R"({"title":"recent","done":true,"doneAt":"2026-11-01"},{"title":"open"},)"
+                     R"({"title":"just done","done":true}]})";
+  CHECK(parseTasks(json, std::strlen(json), stored, err, sizeof(err)));
+  CHECK(stored.items[0].doneAt.valid());
+  CHECK(!stored.items[3].doneAt.valid());
+  // The app sends the list back without the dates: they come from the stored list, new ones today.
+  const char* fromApp = R"({"tasks":[{"title":"old","done":true},{"title":"recent","done":true},)"
+                        R"({"title":"open","done":false},{"title":"just done","done":true}]})";
+  CHECK(parseTasks(fromApp, std::strlen(fromApp), edited, err, sizeof(err)));
+  stampDoneDates(edited, stored, today);
+  CHECK_EQ(edited.items[0].doneAt.m, 10);
+  CHECK_EQ(edited.items[3].doneAt.d, 20);  // today
+  CHECK(!edited.items[2].doneAt.valid());
+  CHECK_EQ(purgeDoneTasks(edited, today), 1);  // "old": 31 days
+  CHECK_EQ(edited.count, 3);
+  CHECK_STR(edited.items[0].title, "recent");
+  CHECK_EQ(purgeDoneTasks(edited, Date{2026, 12, 1}), 1);  // "recent": 30 days on 1 December
+  CHECK_EQ(purgeDoneTasks(edited, Date{}), 0);  // no date: nothing
+  char buf[1024];
+  size_t n = writeTasks(edited, buf, sizeof(buf));
+  CHECK(std::string(buf, n).find("\"doneAt\":\"2026-11-20\"") != std::string::npos);
+}
+
 static void test_note() {
   char note[NOTE_BYTES], err[64], removed[16];
   const char* json = R"({"note":"Wi-Fi for guests:\r\nSunflower-42 ✓"})";
@@ -231,6 +259,7 @@ int main() {
   test_tasks_parse_and_limits();
   test_tasks_round_trip();
   test_task_order_and_labels();
+  test_done_tasks_are_removed_after_30_days();
   test_note();
   test_wrap_cases();
   test_birthdays();

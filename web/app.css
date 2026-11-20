@@ -107,6 +107,8 @@ h1, h2, h3, p { margin: 0; }
 .strip button { flex: 0 0 84px; padding: 7px 6px; border: var(--bw) solid var(--ink); border-radius: var(--rs); background: var(--s); font-size: 13px; line-height: 1.2; cursor: pointer; min-height: 44px; }
 .strip button[aria-pressed="true"] { box-shadow: inset 0 0 0 3px var(--ink); font-weight: 700; }
 .strip svg { display: block; width: 100%; height: auto; margin-bottom: 5px; }
+.strip.big button { flex-basis: 128px; }
+@media (min-width: 600px) { .strip { flex-wrap: wrap; overflow-x: visible; } }
 
 /* tasks / birthdays editors */
 .task { padding: 12px 0; border-top: 1px solid var(--sep); }

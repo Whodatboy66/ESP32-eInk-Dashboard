@@ -151,14 +151,17 @@ layout engine (inside the grid, no overlaps, the whole grid covered by boxes, ev
 and within its minimum size, at most 12 boxes). → `{"ok": true}`, stored and drawn on the display at
 once, **no restart**; or 400 with `error`.
 
-`POST /api/preview.bmp`: same body as `/api/layout` → `image/bmp`, 800 × 480, 1 bit per pixel, drawn
+`POST /api/preview.bmp`: same body as `/api/layout`, optionally with `"clock_24h": true/false` (the
+app's current, maybe unsaved choice; build 76) → `image/bmp`, 800 × 480, 1 bit per pixel, drawn
 by the device with the data it has (a widget without data shows its empty text). 503 `{"ok": false, "error": "..."}`
 when there's not enough memory.
 
 ## Personal data
 
 `GET /api/tasks` → `{"tasks": [{"title": "Buy milk", "due": "2026-11-20", "prio": 2, "done": false}]}`
-(`due`: `""` or `YYYY-MM-DD`; `prio`: 1 high, 2 normal, 3 low). `PUT /api/tasks` with the same shape
+(`due`: `""` or `YYYY-MM-DD`; `prio`: 1 high, 2 normal, 3 low; done tasks also have `doneAt`
+`YYYY-MM-DD`, from build 76: set by the device when a task is ticked off (kept from the stored list if
+the app doesn't send it back), and the task is deleted 30 days later). `PUT /api/tasks` with the same shape
 replaces the list (at most 30, titles up to 60 characters).
 
 `GET /api/notes` → `{"note": "text\nsecond line"}`; `PUT` the same (up to 400 characters).

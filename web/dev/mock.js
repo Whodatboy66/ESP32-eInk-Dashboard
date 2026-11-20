@@ -30,7 +30,7 @@
       boxes: [{ c: 0, r: 0, w: 2, h: 1, widget: 'clock' }, { c: 2, r: 0, w: 2, h: 1, widget: 'weather' },
         { c: 0, r: 1, w: 2, h: 2, widget: 'agenda' }, { c: 2, r: 1, w: 2, h: 2, widget: 'month' }] };
   var tasks = [{ title: 'Buy milk', due: '2026-11-20', prio: 2, done: false }, { title: 'Call the plumber', due: '', prio: 1, done: false },
-    { title: 'Return library books', due: '2026-11-10', prio: 3, done: true }];
+    { title: 'Return library books', due: '2026-11-10', prio: 3, done: true, doneAt: '2026-11-18' }];
   var note = 'Wi-Fi for guests: Sunflower-42\nBins out on Thursday';
   var manual = [{ name: 'Anna', day: 17, month: 11, year: 1990 }, { name: 'Grandpa Joe', day: 22, month: 11, year: 0 }];
 
@@ -301,7 +301,11 @@
       case 'GET /api/tasks': return json(200, { tasks: tasks });
       case 'PUT /api/tasks':
         if ((body.tasks || []).length > 30) return json(400, { ok: false, error: 'At most 30 tasks.' });
-        tasks = body.tasks;
+        tasks = body.tasks.map(function (t) {
+          if (t.done && !t.doneAt) t.doneAt = new Date().toISOString().slice(0, 10);
+          if (!t.done) delete t.doneAt;
+          return t;
+        });
         return json(200, tasks.some(function (t) { return /✓/.test(t.title); }) ? { ok: true, removed: '✓' } : { ok: true });
       case 'GET /api/notes': return json(200, { note: note });
       case 'PUT /api/notes':

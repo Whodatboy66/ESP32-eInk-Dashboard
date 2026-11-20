@@ -1,7 +1,7 @@
 # Device test session: everything still open
 
 Everything implemented so far that has only been checked on the PC (host tests, PC renderer, CI)
-and still needs the real device: stages 0-6, builds 63-75. Made to be done in **one session**, in
+and still needs the real device: stages 0-6, builds 63-76. Made to be done in **one session**, in
 this order (each block builds on the one before). Tick the boxes, note what the screen showed, and
 copy the results into the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log).
 
@@ -113,17 +113,20 @@ before or after and note them separately.
 - [x] In the app (Data tab): add 5 tasks (one overdue, one today, one high priority, one without date,
       one done), a note with umlauts and line breaks ("Müll: Donnerstag!"), 3 birthdays (one today with
       year, one in 3 days, one in February)
-- [ ] Layout **Personal**: tasks in the right order (overdue first, date in a black box; high priority
+- [ ] Layout **Personal** (Screen tab, "Ready-made layouts" from build 76; before: at the far right
+      end of the structure strip): tasks in the right order (overdue first, date in a black box; high priority
       = filled box; the done one not shown), the note wrapped, birthdays with "Today" in a black box and
       the age
 - [x] Umlauts, ß, €, `! ( ) & ' "` look right; an emoji typed into a task is removed when saving (the app says so)
-- [x] 31st task refused with a message; a note over 400 characters refused
+- [x] Limits: the app allows at most 30 tasks (adding is greyed out at 30) and 400 characters for the note
 - [ ] **Birthday calendar link** (e.g. Google's birthday calendar as iCal): "Check" finds events; after
       the next wake its birthdays appear (marked as from the calendar in the app)
 - [ ] **Survives a restart** (hold 2 s): everything still there
 - [ ] **Survives an update:** release a build to beta and install it (block 4): everything still there
 - [ ] Next day (or change the device clock by waiting past midnight): "in 3 d" became "in 2 d", "today"
       labels moved (redrawn right after midnight)
+- [ ] A task ticked off shows "done 20.11." in the app; 30 days later it's gone (log: `[User] 1 done
+      task(s) older than 30 days removed`)
 
 ## 6. Stage 5: the setup app
 
@@ -180,15 +183,15 @@ before or after and note them separately.
 
 Seen on the device on 2026-11-19: the diagnostics view works, the firmware line is in the log.
 
-- [ ] After a few hours on the wall: Device → Diagnostics shows log lines of the Wi-Fi wakes (with
+- [x] After a few hours on the wall: Device → Diagnostics shows log lines of the Wi-Fi wakes (with
       times and a date line) and one battery value per hour
 - [ ] A broken calendar link (or Wi-Fi off for a while): it shows in the service table (failures,
       next retry) and in the log
-- [ ] **Download log** opens / saves a text file (iPhone captive browser and a normal browser)
-- [ ] **Clear log**: the list is empty; new lines appear after the next Wi-Fi wake
-- [ ] Battery chart: the case of 2026-11-19 (1.1-1.4 V with the battery plugged in) is visible as
+- [x] **Download log** opens / saves a text file (iPhone captive browser and a normal browser)
+- [x] **Clear log**: the list is empty; new lines appear after the next Wi-Fi wake
+- [x] Battery chart: the case of 2026-11-19 (1.1-1.4 V with the battery plugged in) is visible as
       "no battery measured"; after the battery fix the curve rises while on USB
-- [ ] The USB serial monitor still shows every line live, secrets masked
+- [x] The USB serial monitor still shows every line live, secrets masked
 
 ### Fixes of build 73 (found in the device test, 2026-11-19)
 
@@ -208,6 +211,12 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
       fixed in build 74)
 - [ ] A printer that doesn't answer costs about 5 s per wake, not 30-60 s (printer settings were removed
       for now: redo when the printer is set up again)
+
+### Fixes of build 76 (device test, 2026-11-20)
+
+- [ ] Top bar: the battery in percent ("53 %") instead of volts; in full-width layouts the date first
+      ("Fri 20 Nov")
+- [ ] Exact preview after switching to 12 h (not saved yet): shows AM/PM where it fits
 
 ## 6b. Stage 6 part 1: power (build 75)
 

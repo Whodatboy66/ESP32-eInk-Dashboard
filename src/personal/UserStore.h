@@ -22,6 +22,9 @@ bool saveUserFeedBirthdays(const personal::BirthdayList& list);
 // The stored files as JSON, for the API (empty lists when there is none). Returns the length.
 size_t readUserFile(const char* path, char* out, size_t cap);
 
+// Removes done tasks ticked off 30 or more days ago (saved if any). Once a day from the wake.
+void purgeOldDoneTasks();
+
 // Plain files on the userdata partition (diagnostics log, battery history).
 bool userFileExists(const char* path);
 size_t userFileSize(const char* path);  // 0 if missing

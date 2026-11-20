@@ -220,6 +220,17 @@ bool saveUserFeedBirthdays(const personal::BirthdayList& list) {
   return saveJson(USER_BDAY_FEED_FILE, [&](char* b, size_t cap) { return personal::writeBirthdays(*f, "feed", b, cap); });
 }
 
+void purgeOldDoneTasks() {
+  personal::TaskList* t = lazy(tasksP);
+  if (!t) return;
+  userTasks();  // loaded
+  int removed = personal::purgeDoneTasks(*t, localToday());
+  if (removed) {
+    DBGF("[User] %d done task(s) older than %d days removed", removed, personal::DONE_KEEP_DAYS);
+    saveUserTasks(*t);
+  }
+}
+
 size_t readUserFile(const char* path, char* out, size_t cap) {
   size_t len;
   char* buf = readAll(path, &len);

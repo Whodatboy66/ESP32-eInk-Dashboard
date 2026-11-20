@@ -1,5 +1,7 @@
 #include "StatusBar.h"
 
+#include <time.h>
+
 #include "../../app.h"
 #include "../core/AppState.h"
 #include "../core/Problems.h"
@@ -42,13 +44,22 @@ void drawStatus(LayoutItem* item) {
   DBG(F("Battery Draw"));
 
   float voltage = 0.0f;
-  char buf[20] = "";
+  char buf[40] = "";
+  // A full-width bar (grid layouts) starts with the date ("Fri 20 Nov"): the clock widget has no
+  // room for it below its digits. Classic keeps its own date in the agenda.
+  int n = 0;
+  if (item->Width >= 600) {
+    time_t now = time(nullptr);
+    struct tm lt;
+    if (now > 1700000000 && localtime_r(&now, &lt)) n = strftime(buf, sizeof(buf), "%a %d %b   ", &lt);
+  }
   if (hasBatteryPin()) {
     voltage = readBattery();
     batteryNoteQuiet(voltage);  // drawn with Wi-Fi off: the reading the setup app shows
-    // No battery measured: the board runs on USB (a voltage there would only confuse).
-    if (batteryReadingPlausible(voltage)) snprintf(buf, sizeof(buf), "%.2f V", voltage);
-    else snprintf(buf, sizeof(buf), "USB");
+    // The charge in percent (the voltage is in the log and Diagnostics); without a measured
+    // battery the board runs on USB (a voltage there would only confuse).
+    if (batteryReadingPlausible(voltage)) snprintf(buf + n, sizeof(buf) - n, "%d %%", batteryPercent(voltage));
+    else snprintf(buf + n, sizeof(buf) - n, "USB");
   }
 
   char versionBuf[48];
@@ -60,7 +71,7 @@ void drawStatus(LayoutItem* item) {
   canvas().fillRect(item->PosX, item->PosY, item->Width, item->Height, GxEPD_WHITE);
 
   int16_t leftX = item->PosX;
-  if (hasBatteryPin()) {
+  if (buf[0]) {
     drawSparseString(&epaperFont, item->PosX, item->PosY + 16, buf, GxEPD_BLACK);
     leftX += getSparseStringWidth(&epaperFont, buf) + 10;
   }
@@ -76,7 +87,7 @@ void drawStatus(LayoutItem* item) {
 
   int16_t versionWidth = getSparseStringWidth(&epaperFont, versionBuf);
   int16_t versionX = item->PosX + item->Width - iconReserve - versionWidth;
-  int16_t minVersionX = item->PosX + (hasBatteryPin() ? getSparseStringWidth(&epaperFont, buf) + 8 : 0);
+  int16_t minVersionX = item->PosX + (buf[0] ? getSparseStringWidth(&epaperFont, buf) + 8 : 0);
   if (versionX < minVersionX) versionX = minVersionX;
   drawSparseString(&epaperFont, versionX, item->PosY + 16, versionBuf, GxEPD_BLACK);
 

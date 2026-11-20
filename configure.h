@@ -9,7 +9,7 @@
 // Firmware build number: an integer that only goes up with each release. The update client only
 // installs a release with a higher build. FW_VERSION (status bar, release name) follows from it.
 #ifndef FW_BUILD
-#define FW_BUILD            75
+#define FW_BUILD            76
 #endif
 #define FW_STR_(x)          #x
 #define FW_STR(x)           FW_STR_(x)

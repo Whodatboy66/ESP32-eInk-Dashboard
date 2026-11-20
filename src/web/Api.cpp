@@ -665,6 +665,9 @@ void handlePreview() {
     sendError(503, "Not enough memory for the preview right now: try again.");
     return;
   }
+  // The app's current (maybe unsaved) 12 / 24-hour choice, only for this picture.
+  const bool saved24h = clock_24h;
+  if (in["clock_24h"].is<bool>()) clock_24h = in["clock_24h"];
   setCanvas(img);
   img->fillScreen(GxEPD_WHITE);
   loadLayoutFrom(tpl, boxes, mask);
@@ -672,6 +675,7 @@ void handlePreview() {
   parts.printer = parts.weather = parts.agenda = parts.stocks = parts.month = parts.tracking = true;
   drawFullScreen(parts);
   setCanvas(nullptr);
+  clock_24h = saved24h;
   loadLayout();  // back to the saved layout
 
   // BMP: 14 + 40 byte headers, 2-color palette (0 = black, 1 = white), rows bottom-up, 100 bytes each.
@@ -867,6 +871,10 @@ void handlePutTasks() {
     sendError(400, err);
     return;
   }
+  // Done tasks keep the date they were ticked off (new ones: today) and go after 30 days.
+  personal::Date today = localToday();
+  personal::stampDoneDates(list, userTasks(), today);
+  personal::purgeDoneTasks(list, today);
   if (!saveUserTasks(list)) {
     sendError(500, "The tasks could not be saved.");
     return;
