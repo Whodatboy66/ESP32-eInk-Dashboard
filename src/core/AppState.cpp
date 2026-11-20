@@ -4,6 +4,8 @@
 
 Preferences preferences;
 bool forceUpdateStatusBar = false;
+char powerNote[48] = "";
+RTC_DATA_ATTR uint32_t powerNoteShown = 0;
 bool apModeActive = false;
 RTC_DATA_ATTR ServiceState serviceStates[SERVICE_COUNT];  // per data service: last success, retries
 RTC_DATA_ATTR uint32_t layoutSignature = 0;  // layouts::signature() of the screen drawn last

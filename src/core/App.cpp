@@ -35,6 +35,9 @@
 #include "ConfigManager.h"
 #include "Problems.h"
 #include "WakePlan.h"
+#include "PowerPlan.h"
+#include "../ui/Canvas.h"
+#include "../ui/SparseFont.h"
 
 bool fullRefresh;  // this wake redraws the whole screen
 
@@ -50,11 +53,6 @@ RTC_DATA_ATTR static uint32_t bdayFeedUrlHash = 0;
 RTC_DATA_ATTR static uint8_t bambuFailures = 0;
 RTC_DATA_ATTR static time_t bambuRetryAfter = 0;  // a changed link is read right away
 
-static uint32_t textHash(const char* s) {
-  uint32_t h = 2166136261u;  // FNV-1a
-  for (; *s; s++) h = (h ^ (uint8_t)*s) * 16777619u;
-  return h;
-}
 
 // Minutes since the epoch: changes exactly when the displayed HH:MM changes.
 static long currentMinute() {
@@ -72,6 +70,77 @@ static void recordFetch(Service svc, bool ok, LayoutItem* item) {
 static bool turnedStale(Service svc, LayoutItem* item) {
   time_t interval = item && item->Refresh > 0 ? (time_t)item->Refresh * 60 : 3600;
   return isStale(serviceStates[(int)svc], time(nullptr), interval);
+}
+
+// Power (stage 6): battery saver on at the last wake (hysteresis), the night note already shown,
+// the "please charge" screen shown, the wake interval of the last wake.
+RTC_DATA_ATTR static bool saverWasOn = false;
+RTC_DATA_ATTR static bool nightShown = false;
+RTC_DATA_ATTR static bool criticalShown = false;
+
+// Deep sleep: display off (if it was used), button wake armed, the diagnostics log written.
+// timerUs 0: no timer wake (critical battery: only the button wakes it).
+[[noreturn]] static void sleepNow(uint64_t timerUs, bool displayUsed, bool hibernateDisplay, bool keepLog) {
+  // hibernate() clears the controller's internal frame buffer used for partial refresh XOR. Only
+  // when the next wake is a full refresh; powerOff() keeps the controller RAM for partial ones.
+  if (displayUsed) {
+    if (hibernateDisplay) display.hibernate();
+    else display.powerOff();
+  }
+  if (hasDisplayPowerPin()) {
+    gpio_hold_en((gpio_num_t)activePins.displayPower);
+  }
+
+  if (hasDemoButtonPin()) {
+    const gpio_num_t buttonGpio = getDemoWakeGpio();
+    // A press in progress: let the button task finish it (it restarts the board for a gesture, or
+    // flags a fault after BUTTON_FAULT_MS), instead of sleeping and losing it. The pin is checked
+    // too, for a press the task hasn't polled yet. Bounded in case the task isn't running.
+    unsigned long waitStart = millis();
+    while ((buttonBusy || digitalRead(activePins.demoButton) == HIGH) && !buttonFaulted &&
+           millis() - waitStart < BUTTON_FAULT_MS + 1000UL) {
+      delay(10);
+    }
+    if (digitalRead(activePins.demoButton) == HIGH) {
+      // Stuck HIGH: a button wake would fire at once and keep the board awake. Timer wakes only,
+      // until the input reads LOW again.
+      DBG(F("[Button] input stuck HIGH: button wake off for this sleep"));
+    } else {
+      buttonFaulted = false;  // reads LOW: the sensor is fine again (the task may not have seen it yet)
+      esp_sleep_enable_ext1_wakeup((1ULL << buttonGpio), ESP_EXT1_WAKEUP_ANY_HIGH);  // wake on HIGH
+      // Keep the pull-down during deep sleep, so a missing sensor can't float HIGH and wake the
+      // board. The sleep code latches it with the pad hold (released in configureButtonInput()).
+      if (rtc_gpio_is_valid_gpio(buttonGpio)) {
+        rtc_gpio_pullup_dis(buttonGpio);
+        rtc_gpio_pulldown_en(buttonGpio);
+      }
+    }
+  }
+
+  if (timerUs) esp_sleep_enable_timer_wakeup(timerUs);
+
+  // Diagnostics (setup app): the battery once an hour; this wake's log if it did something.
+  batteryHistorySample();
+  if (keepLog) logKeepThisWake();
+  logFlush();
+
+  esp_deep_sleep_start();
+  for (;;) {}  // not reached
+}
+
+// Below 5 % battery: one full-screen message, then only the button wakes the board.
+static void drawCriticalScreen(float volts) {
+  initDisplay(true);
+  display.setFullWindow();
+  display.firstPage();
+  do {
+    canvas().fillScreen(GxEPD_WHITE);
+    drawSparseStringCentered(&epaperFont, 400, 200, "Battery empty: please charge", GxEPD_BLACK);
+    char line[48];
+    snprintf(line, sizeof(line), "Battery: %.2f V", volts);
+    drawSparseStringCentered(&epaperFont, 400, 240, line, GxEPD_BLACK);
+    drawSparseStringCentered(&epaperFont, 400, 290, "The dashboard comes back by itself once it charges.", GxEPD_BLACK);
+  } while (display.nextPage());
 }
 
 // One wake: boot checks, button, update requests, plan (WakePlan), Wi-Fi + fetches, drawing, sleep.
@@ -240,6 +309,79 @@ void appSetup() {
     bootCount = 0;
     layoutSignature = laySig;
   }
+  // Power (stage 6, src/core/PowerPlan.h): clock interval, night quiet hours, battery saver,
+  // critical battery. Measured now, before Wi-Fi: the voltage doesn't sag yet.
+  power::Inputs powerIn;
+  {
+    time_t t = time(nullptr);
+    struct tm lt;
+    if (t > 1700000000 && localtime_r(&t, &lt)) powerIn.minuteOfDay = lt.tm_hour * 60 + lt.tm_min;
+    else powerIn.minuteOfDay = -1;
+  }
+  powerIn.clockInterval = clock_interval;
+  powerIn.quietOn = quiet_on;
+  powerIn.quietFrom = quiet_from;
+  powerIn.quietTo = quiet_to;
+  powerIn.batteryPct = batteryPercentNow();
+  powerIn.usb = usbPowered();
+  powerIn.saverWasOn = saverWasOn;
+  powerIn.criticalWasOn = criticalShown;
+  powerIn.buttonWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
+  const power::Plan powerPlan = power::decide(powerIn);
+  if (powerPlan.saverOn != saverWasOn)
+    DBGF("[Power] battery saver %s (%d %%)", powerPlan.saverOn ? "on" : "off", powerIn.batteryPct);
+  saverWasOn = powerPlan.saverOn;
+  {
+    power::Plan shown = powerPlan;
+    if (powerPlan.night) shown.mode = power::Mode::Night;  // also after a tap at night
+    power::note(shown, clock_interval, quiet_to, powerNote, sizeof(powerNote));
+  }
+  if (textHash(powerNote) != powerNoteShown) forceUpdateStatusBar = true;
+  // The counter advances in steps of the wake interval: keep it on a multiple of it (the step
+  // changes when the saver starts or the setting changes), so hourly fetches stay hourly.
+  if (powerPlan.stepMin > 1 && bootCount % powerPlan.stepMin)
+    bootCount = (uint16_t)(((bootCount + powerPlan.stepMin - 1) / powerPlan.stepMin * powerPlan.stepMin) % 10080);
+
+  if (powerPlan.mode == power::Mode::Critical) {
+    bool drew = false;
+    if (!criticalShown || powerIn.buttonWake) {
+      DBGF("[Power] battery critical (%d %%): charge screen, battery check once an hour", powerIn.batteryPct);
+      drawCriticalScreen(readBattery());
+      drew = true;
+      criticalShown = true;
+    }
+    // Once an hour only the battery is read (nothing drawn): back to the dashboard once it charged.
+    sleepNow((uint64_t)power::CRITICAL_CHECK_MIN * 60 * 1000000ULL, drew, true, drew);
+  }
+  if (criticalShown) {  // charged again: everything fresh
+    criticalShown = false;
+    fullRefresh = true;
+    bootCount = 0;
+  }
+  if (powerPlan.mode == power::Mode::Night) {
+    bool drew = false;
+    if (!nightShown) {  // first wake of the night: the note in the status bar, then one long sleep
+      DBGF("[Power] %s", powerNote);
+      LayoutItem* bar = getLayout(128);
+      if (bar) {
+        initDisplay(false);
+        updatePartial(bar, drawStatus);
+        drew = true;
+      }
+      nightShown = true;
+    }
+    struct timeval ntv;
+    gettimeofday(&ntv, nullptr);
+    sleepNow((uint64_t)power::nightSleepMicros(ntv.tv_sec, ntv.tv_usec, powerPlan.nightMinutesLeft, WAKE_AFTER_MINUTE_MS),
+             drew, false, drew);
+  }
+  if (nightShown && !powerPlan.night) {  // morning: everything fresh
+    DBG(F("[Power] quiet hours over: full refresh"));
+    nightShown = false;
+    fullRefresh = true;
+    bootCount = 0;
+  }
+
   LayoutItem* infoClock = getLayout(1);
   LayoutItem* infoEvent = getLayout(2);
   LayoutItem* infoStocks = getLayout(4);
@@ -267,6 +409,7 @@ void appSetup() {
   WakeInputs wake;
   wake.now = nowTs;
   wake.bootCount = bootCount;
+  wake.stepMin = powerPlan.stepMin;
   wake.fullRefresh = fullRefresh;
   wake.buttonWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
   // Present = on the layout and active (loadDefaultLayout adds only active items, all with
@@ -569,68 +712,22 @@ void appSetup() {
   // A freshly installed firmware: confirm it now that Wi-Fi and the display worked (or roll back).
   otaConfirmIfPending();
 
-  bootCount++;
+  if (powerPlan.night) nightShown = true;  // a tap at night: the morning still gets its full refresh
+  bootCount = (uint16_t)((bootCount + powerPlan.stepMin) % 10080);  // minutes (multiple of every interval)
   // Repeated at the end: after a deep-sleep wake the USB monitor misses the first lines.
   DBGF("Finished wake %d: firmware %s (build %d, %s), awake %lu ms", bootCount, FW_VERSION, FW_BUILD, FW_VARIANT, millis());
 
-  // Wake WAKE_AFTER_MINUTE_MS after the next minute boundary (sub-second precision).
+  // Next wake: on the next wall-clock boundary of the interval (every 5 min: :00, :05, ...), or at
+  // the end of the quiet hours after a tap at night.
   struct timeval tv;
   gettimeofday(&tv, nullptr);
   if (tv.tv_sec <= 1700000000) DBG(F("Time not set, sleeping 60s"));
-  uint64_t sleep_us = (uint64_t)sleepMicros(tv.tv_sec, tv.tv_usec);
+  uint64_t sleep_us = powerPlan.night
+                          ? (uint64_t)power::nightSleepMicros(tv.tv_sec, tv.tv_usec, powerPlan.nightMinutesLeft, WAKE_AFTER_MINUTE_MS)
+                          : (uint64_t)power::alignedSleepMicros(tv.tv_sec, tv.tv_usec, powerPlan.stepMin, WAKE_AFTER_MINUTE_MS);
   if (redrawAll) sleep_us = 1000000ULL;  // redraw the dashboard right away
   DBGF("Awake %lu ms, sleeping %llu ms", millis(), sleep_us / 1000ULL);
 
-  // hibernate() clears the controller's internal frame buffer used for partial refresh XOR.
-  // Only use it when the next boot will be a full refresh (controller RAM is reloaded anyway).
-  // For partial-refresh boots, powerOff() keeps the controller RAM intact.
-  // bootCount was already incremented, so it is the next boot's value.
   bool nextBootIsFullRefresh = (bootCount % (60 * 24) == 0);
-  if (nextBootIsFullRefresh) {
-    display.hibernate();
-  } else {
-    display.powerOff();
-  }
-
-  if (hasDisplayPowerPin()) {
-    gpio_hold_en((gpio_num_t)activePins.displayPower);
-  }
-
-  if (hasDemoButtonPin()) {
-    const gpio_num_t buttonGpio = getDemoWakeGpio();
-    // A press in progress: let the button task finish it (it restarts the board for a gesture, or
-    // flags a fault after BUTTON_FAULT_MS), instead of sleeping and losing it. The pin is checked
-    // too, for a press the task hasn't polled yet. Bounded in case the task isn't running.
-    unsigned long waitStart = millis();
-    while ((buttonBusy || digitalRead(activePins.demoButton) == HIGH) && !buttonFaulted &&
-           millis() - waitStart < BUTTON_FAULT_MS + 1000UL) {
-      delay(10);
-    }
-    if (digitalRead(activePins.demoButton) == HIGH) {
-      // Stuck HIGH: a button wake would fire at once and keep the board awake. Timer wakes only,
-      // until the input reads LOW again.
-      DBG(F("[Button] input stuck HIGH: button wake off for this sleep"));
-    } else {
-      buttonFaulted = false;  // reads LOW: the sensor is fine again (the task may not have seen it yet)
-      esp_sleep_enable_ext1_wakeup(
-        (1ULL << buttonGpio),
-        ESP_EXT1_WAKEUP_ANY_HIGH  // Wake when pin goes HIGH
-      );
-      // Keep the pull-down during deep sleep, so a missing sensor can't float HIGH and wake the
-      // board. The sleep code latches it with the pad hold (released in configureButtonInput()).
-      if (rtc_gpio_is_valid_gpio(buttonGpio)) {
-        rtc_gpio_pullup_dis(buttonGpio);
-        rtc_gpio_pulldown_en(buttonGpio);
-      }
-    }
-  }
-
-  esp_sleep_enable_timer_wakeup(sleep_us);
-
-  // Diagnostics (setup app): the battery once an hour; this wake's log if it did something.
-  batteryHistorySample();
-  if (fullRefresh || problems != problemsAtStart) logKeepThisWake();
-  logFlush();
-
-  esp_deep_sleep_start();
+  sleepNow(sleep_us, true, nextBootIsFullRefresh, fullRefresh || problems != problemsAtStart);
 }

@@ -14,6 +14,7 @@
 #include "Timezone.h"
 #include "Logger.h"
 #include "../layout/Templates.h"
+#include "PowerPlan.h"
 
 char wifi_ssid[CFG_WIFI_SSID_MAX];
 char wifi_pass[CFG_WIFI_PASS_MAX];
@@ -38,6 +39,10 @@ uint16_t widget_show_mask = 0xFFFF;
 bool clock_24h = true;
 char layout_boxes[CFG_LAYOUT_BOXES_MAX] = "";
 char device_name[CFG_DEVICE_NAME_MAX] = "";
+uint8_t clock_interval = 1;
+bool quiet_on = true;
+uint16_t quiet_from = power::DEFAULT_QUIET_FROM, quiet_to = power::DEFAULT_QUIET_TO;
+uint16_t battery_mah = power::DEFAULT_BATTERY_MAH;
 
 const char* const ICS_PREF_KEYS[ICS_MAX_FEEDS] = { "ics_url", "ics_url2", "ics_url3" };
 
@@ -103,6 +108,12 @@ void configLoad() {
   preferences.getString("lay_tpl", layout_template, sizeof(layout_template));
   preferences.getString("lay_box", layout_boxes, sizeof(layout_boxes));
   preferences.getString("dev_name", device_name, sizeof(device_name));
+  clock_interval = preferences.getUChar("clk_int", 1);
+  if (!power::validClockInterval(clock_interval)) clock_interval = 1;
+  quiet_on = preferences.getBool("quiet_on", true);
+  quiet_from = preferences.getUShort("quiet_from", power::DEFAULT_QUIET_FROM) % 1440;
+  quiet_to = preferences.getUShort("quiet_to", power::DEFAULT_QUIET_TO) % 1440;
+  battery_mah = preferences.getUShort("bat_mah", power::DEFAULT_BATTERY_MAH);
   // "custom" = the boxes of the setup app's editor (an unusable string falls back to Classic later).
   if (layouts::templateIndex(layout_template) < 0 && strcmp(layout_template, "custom") != 0)
     snprintf(layout_template, sizeof(layout_template), "classic");
@@ -177,6 +188,11 @@ void configSave() {
   preferences.putBool("clk_24h", clock_24h);
   preferences.putString("lay_box", layout_boxes);
   preferences.putString("dev_name", device_name);
+  preferences.putUChar("clk_int", clock_interval);
+  preferences.putBool("quiet_on", quiet_on);
+  preferences.putUShort("quiet_from", quiet_from);
+  preferences.putUShort("quiet_to", quiet_to);
+  preferences.putUShort("bat_mah", battery_mah);
 
   preferences.putInt("cfg_schema", FW_CONFIG_SCHEMA);
   preferences.end();

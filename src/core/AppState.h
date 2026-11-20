@@ -8,6 +8,15 @@
 
 extern Preferences preferences;       // NVS, namespace "config" (open only briefly)
 extern bool forceUpdateStatusBar;     // redraw the status bar in this wake
+// Power note for the status bar ("Night until 06:00", "Battery saver: every 15 min", ...) and the
+// one shown now (RTC: a change redraws the bar). Stage 6.
+extern char powerNote[48];
+extern uint32_t powerNoteShown;
+inline uint32_t textHash(const char* s) {
+  uint32_t h = 2166136261u;  // FNV-1a
+  for (; *s; s++) h = (h ^ (uint8_t)*s) * 16777619u;
+  return h;
+}
 extern bool apModeActive;             // setup mode (access point + web server) is running
 extern ServiceState serviceStates[SERVICE_COUNT];  // RTC: per data service (ServiceState.h)
 extern uint32_t layoutSignature;      // layout drawn last (RTC): a change means a full refresh

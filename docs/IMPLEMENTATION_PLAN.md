@@ -212,7 +212,7 @@ Detailed plan and result: [plans/STAGE2_FOUNDATION.md](plans/STAGE2_FOUNDATION.m
 - [x] TLS: certificate bundle for every HTTPS request (S1); Bambu LAN MQTT the one exception, only to a local network address
 - [x] Logger: `DBGF` masks Wi-Fi password, access code, API keys and iCal links (S6)
 - [x] Host tests in CI (plain C++ checks, no doctest: ruling in the stage plan): wake plan, config validation, redaction, LAN rule, battery curve, plus stage 1's
-- [ ] Side-by-side check on the device (same screen, same boot log, every service still loads)
+- [x] Side-by-side check on the device (same screen, same boot log, every service still loads)
 
 **Done when:** behavior is the same as before (side-by-side check on the device), CI is green, every HTTPS request is verified.
 
@@ -224,7 +224,7 @@ Detailed plan and result: [plans/STAGE3_WIDGETS_LAYOUT.md](plans/STAGE3_WIDGETS_
 - [x] Per service retry after a failure (2, 4, 8, 16 min, capped at the interval, then the regular schedule) and an "old" badge on stale data (spec §10.2)
 - [x] Host tests: layout (every template × every widget combination), fitting, min/max sizes, invalid templates → fallback, service state, retries in the wake plan; PC renderer for the images
 - [x] Setup page: Layout, Clock (24 h / 12 h), Show (per widget); settings schema 2
-- [ ] On the device: all four templates and switching through the setup page
+- [x] On the device: all four templates and switching through the setup page
 
 **Done when:** widgets and the layout are switched through configuration only; all four templates render correctly on the device.
 
@@ -250,6 +250,8 @@ Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: s
 **Done when:** a person without ESP32 knowledge sets up and personalizes a device using only a phone.
 
 ### Stage 6: Power management (spec §8, Phase 5)
+Part 1 (build 75): [plans/STAGE6_POWER.md](plans/STAGE6_POWER.md): clock interval, night quiet hours,
+battery saver, critical screen, estimates. Done in code, not yet checked on the device.
 - [ ] Power profiles Battery Saver / Balanced / USB Powered; USB detection; on USB the setup app stays reachable on the home network (moved from stage 5)
 - [ ] Configurable refresh intervals per data type
 - [ ] **Battery use, first numbers (2026-11-20, build 73, estimated from the diagnostics log):** 3 %
@@ -259,21 +261,22 @@ Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: s
   stage: **night quiet hours** (no clock updates, no fetches, e.g. 23:00-06:00: about 25-30 % less),
   clock every 2 or 5 minutes as a profile option, calendar every 2 hours (or per calendar), the
   battery saver below; first measure with a USB power meter
-- [ ] **Automatic battery saver (decided 2026-11-19), whatever profile and refresh settings are chosen:**
+- [x] **Clock refresh interval** as a setting (1-30 min) with the estimated battery life per choice; **night quiet hours** (default 23:00-06:00, configurable) (decided 2026-11-20, build 75)
+- [x] **Automatic battery saver (decided 2026-11-19), whatever profile and refresh settings are chosen** (build 75):
   - below **20 %** (about 3.73 V, where the LiPo curve starts to drop fast), on battery (a plausible
     reading, no computer USB): the screen refreshes **every 15 minutes** instead of every minute, data
     fetches at most hourly (slower ones stay as they are), one full refresh a day;
   - back to normal above **30 %** (no flapping around the threshold) or as soon as USB / charging is
     seen (the voltage rising between hourly samples);
-  - below **5 %**: a "Please charge" screen, no more timer wakes, only the button wakes it;
+  - below **5 %**: a "Please charge" screen; only a battery check once an hour (nothing drawn), back
+    above 10 % or on USB;
   - the status bar shows a small "Saver" mark while it's on; the setup app says why;
   - a reading that isn't plausible (no battery measured, below 3.0 V) never triggers it (that's USB);
   - expected effect: about 15 times fewer wakes, the largest part of the battery use (to be measured);
-  - **open:** what the clock shows meanwhile (it can't change every minute): proposed is the time of
-    the last refresh plus a small note "Battery low: updates every 15 min", or the clock replaced by
-    the date. To decide when stage 6 starts.
-- [ ] Low-battery threshold, reduced updates, critical-battery screen, then stay asleep (see the
-  battery saver above)
+  - the clock shows the time of the last refresh, with the note "Battery saver: every 15 min" in the
+    status bar (decided 2026-11-20)
+- [x] Low-battery threshold, reduced updates, critical-battery screen, then stay asleep (see the
+  battery saver above; build 75)
 - [ ] Touch wake + gestures validated with the TTP223 on hardware
 - [ ] **Measurements:** sleep current, clock-wake energy, Wi-Fi-wake energy, TTP223 + HAT standby, and the battery life calculated from them; documented in `docs/POWER.md`
 

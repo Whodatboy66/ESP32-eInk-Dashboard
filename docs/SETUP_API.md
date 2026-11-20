@@ -90,6 +90,21 @@ its own password).
   settings are filled in (`hint` says what's missing).
 - `structures`: starting points for the editor (built-in templates as boxes, plus Full, Halves, …).
 - `pinPresets`: board presets for the Device tab (advanced).
+- **Power (build 75, stage 6):** settings `clock_interval` (minutes: 1, 2, 5, 10, 15 or 30),
+  `quiet_enabled` (bool), `quiet_from` / `quiet_to` ("HH:MM", default "23:00" / "06:00"; equal = no
+  window), `battery_mah` (100-20000, default 3000, only for the estimate). `power` in the state:
+
+  ```json
+  "power": {"note": "Clock every 5 min", "saver": false, "night": false, "stepMin": 5,
+            "estimateNote": "Estimate from the first measurements (2026-11-20); real current measurements follow.",
+            "estimates": [{"interval": 1, "days": 28, "gainPercent": 0}, {"interval": 5, "days": 77, "gainPercent": 175}],
+            "daysWithoutQuietHours": 56, "daysWithQuietHours": 77}
+  ```
+
+  `note`: what the status bar says now ("" = normal, "Night until 06:00", "Battery saver: every 15
+  min", "Clock every 5 min"). `estimates`: days per charge for each clock choice with the current
+  quiet hours and capacity, `gainPercent` against every minute. `daysWithoutQuietHours` /
+  `daysWithQuietHours`: the chosen interval without / with the quiet window (to show what it saves).
 
 ## Settings
 

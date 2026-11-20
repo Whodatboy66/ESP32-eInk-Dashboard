@@ -3,6 +3,8 @@
 #include "src/core/WakePlan.h"
 #include "tests/host/check.h"
 
+#include <initializer_list>
+
 static const time_t NOW = 1789000000;  // 2026-09-10, a real time
 
 // A typical wake: every widget on the layout (default refresh intervals), nothing due by time.
@@ -135,6 +137,37 @@ static void test_bambu_needs_mqtt_settings_and_backs_off() {
   CHECK_EQ(bambuBackoffSeconds(4), 3600);
   CHECK_EQ(bambuBackoffSeconds(200), 3600);
   CHECK_EQ(bambuBackoffSeconds(0), 0);
+}
+
+static void test_slower_clock_keeps_hourly_fetches() {
+  // A 5-minute and a 15-minute clock: bootCount advances by the interval; hourly things still come
+  // once per hour (at the same minute), the 4-minute printer poll becomes 5 / 15 minutes.
+  CHECK_EQ(roundedRefresh(4, 5), 5);
+  CHECK_EQ(roundedRefresh(60, 15), 60);
+  CHECK_EQ(roundedRefresh(10, 15), 15);
+  CHECK_EQ(roundedRefresh(7, 1), 7);
+  for (int step : {5, 15}) {
+    WakeInputs in = base();
+    in.stepMin = step;
+    in.calendarRefresh = 60;
+    int calendarFetches = 0, wakes = 0;
+    for (int minute = step; minute <= 24 * 60; minute += step) {
+      in.bootCount = (uint16_t)minute;
+      WakePlan p = planWake(in);
+      if (p.calendar) calendarFetches++;
+      wakes++;
+    }
+    CHECK_EQ(wakes, 24 * 60 / step);
+    CHECK_EQ(calendarFetches, 24);  // hourly, also with the slower clock
+  }
+  WakeInputs in = base();
+  in.stepMin = 5;
+  in.bambuRefresh = 4;
+  in.isPrinting = true;
+  in.bootCount = 5;
+  CHECK(planWake(in).bambu);  // every 5 minutes while printing (4 rounded up)
+  in.bootCount = 10;
+  CHECK(planWake(in).bambu);
 }
 
 static void test_bambu_redraw_when_print_view_ends() {
@@ -318,6 +351,7 @@ int main() {
   test_bambu_polling();
   test_bambu_redraw_when_print_view_ends();
   test_bambu_needs_mqtt_settings_and_backs_off();
+  test_slower_clock_keeps_hourly_fetches();
   test_wifi_backoff();
   test_backoff_keeps_full_refresh_widgets();
   test_retry_after_a_failed_fetch();

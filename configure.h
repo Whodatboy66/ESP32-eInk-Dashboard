@@ -9,7 +9,7 @@
 // Firmware build number: an integer that only goes up with each release. The update client only
 // installs a release with a higher build. FW_VERSION (status bar, release name) follows from it.
 #ifndef FW_BUILD
-#define FW_BUILD            74
+#define FW_BUILD            75
 #endif
 #define FW_STR_(x)          #x
 #define FW_STR(x)           FW_STR_(x)
@@ -22,7 +22,7 @@
 #define OTA_REPO            "Whodatboy66/ESP32-eInk-Dashboard"
 #endif
 #define OTA_BATTERY_MIN_PCT 30      // below this, no install unless USB is connected
-#define OTA_NIGHT_HOUR      3       // daily check during this local hour (03:00-03:59)
+#define OTA_NIGHT_HOUR      3       // daily check from this local hour until noon (first wake after 03:00)
 #define OTA_CONFIRM_MS      15000   // "Tap to install" waits this long, then cancels
 #define OTA_DONE_SCREEN_MS  10000   // "Updated to ..." stays at least this long after the restart
 

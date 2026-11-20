@@ -18,6 +18,7 @@
 #include "../core/ConfigManager.h"
 #include "../core/ConfigValidation.h"
 #include "../core/LogBuffer.h"
+#include "../core/PowerPlan.h"
 #include "../core/Logger.h"
 #include "../core/Problems.h"
 #include "../core/ServiceState.h"
@@ -250,6 +251,14 @@ void handleState() {
   s["ota_auto"] = otaAutoInstall;
   s["ota_beta"] = otaBeta;
   s["clock_24h"] = clock_24h;
+  s["clock_interval"] = clock_interval;
+  s["quiet_enabled"] = quiet_on;
+  char hm[8];
+  power::formatHm(quiet_from, hm, sizeof(hm));
+  s["quiet_from"] = hm;
+  power::formatHm(quiet_to, hm, sizeof(hm));
+  s["quiet_to"] = hm;
+  s["battery_mah"] = battery_mah;
   s["pin_preset"] = pinPresetValue(activePinPreset);
   JsonObject pins = s["pins"].to<JsonObject>();
   pins["epd_cs"] = customPins.epdCs;
@@ -312,6 +321,48 @@ void handleState() {
              layouts::boxesFromResult(layouts::buildLayout(tt, layouts::ALL_WIDGETS)));
   }
 
+  // Power (stage 6): the note shown now and the battery life estimate for each clock choice.
+  JsonObject pw = doc["power"].to<JsonObject>();
+  {
+    // Setup / edit mode doesn't run the wake's power decision: the same decision for "now".
+    power::Inputs pin;
+    time_t t = time(nullptr);
+    struct tm lt;
+    pin.minuteOfDay = (t > 1700000000 && localtime_r(&t, &lt)) ? lt.tm_hour * 60 + lt.tm_min : -1;
+    pin.clockInterval = clock_interval;
+    pin.quietOn = quiet_on;
+    pin.quietFrom = quiet_from;
+    pin.quietTo = quiet_to;
+    float qv;
+    time_t qat;
+    pin.batteryPct = (hasBatteryPin() && batteryQuiet(qv, qat, 3 * 3600))
+                         ? (batteryReadingPlausible(qv) ? batteryPercent(qv) : -1)
+                         : batteryPercentNow();
+    pin.usb = usbPowered();
+    pin.buttonWake = true;  // the screen shows the dashboard now
+    power::Plan pp = power::decide(pin);
+    if (pp.night) pp.mode = power::Mode::Night;
+    char note[48];
+    power::note(pp, clock_interval, quiet_to, note, sizeof(note));
+    pw["note"] = note;
+    pw["saver"] = pp.saverOn;
+    pw["night"] = pp.night;
+    pw["stepMin"] = pp.stepMin;
+  }
+  pw["estimateNote"] = "Estimate from the first measurements (2026-11-20); real current measurements follow.";
+  JsonArray est = pw["estimates"].to<JsonArray>();
+  double qh = power::quietHours(quiet_on, quiet_from, quiet_to);
+  double base = power::estimateDays(1, qh, battery_mah);
+  for (int c : power::CLOCK_CHOICES) {
+    JsonObject e = est.add<JsonObject>();
+    double d = power::estimateDays(c, qh, battery_mah);
+    e["interval"] = c;
+    e["days"] = (int)(d + 0.5);
+    e["gainPercent"] = (int)((d / base - 1.0) * 100.0 + 0.5);
+  }
+  pw["daysWithoutQuietHours"] = (int)(power::estimateDays(clock_interval, 0.0, battery_mah) + 0.5);
+  pw["daysWithQuietHours"] = (int)(power::estimateDays(clock_interval, power::quietHours(true, quiet_from, quiet_to), battery_mah) + 0.5);
+
   JsonObject grid = doc["grid"].to<JsonObject>();
   grid["cols"] = layouts::GRID_COLS;
   grid["rows"] = layouts::GRID_ROWS;
@@ -373,6 +424,21 @@ void handleSettings() {
   plainText("mqtt_sn", mqttSn, sizeof(mqttSn), mqtt_sn, "Serial number");
   plainText("printer_name", pname, sizeof(pname), printer_name, "Printer name");
   plainText("makerworld_uid", mw, sizeof(mw), makerworld_uid, "MakerWorld user ID");
+
+  // Power (stage 6).
+  int clockInt = clock_interval, qFrom = quiet_from, qTo = quiet_to, batMah = battery_mah;
+  if (!o["clock_interval"].isUnbound()) {
+    clockInt = o["clock_interval"] | 0;
+    if (!power::validClockInterval(clockInt)) fail("clock_interval", "Choose 1, 2, 5, 10, 15 or 30 minutes.");
+  }
+  if (!o["quiet_from"].isUnbound() && !power::parseHm(o["quiet_from"] | "", qFrom))
+    fail("quiet_from", "A time like 23:00.");
+  if (!o["quiet_to"].isUnbound() && !power::parseHm(o["quiet_to"] | "", qTo))
+    fail("quiet_to", "A time like 06:00.");
+  if (!o["battery_mah"].isUnbound()) {
+    batMah = o["battery_mah"] | 0;
+    if (batMah < 100 || batMah > 20000) fail("battery_mah", "Between 100 and 20000 mAh.");
+  }
 
   copyStr(tz, sizeof(tz), device_timezone);
   if (!o["timezone"].isUnbound() &&
@@ -488,6 +554,11 @@ void handleSettings() {
   if (o["ota_auto"].is<bool>()) otaAutoInstall = o["ota_auto"];
   if (o["ota_beta"].is<bool>()) otaBeta = o["ota_beta"];
   if (o["clock_24h"].is<bool>()) clock_24h = o["clock_24h"];
+  clock_interval = (uint8_t)clockInt;
+  if (o["quiet_enabled"].is<bool>()) quiet_on = o["quiet_enabled"];
+  quiet_from = (uint16_t)qFrom;
+  quiet_to = (uint16_t)qTo;
+  battery_mah = (uint16_t)batMah;
   activePinPreset = preset;
   customPins = pins;
   applyStoredPinSelection();

@@ -4,8 +4,10 @@
 // (tests/host/test_wake_plan.cpp). The wake cycle (App) gathers the inputs, runs the plan and does
 // the side effects (Wi-Fi, fetches, drawing).
 //
-// Refresh intervals count wakes (one per minute): a widget with refresh N fetches when
-// bootCount % N == 0. bootCount is 0 after a button wake and every 1440 wakes (daily full refresh).
+// Refresh intervals are in minutes. bootCount counts minutes: it advances by the wake interval
+// (stepMin: 1 normally, more with a slower clock or the battery saver, stage 6) at each wake; a widget
+// with refresh N fetches when bootCount is a multiple of N rounded up to a multiple of the interval.
+// bootCount is 0 after a button wake and every 1440 minutes (daily full refresh).
 #include <cstdint>
 #include <ctime>
 
@@ -36,6 +38,7 @@ struct FlightState {
 struct WakeInputs {
   time_t now = 0;
   uint16_t bootCount = 0;
+  int stepMin = 1;               // minutes between wakes (power::Plan::stepMin)
   bool fullRefresh = false;
   bool buttonWake = false;       // woken by the button (EXT1)
   // Refresh interval in wakes of each widget on the layout; 0 = not on the layout.
@@ -72,17 +75,24 @@ struct WakePlan {
   long backoffRemaining = 0; // seconds
 };
 
-inline bool dueByWakes(int refresh, uint16_t bootCount) {
-  return refresh > 0 && bootCount % refresh == 0;
+// A refresh interval rounded up to a multiple of the wake interval (the clock every 5 minutes: a
+// 4-minute poll becomes 5), so bootCount, which advances in steps of the interval, still hits it.
+inline int roundedRefresh(int refresh, int step) {
+  if (step <= 1) return refresh;
+  return ((refresh + step - 1) / step) * step;
+}
+
+inline bool dueByWakes(int refresh, uint16_t bootCount, int step = 1) {
+  return refresh > 0 && bootCount % roundedRefresh(refresh, step) == 0;
 }
 
 inline WakePlan planWake(const WakeInputs& in) {
   WakePlan p;
   const time_t now = in.now;
-  p.event = dueByWakes(in.eventRefresh, in.bootCount) || (in.eventRefresh > 0 && in.calendarRetry);
-  p.stocks = dueByWakes(in.stocksRefresh, in.bootCount) || (in.stocksRefresh > 0 && in.stocksRetry);
-  p.weather = dueByWakes(in.weatherRefresh, in.bootCount) || (in.weatherRefresh > 0 && in.weatherRetry);
-  p.tracking = dueByWakes(in.trackingRefresh, in.bootCount) || (in.trackingRefresh > 0 && in.trackingRetry);
+  p.event = dueByWakes(in.eventRefresh, in.bootCount, in.stepMin) || (in.eventRefresh > 0 && in.calendarRetry);
+  p.stocks = dueByWakes(in.stocksRefresh, in.bootCount, in.stepMin) || (in.stocksRefresh > 0 && in.stocksRetry);
+  p.weather = dueByWakes(in.weatherRefresh, in.bootCount, in.stepMin) || (in.weatherRefresh > 0 && in.weatherRetry);
+  p.tracking = dueByWakes(in.trackingRefresh, in.bootCount, in.stepMin) || (in.trackingRefresh > 0 && in.trackingRetry);
 
   // A flight departs within 24 hours: refresh its countdown every 10 minutes (no download).
   const FlightState& f = in.flight;
@@ -106,13 +116,13 @@ inline WakePlan planWake(const WakeInputs& in) {
                    (f.lastFetch == 0 || now - f.lastFetch >= liveRefresh);
 
   bool eventOnLayout = in.eventRefresh > 0;
-  p.eventRedraw = eventOnLayout && (flightSoon || liveWindow) && !p.event && (in.bootCount % 10 == 0);
-  p.battery = dueByWakes(in.batteryRefresh, in.bootCount);
-  p.calendar = dueByWakes(in.calendarRefresh, in.bootCount) || (in.calendarRefresh > 0 && in.calendarRetry);
+  p.eventRedraw = eventOnLayout && (flightSoon || liveWindow) && !p.event && dueByWakes(10, in.bootCount, in.stepMin);
+  p.battery = dueByWakes(in.batteryRefresh, in.bootCount, in.stepMin);
+  p.calendar = dueByWakes(in.calendarRefresh, in.bootCount, in.stepMin) || (in.calendarRefresh > 0 && in.calendarRetry);
   bool bambuOnLayout = in.bambuRefresh > 0;
   bool bambuMqtt = bambuOnLayout && in.hasPrinterMqtt;
-  p.bambu = bambuMqtt && ((((in.isPrinting || in.previousIsPrinting) && (in.bootCount % in.bambuRefresh == 0)) ||
-                           (in.bootCount % BAMBU_IDLE_REFRESH_MIN == 0)) ||
+  p.bambu = bambuMqtt && ((((in.isPrinting || in.previousIsPrinting) && dueByWakes(in.bambuRefresh, in.bootCount, in.stepMin)) ||
+                           dueByWakes(BAMBU_IDLE_REFRESH_MIN, in.bootCount, in.stepMin)) ||
                           in.pendingBambuRetry);
   // A printer that didn't answer (usually: switched off) is asked again only after its backoff.
   if (p.bambu && in.bambuRetryAfter && now < in.bambuRetryAfter) p.bambu = false;

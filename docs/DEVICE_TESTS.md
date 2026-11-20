@@ -1,7 +1,7 @@
 # Device test session: everything still open
 
 Everything implemented so far that has only been checked on the PC (host tests, PC renderer, CI)
-and still needs the real device: stages 0-5, builds 63-73. Made to be done in **one session**, in
+and still needs the real device: stages 0-6, builds 63-75. Made to be done in **one session**, in
 this order (each block builds on the one before). Tick the boxes, note what the screen showed, and
 copy the results into the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log).
 
@@ -16,12 +16,12 @@ Whatever it runs now, flash it once over USB: on test build .90005 no release re
 too low" while the battery reading is wrong (block 0b). Battery **unplugged** until block 0b says it's
 safe.
 
-- [ ] `arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .` with the current `main` (build 73);
+- [x] `arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .` with the current `main` (build 73);
       settings and Wi-Fi are kept
-- [ ] Serial monitor (115200): boot log shows `Firmware .73 (build 73, esp32c6_firebeetle, bw750, settings schema 3)`
-- [ ] Settings schema: log shows `Settings schema 2 -> 3` once (not again after the next restart);
+- [x] Serial monitor (115200): boot log shows `Firmware .73 (build 73, esp32c6_firebeetle, bw750, settings schema 3)`
+- [x] Settings schema: log shows `Settings schema 2 -> 3` once (not again after the next restart);
       coming from build 66 or older it starts at 1 or 2, also fine
-- [ ] The dashboard appears as before (same layout as you had)
+- [x] The dashboard appears as before (same layout as you had)
 
 ## 0b. Battery and power (reported 2026-11-19: "battery low" with USB attached, not charging)
 
@@ -38,16 +38,16 @@ charger, 3.91 V (67 %) shortly after: the battery works.
 
 Note what the top bar shows (voltage or `USB`) in each case:
 
-- [ ] USB from a **computer**, battery connected: voltage ____ ; double tap shows "Battery: … - USB connected"
-- [ ] USB from a **charger / power bank**, battery connected: voltage ____ ; it should rise over an hour
+- [x] USB from a **computer**, battery connected: voltage ____ ; double tap shows "Battery: … - USB connected"
+- [x] USB from a **charger / power bank**, battery connected: voltage ____ ; it should rise over an hour
       while charging (the board's charge LED is on while charging)
-- [ ] **Without battery**, on USB: the top bar shows `USB` (build 71), updates are allowed
-- [ ] Battery only (no USB): voltage ____ ; compare with a multimeter at the battery connector:
+- [x] **Without battery**, on USB: the top bar shows `USB` (build 71), updates are allowed
+- [x] Battery only (no USB): voltage ____ ; compare with a multimeter at the battery connector:
       ____ V (if they differ, `BAT_CALIBRATION`, user guide "battery level")
-- [ ] Charging: with USB connected for an hour the voltage goes up; if it doesn't, check the battery's
+- [x] Charging: with USB connected for an hour the voltage goes up; if it doesn't, check the battery's
       plug polarity (+/- at the board's battery connector; JST plugs of different vendors are wired
       reversed) and that it's a single-cell 3.7 V LiPo
-- [ ] "Check for updates now" on a charger with a low battery: still "battery too low" (expected: the
+- [x] "Check for updates now" on a charger with a low battery: still "battery too low" (expected: the
       device can't see a charger); with a computer's USB it installs
 
 ## 1. Button and boot (stage 0): done
@@ -66,22 +66,22 @@ opening **edit mode** (new in build 71) is checked in block 6.
 
 ## 2. Stage 2: no visible change, every service still loads
 
-- [ ] Side by side with what you remember from build 66: same screen, nothing missing
-- [ ] Each service once (status bar shows no problem after a few minutes): weather, stocks, calendar
+- [x] Side by side with what you remember from build 66: same screen, nothing missing
+- [x] Each service once (status bar shows no problem after a few minutes): weather, stocks, calendar
       (all links), parcels, flight (if one is in a calendar), printer (if on), MakerWorld
-- [ ] Serial log: no secret (Wi-Fi password, keys, calendar links) printed in clear text (masked as `***`)
-- [ ] Old setup page `http://192.168.4.1/basic` (in setup mode): saving a wrong value (e.g. stock symbol
+- [x] Serial log: no secret (Wi-Fi password, keys, calendar links) printed in clear text (masked as `***`)
+- [x] Old setup page `http://192.168.4.1/basic` (in setup mode): saving a wrong value (e.g. stock symbol
       `AAPL!`) shows what to fix and saves nothing; a `webcal://` link is accepted and turned into `https://`
-- [ ] Factory reset from the serial console: type `factory-reset` during the BOOT window after a reset
+- [x] Factory reset from the serial console: type `factory-reset` during the BOOT window after a reset
       (only if you're willing to type all settings again; the app's factory reset is in block 7)
 
 ## 3. Stage 3: layouts and data age
 
-- [ ] In the app (block 6) or the old page: switch through **Classic, Planner, Minimal, Technical,
+- [x] In the app (block 6) or the old page: switch through **Classic, Planner, Minimal, Technical,
       Personal**; each is drawn with a full refresh, no leftovers of the previous one
 - [ ] Planner without a weather place: the clock fills the top row (gap filling)
 - [ ] 12-hour clock: "9:41" with AM/PM; at 12:xx without AM/PM where it doesn't fit
-- [ ] Partial refreshes over a few minutes: clock changes every minute without ghosting
+- [x] Partial refreshes over a few minutes: clock changes every minute without ghosting
 - [ ] "old" badge: set a wrong weather place, wait 30+ minutes: weather keeps its last data and shows
       "old"; the status bar names "Weather". Retries: log shows retries after 2, 4, 8, 16 minutes, then hourly
 - [ ] Fix the place again: the badge disappears at the next fetch
@@ -90,15 +90,15 @@ opening **edit mode** (new in build 71) is checked in block 6.
 
 Set channel **Beta**, auto install **off** first (setup app, Device tab).
 
-- [ ] **Release build 73 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
-      channel beta, "What's new" text. Then double tap: "Up to date: .73" (the device already has it)
+- [ ] **Release build 75 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
+      channel beta, "What's new" text. Then double tap: "Up to date: .75" (the device already has it)
 - [ ] **Hang test with the fix (build 69+):** OTA test release → `hang`; double tap, confirm tap:
       "Updated to .90005", then hangs. **Hold the button 2 s** during the hang: it must restart and come
-      back as .73 with "Update failed: previous version kept" (before build 69 a hold kept the test build)
-- [ ] OTA test release → `restore`; double tap: "Up to date: .73"
+      back as .75 with "Update failed: previous version kept" (before build 69 a hold kept the test build)
+- [ ] OTA test release → `restore`; double tap: "Up to date: .75"
 - [ ] **Notify only:** auto install off, a newer beta release (bump `FW_BUILD`, release to beta, or use
       the next real release): after the night check (03:00-03:59) the status bar shows the "Update
-      available" mark
+      available" mark (with night quiet hours over 03:00: after their end, block 6b)
 - [ ] **Night install:** auto install on, a newer beta release: installs by itself between 03:00 and
       03:59; next morning "Updated to …" was shown and the version is new
 - [ ] **Battery guard:** on battery below 30 % (no USB), "Check for updates now": "Battery too low for
@@ -110,14 +110,14 @@ before or after and note them separately.
 
 ## 5. Stage 4: tasks, note, birthdays
 
-- [ ] In the app (Data tab): add 5 tasks (one overdue, one today, one high priority, one without date,
+- [x] In the app (Data tab): add 5 tasks (one overdue, one today, one high priority, one without date,
       one done), a note with umlauts and line breaks ("Müll: Donnerstag!"), 3 birthdays (one today with
       year, one in 3 days, one in February)
 - [ ] Layout **Personal**: tasks in the right order (overdue first, date in a black box; high priority
       = filled box; the done one not shown), the note wrapped, birthdays with "Today" in a black box and
       the age
-- [ ] Umlauts, ß, €, `! ( ) & ' "` look right; an emoji typed into a task is removed when saving (the app says so)
-- [ ] 31st task refused with a message; a note over 400 characters refused
+- [x] Umlauts, ß, €, `! ( ) & ' "` look right; an emoji typed into a task is removed when saving (the app says so)
+- [x] 31st task refused with a message; a note over 400 characters refused
 - [ ] **Birthday calendar link** (e.g. Google's birthday calendar as iCal): "Check" finds events; after
       the next wake its birthdays appear (marked as from the calendar in the app)
 - [ ] **Survives a restart** (hold 2 s): everything still there
@@ -129,33 +129,33 @@ before or after and note them separately.
 
 ### Hotspot (setup mode)
 
-- [ ] Start setup mode with BOOT after a reset (or the 5 s hold without working Wi-Fi). The screen shows
+- [x] Start setup mode with BOOT after a reset (or the 5 s hold without working Wi-Fi). The screen shows
       **"Setup mode"**, the network name, a **password** and a **QR code**
-- [ ] **Scan the QR code** with the phone camera: joins the hotspot without typing (iPhone and Android)
-- [ ] The **app opens by itself** (captive portal). If not: `http://192.168.4.1`
-- [ ] The Paper look, four tabs (Home, Screen, Data, Device); everything readable in the captive-portal
+- [x] **Scan the QR code** with the phone camera: joins the hotspot without typing (iPhone and Android)
+- [x] The **app opens by itself** (captive portal). If not: `http://192.168.4.1`
+- [x] The Paper look, four tabs (Home, Screen, Data, Device); everything readable in the captive-portal
       window (iPhone: the small "mini browser" without address bar)
-- [ ] Home: battery, Wi-Fi, version, problems in plain words with the fix
-- [ ] Device: Wi-Fi list (scan), password "Test" (wrong password → "Wrong password", right one → OK)
-- [ ] Data: calendar link "Check" (right link → number of events; wrong link → reason); weather place
+- [x] Home: battery, Wi-Fi, version, problems in plain words with the fix
+- [x] Device: Wi-Fi list (scan), password "Test" (wrong password → "Wrong password", right one → OK)
+- [x] Data: calendar link "Check" (right link → number of events; wrong link → reason); weather place
       search shows suggestions (needs the tested Wi-Fi)
-- [ ] Save a setting: "Saved, restarting"; the device restarts and uses it
-- [ ] The old page `http://192.168.4.1/basic` still works (fallback)
-- [ ] 5 minutes without use: leaves setup mode and shows the dashboard
+- [x] Save a setting: "Saved, restarting"; the device restarts and uses it
+- [x] The old page `http://192.168.4.1/basic` still works (fallback)
+- [x] Without use it leaves setup mode and shows the dashboard (hotspot: after 5 minutes, edit mode: after 10)
 
 ### Layout editor
 
-- [ ] Screen tab: pick a structure, tap a box, choose a widget; widgets that don't fit are greyed out
+- [x] Screen tab: pick a structure, tap a box, choose a widget; widgets that don't fit are greyed out
       with the reason ("needs 2 × 2")
-- [ ] **Split** a 2 × 2 box: two 2 × 1 boxes; **merge** two neighbors back
-- [ ] **Your example:** "Top + main", agenda in the top row, no clock anywhere → "Show on the display":
+- [x] **Split** a 2 × 2 box: two 2 × 1 boxes; **merge** two neighbors back
+- [x] **Your example:** "Top + main", agenda in the top row, no clock anywhere → "Show on the display":
       the screen shows it **without a restart**; the sketch in the app matched the screen
-- [ ] **Status bar off**: the boxes use the full height; with a problem (e.g. wrong weather place) a
+- [x] **Status bar off**: the boxes use the full height; with a problem (e.g. wrong weather place) a
       small mark appears in the bottom-right corner
 - [ ] A widget without settings in a box (e.g. weather without a place): the box shows a hint
       ("Weather: set a place in the app") instead of being empty
-- [ ] **Exact preview** button: the device draws the edited layout; same as the screen afterwards
-- [ ] After a restart the custom layout is still there; no clock on screen → the time still right in the
+- [x] **Exact preview** button: the device draws the edited layout; same as the screen afterwards
+- [x] After a restart the custom layout is still there; no clock on screen → the time still right in the
       agenda (time zone applied without the clock)
 
 ### First start (on a reset device, see block 7)
@@ -208,6 +208,22 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
       fixed in build 74)
 - [ ] A printer that doesn't answer costs about 5 s per wake, not 30-60 s (printer settings were removed
       for now: redo when the printer is set up again)
+
+## 6b. Stage 6 part 1: power (build 75)
+
+- [ ] Clock refresh "every 5 minutes": the display updates at :00, :05, :10 ...; the status bar says
+      "Clock every 5 min"; the log shows wakes 5 minutes apart; calendar still once an hour
+- [ ] The app shows days per charge for each choice; the numbers change with the quiet hours on / off
+- [ ] Quiet hours set to start in 2 minutes and end 10 minutes later: at the start the status bar says
+      "Night until …", no wakes in the log during the window, a full refresh with fresh data at its end
+- [ ] A tap during the quiet hours shows the current dashboard (with the note), then it sleeps again
+- [ ] Quiet hours off: normal updates through the night
+- [ ] Night update check with quiet hours over 03:00: the log shows `[OTA] beta manifest` at the end of
+      the quiet hours (06:00), not at 03:00
+- [ ] Battery saver: below 20 % on battery (no computer USB) the status bar says "Battery saver: every
+      15 min" and the log shows `[Power] battery saver on`; above 30 % (or with a computer's USB) off again
+- [ ] Below 5 %: "Battery empty: please charge"; the log shows one short wake per hour; a tap shows the
+      same screen; after charging above 10 % the dashboard comes back by itself (full refresh)
 
 ## 7. Factory reset (last, it erases everything)
 

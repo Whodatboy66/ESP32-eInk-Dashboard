@@ -45,7 +45,9 @@ static void test_night_check_due() {
   CHECK(!nightCheckDue(3, dayKey(2026, 320), dayKey(2026, 320), 3));  // once per night
   CHECK(nightCheckDue(3, dayKey(2026, 321), dayKey(2026, 320), 3));
   CHECK(!nightCheckDue(2, dayKey(2026, 321), dayKey(2026, 320), 3));
-  CHECK(!nightCheckDue(4, dayKey(2026, 321), dayKey(2026, 320), 3));
+  CHECK(nightCheckDue(6, dayKey(2026, 321), dayKey(2026, 320), 3));   // after night quiet hours
+  CHECK(!nightCheckDue(6, dayKey(2026, 321), dayKey(2026, 321), 3));  // done today already
+  CHECK(!nightCheckDue(12, dayKey(2026, 321), dayKey(2026, 320), 3)); // not in the afternoon
   CHECK(nightCheckDue(3, dayKey(2027, 0), dayKey(2026, 364), 3));     // new year
 }
 

@@ -43,6 +43,12 @@ extern uint16_t widget_show_mask;              // widgetBit(layouts::WidgetId): 
 extern bool clock_24h;
 extern char layout_boxes[CFG_LAYOUT_BOXES_MAX];  // the boxes when layout_template is "custom" (stage 5)
 extern char device_name[CFG_DEVICE_NAME_MAX];
+// Power (stage 6, src/core/PowerPlan.h): clock interval (minutes), night quiet hours (minutes of
+// the day, from == to: none), battery capacity for the estimate.
+extern uint8_t clock_interval;
+extern bool quiet_on;
+extern uint16_t quiet_from, quiet_to;
+extern uint16_t battery_mah;
 
 #define ICS_MAX_FEEDS 3
 extern char ics_urls[ICS_MAX_FEEDS][CFG_ICS_URL_MAX];

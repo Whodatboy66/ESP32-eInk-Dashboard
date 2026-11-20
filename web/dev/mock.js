@@ -1,11 +1,11 @@
 // Fake device for developing the setup app without hardware (web/dev/index.html). Replaces
 // window.fetch and answers every /api/ route of docs/SETUP_API.md with sample data. Not part of
-// the bundle. Address options: ?first=1 ?home=1 ?offline=1 ?slow=1 ?down=1 ?classic=1 ?mem=1 ?lowbat=1
+// the bundle. Address options: ?first=1 ?home=1 ?offline=1 ?slow=1 ?down=1 ?classic=1 ?mem=1 ?lowbat=1 ?saver=1
 (function () {
   'use strict';
   function opt(k) { return new RegExp('[?&]' + k + '=1').test(location.search); }
   var FIRST = opt('first'), HOME = opt('home'), OFFLINE = opt('offline'), SLOW = opt('slow'), DOWN = opt('down');
-  var CLASSIC = opt('classic'), MEM = opt('mem'), LOWBAT = opt('lowbat');
+  var CLASSIC = opt('classic'), MEM = opt('mem'), LOWBAT = opt('lowbat'), SAVER = opt('saver');
   var loggedIn = !HOME, wrongCodes = 0, code = '123456', downUntil = 0;
 
   var settings = {
@@ -19,6 +19,7 @@
     mqtt_ip: FIRST ? '' : '192.168.1.50', mqtt_sn: FIRST ? '' : '01S00A123456789', mqtt_pass: FIRST ? null : '12345678',
     mqtt_port: 8883, printer_name: FIRST ? '' : 'X1C', makerworld_uid: '',
     ota_auto: true, ota_beta: false, clock_24h: true,
+    clock_interval: 1, quiet_enabled: true, quiet_from: '23:00', quiet_to: '06:00', battery_mah: 3000,
     pin_preset: 'esp32c6_default',
     pins: { epd_cs: 1, epd_dc: 8, epd_rst: 14, epd_busy: 7, epd_sck: 23, epd_mosi: 22, display_power: 4, battery: 0, demo_button: 2 }
   };
@@ -70,6 +71,24 @@
       .sort(function (a, b) { return a.days - b.days; });
   }
 
+  // Battery life estimates (build 75): days for 3000 mAh, with 7 quiet hours and without.
+  var DAYS_QUIET = { 1: 28, 2: 47, 5: 77, 10: 98, 15: 108, 30: 120 }, DAYS_ALL = { 1: 20, 2: 35, 5: 56, 10: 74, 15: 85, 30: 100 };
+  function powerState() {
+    var scale = (settings.battery_mah || 3000) / 3000, quiet = settings.quiet_enabled && settings.quiet_from !== settings.quiet_to;
+    function days(n, q) { return Math.round((q ? DAYS_QUIET : DAYS_ALL)[n] * scale); }
+    var first = days(1, quiet), n = settings.clock_interval;
+    return {
+      note: SAVER ? 'Battery saver: every 15 min' : n !== 1 ? 'Clock every ' + n + ' min' : '',
+      saver: SAVER, night: false, stepMin: SAVER ? Math.max(15, n) : n,
+      estimateNote: 'Estimate from the first measurements (2026-11-20); real current measurements follow.',
+      estimates: [1, 2, 5, 10, 15, 30].map(function (i) {
+        var d = days(i, quiet);
+        return { interval: i, days: d, gainPercent: Math.round((d / first - 1) * 100) };
+      }),
+      daysWithoutQuietHours: days(n, false), daysWithQuietHours: days(n, true)
+    };
+  }
+
   function state() {
     var s = {};
     Object.keys(settings).forEach(function (k) {
@@ -87,6 +106,7 @@
           [{ key: 'calendar', text: 'A calendar can\'t be read', fix: 'Check the calendar links on the Data tab.' }] : [],
         lastUpdate: 'Updated to .70', updateAvailable: FIRST ? null : '.72', layoutFallback: null
       },
+      power: powerState(),
       settings: s,
       pinPresets: [{ key: 'esp32c6_default', name: 'ESP32-C6 FireBeetle' }, { key: 'custom', name: 'Custom pins' }],
       layout: JSON.parse(JSON.stringify(layout)),
@@ -146,6 +166,11 @@
     if ('mqtt_port' in b && !(b.mqtt_port >= 1 && b.mqtt_port <= 65535)) errors.mqtt_port = 'The port is a number from 1 to 65535 (usually 8883).';
     if ('device_name' in b && !/^[\w \-äöüÄÖÜß]{1,32}$/.test(b.device_name)) errors.device_name = 'Use letters, digits, spaces and hyphens (up to 32).';
     if ('stocks' in b && String(b.stocks).split(',').filter(Boolean).length > 5) errors.stocks = 'Up to 5 symbols.';
+    if ('clock_interval' in b && [1, 2, 5, 10, 15, 30].indexOf(b.clock_interval) < 0) errors.clock_interval = 'Choose 1, 2, 5, 10, 15 or 30 minutes.';
+    ['quiet_from', 'quiet_to'].forEach(function (k) {
+      if (k in b && !/^([01]\d|2[0-3]):[0-5]\d$/.test(b[k])) errors[k] = 'Type a time like 23:00.';
+    });
+    if ('battery_mah' in b && !(b.battery_mah >= 100 && b.battery_mah <= 20000)) errors.battery_mah = 'Type the capacity in mAh, from 100 to 20000 (printed on the battery).';
     if (b.ics) b.ics.forEach(function (v, i) {
       if (typeof v === 'string' && v && !/^(https?|webcals?):\/\//i.test(v.trim())) errors['ics.' + i] = 'A calendar link starts with https:// or webcal://.';
     });

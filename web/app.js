@@ -35,7 +35,9 @@ var FIELDS = {
   adb_key: ['data', 'Flights key'], mqtt_ip: ['data', 'Printer address'], mqtt_sn: ['data', 'Printer serial number'],
   mqtt_pass: ['data', 'Printer access code'], mqtt_port: ['data', 'Printer port'], printer_name: ['data', 'Printer name'],
   makerworld_uid: ['data', 'MakerWorld user ID'], ota_auto: ['device', 'Automatic updates'], ota_beta: ['device', 'Update channel'],
-  clock_24h: ['screen', 'Clock'], pin_preset: ['device', 'Board'], pins: ['device', 'Pins']
+  clock_24h: ['screen', 'Clock'], pin_preset: ['device', 'Board'], pins: ['device', 'Pins'],
+  clock_interval: ['screen', 'Clock refresh'], quiet_enabled: ['screen', 'Quiet hours'], quiet_from: ['screen', 'Quiet hours from'],
+  quiet_to: ['screen', 'Quiet hours until'], battery_mah: ['device', 'Battery capacity']
 };
 
 // ---------- helpers ----------
@@ -1018,6 +1020,8 @@ function homeTab() {
   }
   out.push(lbl('Device'), card(
     kv('Battery', batteryText(d)),
+    S.state.power && S.state.power.note ? kv('Power', S.state.power.note) : null,
+    S.state.power && S.state.power.saver ? h('p', { class: 'note' }, 'Battery below 20 %: the display updates every 15 minutes until it\'s charged above 30 %.') : null,
     kv('Wi-Fi', w.ssid ? (w.connected ? w.ssid + ', ' + signalWord(w.rssi) : w.ssid + ' (not connected now)') : 'Not set up'),
     kv('Version', d.version + (d.build ? ' (build ' + d.build + ')' : '')),
     d.lastUpdate ? kv('Last update', d.lastUpdate) : null,
@@ -1144,7 +1148,50 @@ function screenTab() {
   }
   out.push(lbl('Clock'), card(seg('Clock format', [[true, '24 hours (14:30)'], [false, '12 hours (2:30 PM)']], cur('clock_24h') !== false,
     function (v) { setVal('clock_24h', v); render(); }, 'c24-'), h('p', { class: 'note' }, 'A setting: saved with "Save … and restart".')));
+  if (saved('clock_interval') !== undefined) out.push(lbl('Clock refresh'), clockRefreshCard());
+  if (saved('quiet_enabled') !== undefined) out.push(lbl('Night'), nightCard());
   return out;
+}
+
+// ---------- Screen tab: power (build 75) ----------
+
+function power() { return S.state.power || {}; }
+function errLine(key) {
+  var e = S.errors[key];
+  return e ? h('p', { class: 'err', role: 'alert' }, e) : null;
+}
+function estimatesStale() { return has(S.draft, 'quiet_enabled') || has(S.draft, 'quiet_from') || has(S.draft, 'quiet_to') || has(S.draft, 'battery_mah'); }
+function clockRefreshCard() {
+  var P = power(), est = P.estimates || [], now = cur('clock_interval') || 1;
+  var list = est.length ? est : [1, 2, 5, 10, 15, 30].map(function (n) { return { interval: n }; });
+  var rows = list.map(function (e) {
+    var n = e.interval, sub = e.days ? 'about ' + e.days + ' days per charge' + (e.gainPercent > 0 ? ' (+' + e.gainPercent + ' %)' : '') : '';
+    return h('button', { type: 'button', class: 'it', 'aria-pressed': String(n === now), 'data-f': 'ci' + n,
+      onclick: function () { setVal('clock_interval', n); if (S.errors.clock_interval) delete S.errors.clock_interval; render(); } },
+      h('span', { class: 't' }, n === 1 ? 'Every minute' : 'Every ' + n + ' minutes', sub ? h('small', null, sub) : null),
+      n === now ? h('span', { 'aria-hidden': 'true' }, '✓︎') : null);
+  });
+  return h('div', { class: 'card', 'data-k': 'clock_interval' },
+    h('p', null, 'The display wakes this often to update the clock. Less often = longer battery life; the clock then shows the time of the last update (e.g. 9:45 until 9:50).'),
+    h('div', { class: 'list', role: 'group', 'aria-label': 'Clock refresh' }, rows), errLine('clock_interval'),
+    estimatesStale() ? h('p', { class: 'note' }, 'The estimates are updated after saving the changed quiet hours or battery capacity.') : null,
+    P.estimateNote ? h('p', { class: 'note' }, P.estimateNote) : null);
+}
+function nightCard() {
+  var P = power(), on = !!cur('quiet_enabled'), out = [];
+  out.push(settingSwitch('quiet_enabled', 'Quiet hours at night', on ? (cur('quiet_from') || '23:00') + ' to ' + (cur('quiet_to') || '06:00') : 'Off: updates day and night'));
+  if (on) {
+    out.push(h('div', { class: 'grid3', style: 'grid-template-columns:1fr 1fr' },
+      textField('quiet_from', 'From', { type: 'time' }), textField('quiet_to', 'Until', { type: 'time' })));
+  }
+  out.push(h('p', { class: 'note' }, 'No updates during these hours; the display keeps its last picture and says "Night until ' + (cur('quiet_to') || '06:00') +
+    '". A tap on the button shows the current dashboard.'));
+  if (P.daysWithQuietHours && P.daysWithoutQuietHours) {
+    out.push(h('p', null, 'With quiet hours: about ' + P.daysWithQuietHours + ' days, without: ' + P.daysWithoutQuietHours + ' days' +
+      (has(S.draft, 'clock_interval') ? ' (for the saved clock refresh)' : '') + '.'));
+  }
+  out.push(errLine('quiet_enabled'));
+  return card(out);
 }
 
 // ---------- Data tab: personal data ----------
@@ -1349,6 +1396,8 @@ function deviceTab() {
       h('p', { class: 'note' }, 'Moved, or a new router? Change Wi-Fi restarts the device into setup mode, with its own hotspot.'),
       btn('Change Wi-Fi', changeWifi, 'wide', { 'data-f': 'chgwifi' })] : null),
     lbl('Time zone'), card(tzField()),
+    saved('battery_mah') !== undefined ? [lbl('Battery'), card(textField('battery_mah', 'Battery capacity (mAh)', { num: true, im: 'numeric', ph: '3000', max: 5,
+      note: 'Only used for the estimates.' }))] : null,
     lbl('Updates'), card(
       settingSwitch('ota_auto', 'Install updates by themselves', 'At night, when there is a new version. Off: the status bar says "Update available".'),
       h('div', null, h('p', { class: 'fl', style: 'font-weight:650;margin-bottom:6px' }, 'Update channel'),

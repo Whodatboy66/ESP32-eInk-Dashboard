@@ -46,6 +46,8 @@ extern int renderSample;  // tools/render/UserStoreSample.cpp
 char layout_template[CFG_LAYOUT_MAX] = "classic";
 char layout_boxes[CFG_LAYOUT_BOXES_MAX] = "";
 char device_name[CFG_DEVICE_NAME_MAX] = "";
+char powerNote[48] = "";
+uint32_t powerNoteShown = 0;
 uint16_t widget_show_mask = 0xFFFF;
 bool clock_24h = true;
 ServiceState serviceStates[SERVICE_COUNT];
@@ -58,6 +60,7 @@ char otaAvailVersion[16] = "";
 bool showPrintView() { return false; }
 
 float readBattery() { return 3.95f; }
+void batteryNoteQuiet(float) {}
 void logPrint(const char* s) { fputs(s, stderr); }
 void logPrint(const String& s) { fputs(s.c_str(), stderr); }
 void logPrintln(const char* s) { fprintf(stderr, "%s\n", s); }
@@ -168,6 +171,8 @@ int main(int argc, char** argv) {
   }
   if (argc > 4 && std::string(argv[4]).rfind("12h", 0) == 0) clock_24h = false;
   if (argc > 4 && std::string(argv[4]) == "empty") renderSample = 1;
+  if (argc > 4 && std::string(argv[4]) == "night") snprintf(powerNote, sizeof(powerNote), "Night until 06:00");
+  if (argc > 4 && std::string(argv[4]) == "saver") snprintf(powerNote, sizeof(powerNote), "Battery saver: every 15 min");
   if (argc > 4 && std::string(argv[4]) == "problems") {  // weather place missing, calendar failing
     weather_location[0] = '\0';
     problems = PROBLEM_CALENDAR | PROBLEM_WEATHER;

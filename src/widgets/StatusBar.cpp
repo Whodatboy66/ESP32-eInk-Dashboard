@@ -1,6 +1,7 @@
 #include "StatusBar.h"
 
 #include "../../app.h"
+#include "../core/AppState.h"
 #include "../core/Problems.h"
 #include "../hardware/BatteryCurve.h"
 #include "../hardware/BatteryMonitor.h"
@@ -78,6 +79,13 @@ void drawStatus(LayoutItem* item) {
   int16_t minVersionX = item->PosX + (hasBatteryPin() ? getSparseStringWidth(&epaperFont, buf) + 8 : 0);
   if (versionX < minVersionX) versionX = minVersionX;
   drawSparseString(&epaperFont, versionX, item->PosY + 16, versionBuf, GxEPD_BLACK);
+
+  // Power note (stage 6): "Night until 06:00", "Battery saver: every 15 min", "Clock every 5 min".
+  powerNoteShown = textHash(powerNote);
+  if (powerNote[0] && leftX + getSparseStringWidth(&epaperFont, powerNote) < versionX - 8) {
+    drawSparseString(&epaperFont, leftX, item->PosY + 16, powerNote, GxEPD_BLACK);
+    leftX += getSparseStringWidth(&epaperFont, powerNote) + 12;
+  }
 
   drawProblems(leftX, item->PosY + 16, versionX - 8);
 

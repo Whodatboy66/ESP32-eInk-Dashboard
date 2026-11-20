@@ -47,8 +47,11 @@ inline bool batteryAllowsInstall(bool hasBatterySensor, int percent, bool usbPow
 inline int dayKey(int year, int yday) { return year * 1000 + yday; }
 
 // The night-time check runs once per day, during nightHour (local time).
+// Once per day, from nightHour until noon: normally at the first wake after 03:00; with night quiet
+// hours over 03:00 (stage 6) at the first wake after them, and after a failed Wi-Fi at 03:00 at the
+// next Wi-Fi wake instead of a day later.
 inline bool nightCheckDue(int hour, int todayKey, int lastCheckKey, int nightHour) {
-  return hour == nightHour && todayKey != lastCheckKey;
+  return hour >= nightHour && hour < 12 && todayKey != lastCheckKey;
 }
 
 enum class NightAction : uint8_t {

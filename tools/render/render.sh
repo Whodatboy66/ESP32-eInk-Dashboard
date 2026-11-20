@@ -45,4 +45,6 @@ personal-long personal - long
 custom-top-agenda v1;sb1;0,0,4,1,agenda;0,1,2,2,tasks;2,1,2,2,month
 custom-no-status-bar v1;sb0;0,0,2,1,clock;2,0,2,1,weather;0,1,2,2,agenda;2,1,2,2,notes - problems
 custom-full-month v1;sb1;0,0,4,3,month
+planner-night planner - night
+classic-saver classic - saver
 LIST

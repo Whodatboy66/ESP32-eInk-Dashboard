@@ -338,6 +338,28 @@ stay in 24-hour format for now.
 These images are drawn on the PC with the firmware's own drawing code (`tools/render/render.sh`).
 Adding a widget: [ADD_A_WIDGET.md](ADD_A_WIDGET.md).
 
+## Battery and power
+
+Set in the setup app (Screen tab):
+
+- **Clock refresh:** every 1, 2, 5, 10, 15 or 30 minutes. The display wakes this often and shows the
+  time of that moment ("9:45" until 9:50 with 5 minutes); the status bar says "Clock every 5 min". The
+  app shows the estimated days per charge for each choice. Most of the battery goes into these wakes:
+  every 5 minutes lasts about 2.5 times as long as every minute.
+- **Quiet hours at night** (default 23:00-06:00, can be changed or switched off): no updates at all;
+  the display keeps its last picture and the status bar says "Night until 06:00". A tap shows the
+  current dashboard; in the morning everything is refreshed. The nightly update check then runs at the
+  end of the quiet hours.
+- **Battery saver** (automatic): below 20 % the display updates every 15 minutes ("Battery saver: every
+  15 min"), until the battery is above 30 % again or a computer's USB is connected. Below 5 % it shows
+  "Battery empty: please charge" and only checks the battery once an hour; once it's charged above
+  10 % the dashboard comes back by itself.
+- **Battery capacity** (Device tab, default 3000 mAh): only used for the estimates.
+
+The estimates come from the first measured battery use (about 20 days per charge with every minute,
+no quiet hours, 3000 mAh) and will be replaced by real current measurements.
+[Status bar at night](images/layouts/planner-night.png), [battery saver](images/layouts/classic-saver.png).
+
 ## Tasks, note and birthdays
 
 Three widgets with your own data, stored on the device (they stay through restarts and updates; a
