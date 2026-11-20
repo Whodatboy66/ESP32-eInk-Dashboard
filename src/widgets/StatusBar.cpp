@@ -44,6 +44,7 @@ void drawStatus(LayoutItem* item) {
   char buf[20] = "";
   if (hasBatteryPin()) {
     voltage = readBattery();
+    batteryNoteQuiet(voltage);  // drawn with Wi-Fi off: the reading the setup app shows
     // No battery measured: the board runs on USB (a voltage there would only confuse).
     if (batteryReadingPlausible(voltage)) snprintf(buf, sizeof(buf), "%.2f V", voltage);
     else snprintf(buf, sizeof(buf), "USB");

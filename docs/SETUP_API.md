@@ -78,7 +78,10 @@ its own password).
 ```
 
 - `device.mode`: `"ap"` or `"home"`. `firstRun`: no Wi-Fi saved yet (the app shows the guided setup).
-- `battery`: percent, `-1` without a sensor. `time`: Unix time, `0` when the clock isn't set.
+- `battery`: percent, `-1` without a sensor (or no battery measured). From build 74 it's the last
+  reading taken with Wi-Fi off (`batteryAt`: its Unix time; `null` = measured now): with Wi-Fi on in
+  setup / edit mode the voltage sags by a few hundredths of a volt, up to ~10 % on the flat part of
+  the LiPo curve. `time`: Unix time, `0` when the clock isn't set.
 - `layout.template`: `"custom"` (boxes) or a built-in key (`"classic"`, `"planner"`, `"minimal"`,
   `"technical"`, `"personal"`). For a built-in grid template, `boxes` is its current result (after gap
   filling), so the editor can start from it. `show` is the list of widget keys switched on (used by
@@ -175,7 +178,8 @@ Characters the screen font can't show are removed when saving; the answer says s
   Each line starts with the local time (`07:41:20`), or `+12.345 s` before the clock was set; date
   lines `--- YYYY-MM-DD ---` separate the days. Only wakes that did something are stored (Wi-Fi,
   a full refresh, a problem change, setup mode), not the quiet clock wakes.
-- `battery.mv`: measured now (raw, also when not plausible); `plausible`: 3.0-4.4 V (a LiPo running
+- `battery.quietMv` / `quietPercent` / `quietAt` (build 74, when known): the last reading with Wi-Fi
+  off; `battery.mv`: measured now, with Wi-Fi on (raw, also when not plausible); `plausible`: 3.0-4.4 V (a LiPo running
   the board); `percent` -1 when not plausible or without sensor; `usb`: a computer's USB seen (a
   charger isn't). `history`: `[unix time, millivolts, usb 0/1]` once an hour, last 7 days, oldest first.
 - `services`: last success (0 = never this power-on), failures in a row, next retry (0 = none),

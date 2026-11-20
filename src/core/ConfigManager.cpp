@@ -4,6 +4,7 @@
 #include "../personal/UserStore.h"
 
 #include <string.h>
+#include <time.h>
 
 #include "../hardware/PinMapping.h"
 #include "../hardware/StatusLed.h"
@@ -57,6 +58,9 @@ void configLoad() {
   preferences.getString("mqtt_ip", mqtt_ip, sizeof(mqtt_ip));
   mqtt_port = preferences.getUInt("mqtt_port", 8883);
   preferences.getString("device_timezone", device_timezone, sizeof(device_timezone));
+  // Right away, so the log lines that follow already carry the local time.
+  setenv("TZ", device_timezone[0] ? device_timezone : "UTC0", 1);
+  tzset();
   memset(weather_location, 0, sizeof(weather_location));
   memset(stock_symbols, 0, sizeof(stock_symbols));
   memset(ics_urls, 0, sizeof(ics_urls));

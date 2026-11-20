@@ -106,13 +106,15 @@ void appSetup() {
 
   int wakeup_reason = esp_sleep_get_wakeup_cause();
 
+  // Logged after the settings are loaded: the time zone (log times) comes with them.
+  const char* wakeMsg = "Wakeup was not caused by deep sleep";
   switch (wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0: logPrintln("Wakeup caused by external signal using RTC_IO"); break;
-    case ESP_SLEEP_WAKEUP_EXT1: logPrintln("Wakeup caused by external signal using RTC_CNTL"); fullRefresh=true; bootCount=0; break;
-    case ESP_SLEEP_WAKEUP_TIMER: logPrintln("Wakeup caused by timer"); break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD: logPrintln("Wakeup caused by touchpad"); break;
-    case ESP_SLEEP_WAKEUP_ULP: logPrintln("Wakeup caused by ULP program"); break;
-    default: logPrintf("Wakeup was not caused by deep sleep: %d\n", wakeup_reason); break;
+    case ESP_SLEEP_WAKEUP_EXT0: wakeMsg = "Wakeup caused by external signal using RTC_IO"; break;
+    case ESP_SLEEP_WAKEUP_EXT1: wakeMsg = "Wakeup caused by the button (RTC_CNTL)"; fullRefresh=true; bootCount=0; break;
+    case ESP_SLEEP_WAKEUP_TIMER: wakeMsg = "Wakeup caused by timer"; break;
+    case ESP_SLEEP_WAKEUP_TOUCHPAD: wakeMsg = "Wakeup caused by touchpad"; break;
+    case ESP_SLEEP_WAKEUP_ULP: wakeMsg = "Wakeup caused by ULP program"; break;
+    default: break;
   }
   // An update screen covered the dashboard during the last wake: redraw (and refetch) everything.
   if (redrawAll) {
@@ -127,6 +129,7 @@ void appSetup() {
   // a layout may have no clock).
   setenv("TZ", device_timezone[0] ? device_timezone : "UTC0", 1);
   tzset();
+  logPrintln(wakeMsg);
   DBGF("Firmware %s (build %d, %s, %s, settings schema %d), auto update %s, channel %s", FW_VERSION,
        FW_BUILD, FW_VARIANT, FW_DISPLAY, FW_CONFIG_SCHEMA, otaAutoInstall ? "on" : "off",
        ota::channelName(otaBeta));

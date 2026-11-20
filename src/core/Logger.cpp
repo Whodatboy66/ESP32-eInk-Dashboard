@@ -160,7 +160,9 @@ void batteryHistorySample() {
   if (lastBatterySample && now - lastBatterySample < 3600 && now >= lastBatterySample) return;
   lastBatterySample = now;
   char line[48];
-  int mv = (int)(readBattery() * 1000.0f + 0.5f);
+  float v = readBattery();  // end of the wake: Wi-Fi is off
+  batteryNoteQuiet(v);
+  int mv = (int)(v * 1000.0f + 0.5f);
   int n = snprintf(line, sizeof(line), "%ld,%d,%d\n", (long)now, mv, usbPowered() ? 1 : 0);
   appendUserFile(BATTERY_FILE, line, n);
   // Keep the last 7 days: trimmed when the file has grown a day past that.

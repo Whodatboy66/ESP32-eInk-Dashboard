@@ -1,6 +1,8 @@
 #include "BatteryMonitor.h"
 
 #include <Arduino.h>
+#include <esp_attr.h>
+#include <time.h>
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
 #include <driver/usb_serial_jtag.h>
 #endif
@@ -37,5 +39,31 @@ int batteryPercentNow() {
   if (!hasBatteryPin()) return -1;
   float v = readBattery();
   return batteryReadingPlausible(v) ? batteryPercent(v) : -1;
+}
+
+namespace {
+struct QuietReading {
+  uint32_t magic;
+  float volts;
+  time_t at;
+};
+constexpr uint32_t QUIET_MAGIC = 0xBA77E21E;
+RTC_NOINIT_ATTR QuietReading quiet;  // survives deep sleep and the restarts of setup mode
+}  // namespace
+
+void batteryNoteQuiet(float volts) {
+  time_t now = time(nullptr);
+  if (now < 1700000000) return;  // needs the clock for its age
+  quiet.volts = volts;
+  quiet.at = now;
+  quiet.magic = QUIET_MAGIC;
+}
+
+bool batteryQuiet(float& volts, time_t& at, time_t maxAgeS) {
+  time_t now = time(nullptr);
+  if (quiet.magic != QUIET_MAGIC || now < quiet.at || now - quiet.at > maxAgeS) return false;
+  volts = quiet.volts;
+  at = quiet.at;
+  return true;
 }
 

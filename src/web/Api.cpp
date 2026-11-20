@@ -187,7 +187,18 @@ void handleState() {
   dev["variant"] = FW_VARIANT;
   dev["mode"] = setupKind == SetupKind::Home ? "home" : "ap";
   dev["firstRun"] = wifi_ssid[0] == '\0';
-  dev["battery"] = batteryPercentNow();
+  // The last reading with Wi-Fi off (the radio makes the voltage sag now); live if there's none.
+  {
+    float qv;
+    time_t qat;
+    if (hasBatteryPin() && batteryQuiet(qv, qat, 3 * 3600)) {
+      dev["battery"] = batteryReadingPlausible(qv) ? batteryPercent(qv) : -1;
+      dev["batteryAt"] = (long)qat;
+    } else {
+      dev["battery"] = batteryPercentNow();
+      dev["batteryAt"] = nullptr;
+    }
+  }
   dev["usb"] = false;  // no USB detection yet (stage 6)
   JsonObject wifi = dev["wifi"].to<JsonObject>();
   wifi["ssid"] = wifi_ssid;
@@ -905,6 +916,13 @@ void handleDiagnostics() {
     bat["mv"] = (int)(v * 1000.0f + 0.5f);
     bat["plausible"] = batteryReadingPlausible(v);
     bat["percent"] = batteryPercentNow();
+    float qv;
+    time_t qat;
+    if (batteryQuiet(qv, qat, 3 * 3600)) {  // last reading with Wi-Fi off (now it sags under the radio)
+      bat["quietMv"] = (int)(qv * 1000.0f + 0.5f);
+      bat["quietAt"] = (long)qat;
+      bat["quietPercent"] = batteryReadingPlausible(qv) ? batteryPercent(qv) : -1;
+    }
   }
   bat["usb"] = usbPowered();
   bat["minMv"] = (int)(BATTERY_MIN_RUNNING_V * 1000);

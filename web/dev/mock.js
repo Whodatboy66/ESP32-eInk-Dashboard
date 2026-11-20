@@ -80,7 +80,7 @@
     return {
       device: {
         name: settings.device_name, version: '.71', build: 71, variant: 'esp32c6_firebeetle', mode: HOME ? 'home' : 'ap',
-        firstRun: !settings.wifi_ssid, battery: 82, usb: false,
+        firstRun: !settings.wifi_ssid, battery: LOWBAT ? -1 : 68, batteryAt: LOWBAT ? null : Math.floor(Date.now() / 1000) - 25 * 60, usb: false,
         wifi: { ssid: settings.wifi_ssid, connected: HOME, rssi: HOME ? -58 : 0 },
         time: HOME ? Math.floor(Date.now() / 1000) : 0,
         problems: settings.ics[1] && /bad/.test(settings.ics[1]) || !FIRST ?
@@ -208,11 +208,12 @@
     return out;
   }
   function diagnostics() {
-    var hist = history(), last = hist[hist.length - 1];
+    var hist = history();
     return {
       time: NOW, version: '.72', bootCount: 412, log: diagLog.slice(-200),
       battery: LOWBAT ? { sensor: true, mv: 1180, plausible: false, percent: -1, usb: false, minMv: 3000, history: hist } :
-        { sensor: true, mv: last[1], plausible: true, percent: 96, usb: true, minMv: 3000, history: hist },
+        { sensor: true, mv: 3850, plausible: true, percent: 60, usb: false, minMv: 3000, history: hist,
+          quietMv: 3910, quietPercent: 68, quietAt: NOW - 25 * 60 },
       services: [
         { key: 'weather', name: 'Weather', lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },
         { key: 'stocks', name: 'Stocks', lastOk: NOW - 12 * 60, failures: 0, retryAt: 0, stale: false },

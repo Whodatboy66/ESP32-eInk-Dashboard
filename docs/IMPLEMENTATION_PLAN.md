@@ -252,6 +252,13 @@ Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: s
 ### Stage 6: Power management (spec §8, Phase 5)
 - [ ] Power profiles Battery Saver / Balanced / USB Powered; USB detection; on USB the setup app stays reachable on the home network (moved from stage 5)
 - [ ] Configurable refresh intervals per data type
+- [ ] **Battery use, first numbers (2026-11-20, build 73, estimated from the diagnostics log):** 3 %
+  in 13 hours (after the surface charge settled), about 2-4 weeks per charge. Estimated shares: the
+  once-a-minute clock refresh about 50-60 %, the hourly Wi-Fi wake (calendar, 26-30 s, of which 10 s
+  for one calendar with 1090 events) about 25-30 %, deep sleep unknown. Options to decide in this
+  stage: **night quiet hours** (no clock updates, no fetches, e.g. 23:00-06:00: about 25-30 % less),
+  clock every 2 or 5 minutes as a profile option, calendar every 2 hours (or per calendar), the
+  battery saver below; first measure with a USB power meter
 - [ ] **Automatic battery saver (decided 2026-11-19), whatever profile and refresh settings are chosen:**
   - below **20 %** (about 3.73 V, where the LiPo curve starts to drop fast), on battery (a plausible
     reading, no computer USB): the screen refreshes **every 15 minutes** instead of every minute, data

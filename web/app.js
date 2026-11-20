@@ -984,7 +984,20 @@ function finish() {
 
 // ---------- Home tab ----------
 
-function batteryText(d) { return d.usb ? 'On USB power' : d.battery >= 0 ? 'Battery ' + d.battery + ' %' : 'No battery sensor'; }
+// A Unix time as the local clock time, with the date when it isn't the device's today.
+function clockAt(t, now) {
+  var d = new Date(t * 1000), n = new Date((now || t) * 1000);
+  var hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  return d.toDateString() === n.toDateString() ? hm : d.getDate() + ' ' + MONTHS[d.getMonth()].slice(0, 3) + ' ' + hm;
+}
+// device.battery is the last reading with Wi-Fi off; batteryAt its time (null = measured now).
+function batteryText(d, short) {
+  if (d.usb) return 'On USB power';
+  if (!(d.battery >= 0)) return 'No battery reading';
+  var t = 'Battery ' + d.battery + ' %';
+  if (d.batteryAt) t += short ? ' (' + clockAt(d.batteryAt, d.time) + ')' : ', measured ' + clockAt(d.batteryAt, d.time);
+  return t;
+}
 function homeTab() {
   var d = S.state.device, out = [], w = d.wifi || {};
   out.push(lbl('Screen'), sketchEl(-1), h('p', { class: 'cap' }, layoutDirty() ?
@@ -1383,12 +1396,22 @@ function inText(t, now) {
 function volts(mv) { return (mv / 1000).toFixed(2) + ' V'; }
 function kb(b) { return Math.round((b || 0) / 1024) + ' KB'; }
 
+var NO_BATTERY = ': no battery measured (the board runs on USB power)';
 function batteryNow(b) {
   if (!b.sensor) return 'No battery sensor on this board.';
   var t = volts(b.mv);
-  if (b.plausible === false) t += ': no battery measured (the board runs on USB power)';
+  if (b.plausible === false) t += NO_BATTERY;
   else if (b.percent >= 0) t += ', ' + b.percent + ' %';
   return t;
+}
+// The reading with Wi-Fi off (quietMv), when the device has one: shown first, the live one second.
+function batteryLines(b, now) {
+  if (!b.sensor || !(b.quietMv > 0)) return [batteryNow(b)];
+  var q = volts(b.quietMv);
+  if (b.quietMv < 3000 || b.quietMv > 4400) q += NO_BATTERY;
+  else if (b.quietPercent >= 0) q += ', ' + b.quietPercent + ' %';
+  q += ' (with Wi-Fi off' + (b.quietAt ? ', ' + clockAt(b.quietAt, now) : '') + ')';
+  return [q, 'Now, with Wi-Fi on: ' + volts(b.mv) + (b.plausible === false ? NO_BATTERY : ' (the radio makes the voltage sag a little)')];
 }
 
 // Line chart of the battery history: x = last 7 days, y = 0-4.5 V, 3.0-4.2 V band hatched.
@@ -1479,7 +1502,8 @@ function diagPart() {
   }
   var now = D.time || 0, b = D.battery || {}, hist = b.history || [];
   // battery
-  out.push(h('h3', { class: 'dh' }, 'Battery'), h('p', null, batteryNow(b)));
+  var bl = batteryLines(b, now);
+  out.push(h('h3', { class: 'dh' }, 'Battery'), h('p', null, bl[0]), bl[1] ? h('p', { class: 'note' }, bl[1]) : null);
   if (b.usb) out.push(h('p', { class: 'note' }, 'USB from a computer.'));
   if (hist.length) {
     out.push(h('div', { class: 'chart', html: batteryChart(hist, now) }),
@@ -1642,7 +1666,7 @@ function mainView() {
   document.title = name + ' setup';
   var tabs = [['home', 'Home'], ['screen', 'Screen'], ['data', 'Data'], ['device', 'Device']];
   var top = h('header', { class: 'top' }, h('div', { class: 'in' },
-    h('div', { class: 'head' }, h('h1', null, name), h('p', { class: 'st' }, d.mode === 'home' ? 'Home network' : 'Setup hotspot', h('br'), batteryText(d))),
+    h('div', { class: 'head' }, h('h1', null, name), h('p', { class: 'st' }, d.mode === 'home' ? 'Home network' : 'Setup hotspot', h('br'), batteryText(d, true))),
     h('div', { class: 'tabs', role: 'tablist', 'aria-label': 'Sections' }, tabs.map(function (t) {
       return h('button', { type: 'button', role: 'tab', id: 'tab-' + t[0], 'aria-selected': String(S.tab === t[0]), 'aria-controls': 'panel', 'data-f': 'tab-' + t[0],
         onclick: function () { if (S.tab !== t[0]) { S.tab = t[0]; S.barMsg = ''; window.scrollTo(0, 0); render(); } } }, t[1]);

@@ -32,7 +32,9 @@ charger, 3.91 V (67 %) shortly after: the battery works.
 - [x] The battery's **red** wire ends on the pin marked **+** next to the board's battery connector
       (the adapter's wires had to be swapped)
 - [x] The battery is alive: 4.22 V on the charger, 3.91 V (67 %)
-- [ ] First full charge: the cell gets at most slightly warm; Diagnostics shows the curve rising
+- [x] Charging and battery reading work (2026-11-19/20: 4.22 V on the charger; after unplugging 4.00 V
+      dropping to 3.92 V within an hour (surface charge), then 71 % → 68 % in 13 hours)
+- [ ] First full charge: the cell gets at most slightly warm
 
 Note what the top bar shows (voltage or `USB`) in each case:
 
@@ -199,11 +201,13 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
       in 10 min` (then 20, 40, 60), not a printer connection every 10 minutes; a wake takes a few seconds,
       not tens of seconds
 - [ ] MakerWorld ID without printer address: the printer widget shows MakerWorld stats, no MQTT lines in the log
-- [ ] Log after a reset: `[User] storage mounted: … KB used`. The "Corrupted dir pair … mount failed"
+- [x] Log after a reset: `[User] storage mounted: … KB used` (2026-11-20: 20-32 KB used, no errors). The "Corrupted dir pair … mount failed"
       lines may appear **once** (first start of storage); if they come on **every** boot, report it
-- [ ] USB monitor after a timer wake: the last line `Finished wake …: firmware .73 (build 73, …)` is visible
-- [ ] Diagnostics log: all times in local time (before build 73 they jumped between UTC and local time
-      after every Wi-Fi connect); a printer that doesn't answer costs about 5 s per wake, not 30-60 s
+- [x] USB monitor after a timer wake: the last line `Finished wake …: firmware .73 (build 73, …)` is visible (in the stored log, 2026-11-20)
+- [x] Diagnostics log: times in local time (2026-11-20; the first lines of each wake were still UTC:
+      fixed in build 74)
+- [ ] A printer that doesn't answer costs about 5 s per wake, not 30-60 s (printer settings were removed
+      for now: redo when the printer is set up again)
 
 ## 7. Factory reset (last, it erases everything)
 
