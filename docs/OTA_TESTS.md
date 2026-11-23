@@ -55,5 +55,5 @@ arduino-cli compile --profile esp32c6_firebeetle -u -p <port> .
 
 ## Results
 
-Add each test to the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log)
+Add each test to the results log in [DEVICE_TESTS.md](DEVICE_TESTS.md#results-log)
 (date, build, scenario, what the screen showed).

@@ -52,8 +52,8 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 |---|---|
 | [User guide](docs/USER_GUIDE.md) | Widgets, the setup app, layouts, battery and power, wake button, updates, building, troubleshooting |
 | [Project info](docs/PROJECT_INFO.md) | Our hardware and wiring, build/flash workflow, host and web tests |
-| [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Assessment, stages, hardware test log |
-| [Device tests](docs/DEVICE_TESTS.md) | Open checks on the real device |
+| [Implementation plan](docs/IMPLEMENTATION_PLAN.md) | Assessment, stages: what gets implemented |
+| [Device tests](docs/DEVICE_TESTS.md) | Per stage: the checks on the real device that confirm it, and the results log |
 | [Stage plans](docs/plans/) | Detailed plan and result of each stage |
 | [OTA updates](docs/OTA_UPDATES.md) | Self-updating firmware: how it works, signing, publishing a release |
 | [OTA tests](docs/OTA_TESTS.md) | Broken-update tests on the beta channel |

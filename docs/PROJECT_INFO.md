@@ -35,7 +35,7 @@ random "no response" / "busy timeout" results during bring-up.
 
 Red LED next to the battery connector = charge indicator. It flickers when no battery is connected,
 which is normal. The battery's red wire must end on the board's "+" pin: an inline adapter with
-crossed wires connected our battery reversed (hardware test log, 2026-11-19).
+crossed wires connected our battery reversed ([results log](DEVICE_TESTS.md#results-log), 2026-11-19).
 
 ## Workflow
 
@@ -134,7 +134,7 @@ logs `took ~3400 ms -> DISPLAY RESPONDED`.
 
 ## Open points
 
-Fixed findings are in the [CHANGELOG](../CHANGELOG.md) and the plan's hardware test log.
+Fixed findings are in the [CHANGELOG](../CHANGELOG.md) and the [results log](DEVICE_TESTS.md#results-log).
 
 | Issue | Status |
 |---|---|

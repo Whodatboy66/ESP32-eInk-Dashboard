@@ -1,9 +1,11 @@
-# Device test session: everything still open
+# Device tests
 
-Everything implemented so far that has only been checked on the PC (host tests, PC renderer, CI)
-and still needs the real device: stages 0-6, builds 63-78. Made to be done in **one session**, in
-this order (each block builds on the one before). Tick the boxes, note what the screen showed, and
-copy the results into the hardware test log in [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md#hardware-test-log).
+Where a stage of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is confirmed: the plan says what is
+implemented, this file whether it works on the device. Each block starts with **Confirms**: the
+stage's gate; the stage is confirmed when all boxes of its block are ticked. Blocks 0-7 are made to
+be done in one session, in this order (each builds on the one before); blocks 8 and 9 are separate
+sessions. Tick the boxes, note what the screen showed, and add a line to the
+[results log](#results-log) at the end.
 
 **You need:** the FireBeetle C6 with the 7.5" display, the TTP223 touch sensor (wired, but unplug it
 for block 1), a USB cable and the PC with `arduino-cli`, a phone (iPhone and/or Android, ideally both),
@@ -52,6 +54,9 @@ Note what the top bar shows (voltage or `USB`) in each case:
 
 ## 1. Button and boot (stage 0): done
 
+**Confirms stage 0:** a push builds in CI with a size report (done, 2026-11-16); the device boots
+into the dashboard with no sensor connected.
+
 Confirmed on the device on 2026-11-19 (reported by user, with a build before 71). The 5 s hold
 opening **edit mode** (new in build 71) is checked in block 6.
 
@@ -66,6 +71,8 @@ opening **edit mode** (new in build 71) is checked in block 6.
 
 ## 2. Stage 2: no visible change, every service still loads
 
+**Confirms stage 2:** behavior as before, every HTTPS request verified (CI green is checked by CI).
+
 - [x] Side by side with what you remember from build 66: same screen, nothing missing
 - [x] Each service once (status bar shows no problem after a few minutes): weather, stocks, calendar
       (all links), parcels, flight (if one is in a calendar), printer (if on), MakerWorld
@@ -77,6 +84,9 @@ opening **edit mode** (new in build 71) is checked in block 6.
 
 ## 3. Stage 3: layouts and data age
 
+**Confirms stage 3:** widgets and layout switched through configuration only; every template renders
+correctly on the device.
+
 - [x] In the app (block 6) or the old page: switch through **Classic, Planner, Minimal, Technical,
       Personal**; each is drawn with a full refresh, no leftovers of the previous one
 - [ ] Planner without a weather place: the clock fills the top row (gap filling)
@@ -86,9 +96,22 @@ opening **edit mode** (new in build 71) is checked in block 6.
       "old"; the status bar names "Weather". Retries: log shows retries after 2, 4, 8, 16 minutes, then hourly
 - [ ] Fix the place again: the badge disappears at the next fetch
 
-## 4. Stage 1 leftovers: OTA
+## 4. Stage 1: OTA
 
-Set channel **Beta**, auto install **off** first (setup app, Device tab).
+**Confirms stage 1:** a beta release installs itself at night (auto on) and via double tap + confirm
+tap (auto off); notify-only shows the status-bar mark; below 30 % without USB it refuses with the
+battery message; a corrupted, unsigned or wrong-board image is rejected; a release that crashes on
+boot rolls back; settings survive.
+
+Done earlier (results log, 2026-11-16/17):
+
+- [x] Settings survive the USB migration and an update
+- [x] Installs via double tap + confirm tap (auto off)
+- [x] Corrupted image rejected; wrong-board image rejected; unsigned image rejected; a release that
+      crashes on boot rolls back (workflow "OTA test release", [OTA_TESTS.md](OTA_TESTS.md))
+- [x] The same with a beta release
+
+Open (set channel **Beta**, auto install **off** first: setup app, Device tab):
 
 - [ ] **Release build 75 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
       channel beta, "What's new" text. Then double tap: "Up to date: .75" (the device already has it)
@@ -110,6 +133,9 @@ before or after and note them separately.
 
 ## 5. Stage 4: tasks, note, birthdays
 
+**Confirms stage 4:** tasks, note and birthdays are editable in the setup app and survive restarts
+and updates.
+
 - [x] In the app (Data tab): add 5 tasks (one overdue, one today, one high priority, one without date,
       one done), a note with umlauts and line breaks ("Müll: Donnerstag!"), 3 birthdays (one today with
       year, one in 3 days, one in February)
@@ -129,6 +155,9 @@ before or after and note them separately.
       task(s) older than 30 days removed`)
 
 ## 6. Stage 5: the setup app
+
+**Confirms stage 5:** a person without ESP32 knowledge sets up and personalizes a device using only a
+phone (try it once with someone else at the end of this block).
 
 ### Hotspot (setup mode)
 
@@ -237,6 +266,9 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
 
 ## 6b. Stage 6 part 1: power (build 75)
 
+**Confirms stage 6 part 1:** clock interval, quiet hours and battery saver behave as set and as
+described in the app.
+
 - [ ] Clock refresh "every 5 minutes": the display updates at :00, :05, :10 ...; the status bar says
       "Clock every 5 min"; the log shows wakes 5 minutes apart; calendar still once an hour
 - [ ] The app shows days per charge for each choice; the numbers change with the quiet hours on / off
@@ -256,7 +288,53 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
 - [ ] App → Device → Factory reset (confirm): restarts into setup mode with a **new** hotspot password;
       tasks, note and birthdays are gone; first-start guide appears (block 6)
 
+## 8. Power measurements (separate session, needs a USB power meter)
+
+**Confirms stage 6:** measured values and the resulting battery life are documented (`docs/POWER.md`,
+written from these numbers).
+
+- [ ] Deep sleep current (between wakes): ____ mA, with the touch sensor and the display HAT connected
+- [ ] One clock wake (partial refresh): ____ mA × ____ s
+- [ ] The hourly Wi-Fi wake (calendar, weather): ____ mA × ____ s
+- [ ] A full refresh: ____ mA × ____ s
+- [ ] With these: the battery life per clock interval and with / without quiet hours (into
+      `docs/POWER.md` and the estimate in the app)
+
+## 9. Release validation (stage 7, separate session)
+
+**Confirms stage 7:** a release candidate goes out to the first family device via the stable channel.
+
+- [ ] First boot of a fresh device (factory reset or new board): guided setup only with a phone
+- [ ] Wi-Fi loss for an hour: last data kept, "old" badges, Wi-Fi problem shown, recovers by itself
+- [ ] Invalid input in every field of the app: a clear message, nothing saved
+- [ ] Sleep / wake over a day: wakes on time, nothing missed (log)
+- [ ] Touch: tap, double tap, holds still work after a day on the wall
+- [ ] Persistence: settings, layout, tasks, note, birthdays after a power cut
+- [ ] OTA and a failed OTA (block 4 and [OTA_TESTS.md](OTA_TESTS.md)) with the release candidate
+- [ ] Power cut during a normal wake and during an update: the device comes back by itself
+- [ ] 7 days on the wall without touching it: battery curve in Diagnostics, no hang
+- [ ] **Release gate:** the release candidate is promoted to stable and installed on the first family
+      device
+
 ## After the session
 
-- [ ] Results into the hardware test log; tick stage 1-5 items in IMPLEMENTATION_PLAN.md
+- [ ] Results into the results log below (the plan has nothing to tick: a stage is confirmed when its
+      block here is complete)
 - [ ] Problems found: one line each (what you did, what the screen showed, the serial log if you have it)
+
+## Results log
+
+Only tests actually performed on the device go here.
+
+| Date | Build | Test | Result |
+|---|---|---|---|
+| 2026-11-15 | .63 + fixes | Display bring-up (`epd_test`), FireBeetle C6 + Waveshare HAT + 7.5" B/W | Refresh OK (about 3.4 s) with firm wiring; failures traced to loose contacts |
+| 2026-11-16 | .63 + fixes | Dashboard after setup, Wi-Fi, weather, NTP | Running (reported by user) |
+| 2026-11-16 | .64 → .65 | USB migration to the OTA partition table (build 64), then over-the-air update to build 65 | Settings kept after the USB flash and after the update (reported by user) |
+| 2026-11-16 | .64 → .65 | Double tap on the TTP223 → info screen → "New version .65" → confirm tap → download from the GitHub release, install, restart | Installed and running .65 (reported by user). Confirms the certificate bundle fix for GitHub's redirect |
+| 2026-11-17 | .66 | OTA tests on the beta channel: wrong board, bad checksum, unsigned, crash on boot, beta release | All as expected: rejected / rolled back (reported by user) |
+| 2026-11-17 | .66 → .90005 | OTA test "hang", then `restore` | Test build kept instead of rolled back (most likely confirmed by a button use during the hang); afterwards every release showed "Up to date: .90005" because test builds count as newer. Fixed in build 69 (see CHANGELOG); the device needs one USB flash (reported by user) |
+| 2026-11-19 | .70 / older | Update with USB attached; battery voltage in the top bar; charging | "Battery too low" refused the update with USB attached: a USB charger isn't seen as USB, and the battery read 1.1-1.4 V with the battery plugged in (about 3.7 V without it); the charge LED stays on. The inline adapter between the battery's plug and the board crosses red and black: reversed polarity or an over-discharged cell suspected, battery unplugged until measured (DEVICE_TESTS block 0b). Software: from build 71 a reading below 3.0 V counts as USB power (reported by user) |
+| 2026-11-19 | before 71 | Button (stage 0 / A.6): boot without sensor, tap, double tap, 2 s and 5 s holds, sensor held HIGH 15 s, BOOT backup | All as expected (reported by user). Opening edit mode with the 5 s hold is new in build 71 and is checked in DEVICE_TESTS block 6 |
+| 2026-11-19 | .72 | Diagnostics view and log download on the device; battery reading over time | Diagnostics work (firmware line, log, download). Battery: 0.06-0.11 V without a battery, a steady 1.16-1.17 V with it on the charger (charge LED on): not charging. Either the cell is over-discharged, or the inline adapter (red and black crossed) connects it reversed: with a charger attached a reversed cell is reverse-charged, so the positive reading proves nothing. To check: battery red must end on the board's "+" pin; cell voltage at the battery's own plug (reported by user). The log showed: each printer connection attempt 30 s (printer not answering, 1 minute per wake), times jumping between UTC and local time after every Wi-Fi connect, a calendar with 1090 events (10 s per read). Fixed in build 73 |
+| 2026-11-19 | .72 | Battery after flipping the wires of the inline adapter (battery red now on the board's "+") | Charges: 4.22 V on the charger, 3.91 V (67 %) shortly after; the cell survived the reversed connection. Cause of the 1.17 V: the adapter connected the battery reversed (reported by user) |
