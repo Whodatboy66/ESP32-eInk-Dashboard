@@ -162,11 +162,14 @@ on the device is decided in [DEVICE_TESTS.md](DEVICE_TESTS.md): each stage names
 **Where we are (2026-11-23, build 78):** stages 0-5, stage 6 part 1 (clock interval, night quiet
 hours, battery saver) and German / English ([plans/LOOK_AND_LANGUAGE.md](plans/LOOK_AND_LANGUAGE.md)
 part 1) are implemented. Releases: build 70 (stable), 76 and 78 (beta; 78 automatically on push).
-Next: part 2 of LOOK_AND_LANGUAGE (the new screen look), then the rest of stage 6, then stage 7.
+Next: **the gift edition** (stages 7-11, planned 2026-11-23 for the Christmas handover, design:
+[plans/GIFT_EDITION.md](plans/GIFT_EDITION.md)): new look, several screens, profiles, gift mode, help,
+extras. The current build is already deliverable; these stages are improvements, each coming to the
+family by update once device-tested.
 Not done on purpose so far (details in the plans' "Result" sections): the old setup page `/basic`
 stays until the app is checked on phones; the exact preview uses the device's own data (no sample
 data); agenda times stay 24 h with the 12-hour clock; tasks can't be ticked off on the device; one
-note only; several alternating screens (TRMNL playlists) not decided.
+note only.
 
 ### Stage 0: Reproducible base (spec Phase 1)
 - [x] Fix `sketch.yaml` profiles (partition, Zigbee flag): done `daa506c`
@@ -259,12 +262,12 @@ Detailed plan: [plans/STAGE5_SETUP_APP.md](plans/STAGE5_SETUP_APP.md) (editor: s
 ### Stage 6: Power management (spec §8, Phase 5)
 Part 1 (build 75): [plans/STAGE6_POWER.md](plans/STAGE6_POWER.md): clock interval, night quiet hours,
 battery saver, critical screen, estimates.
-- [ ] Power profiles Battery Saver / Balanced / USB Powered; USB detection; on USB the setup app stays reachable on the home network (moved from stage 5)
-- [ ] Configurable refresh intervals per data type (e.g. the calendar every 2 hours, or per calendar)
-- [ ] **Estimates from measured values:** the cost model in `src/core/PowerPlan.h` and `docs/POWER.md`
-  (battery life per setting) from the current measurements of [DEVICE_TESTS.md](DEVICE_TESTS.md)
-  block 8. First numbers (2026-11-20, from the diagnostics log): 3 % in 13 hours, about 2-4 weeks per
-  charge with every minute
+- Moved (2026-11-23, see [plans/GIFT_EDITION.md](plans/GIFT_EDITION.md)): power profiles Battery
+  Saver / Balanced / USB aren't built (the clock interval with its estimate and the quiet hours already
+  are that setting; power stays device-wide, on top of any profile, and the clock interval caps every
+  refresh); refresh intervals per data type go to stage 8 (with the data store);
+  the estimates from measured values to stage 10; "setup app reachable on USB" to stage 10 as an
+  experiment (a charger can't be seen directly, only inferred from the battery voltage)
 - [x] **Clock refresh interval** as a setting (1-30 min) with the estimated battery life per choice; **night quiet hours** (default 23:00-06:00, configurable) (decided 2026-11-20, build 75)
 - [x] **Automatic battery saver (decided 2026-11-19), whatever profile and refresh settings are chosen** (build 75):
   - below **20 %** (about 3.73 V, where the LiPo curve starts to drop fast), on battery (a plausible
@@ -284,12 +287,69 @@ battery saver, critical screen, estimates.
 
 **Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) blocks 6b (power settings) and 8 (measurements).
 
-### Stage 7: Product validation (spec §16, §17, Phase 7)
-- [ ] Docs: README, wiring + TTP223, battery requirements, setup guide, user guide, update guide, recovery guide, architecture, "how to add a widget"
-- [ ] Example profiles: personal planner, family planner, minimal desk clock, technical dashboard
-- [ ] Validation report: implemented / deferred / tests run / hardware tests done / limits / memory / open security points
+Stages 7-11 are the **gift edition**, designed in [plans/GIFT_EDITION.md](plans/GIFT_EDITION.md)
+(2026-11-23). No stage waits for the device test of the previous one; device tests move a build from
+beta to stable.
 
-**Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) block 9 (release validation and the release gate).
+### Stage 7: New look (week 1, until 2026-11-30)
+- [ ] [plans/LOOK_AND_LANGUAGE.md](plans/LOOK_AND_LANGUAGE.md) part 2: Montserrat Bold clock in every
+  layout incl. Classic (HighSpeed font removed), date under the clock, headings with a line, weather
+  labels, the app's sketch follows the device
+- [ ] Month view rework: small rounded square for today, frame for public holidays, line for school
+  holidays, mark row (appointment dot, birthday cake), bold weekend, KW, footer / side column; a design
+  per box size (full screen to 1 × 1 calendar sheet)
+- [ ] "Im Monat markieren" switch per calendar link (off by default)
+- [ ] Public holidays (calculated) and school holidays (a calendar link to our own ICS per Bundesland,
+  published by a GitHub Action, replaceable) per Bundesland, opt-in; in the
+  status bar, "Heute und morgen", month view
+- [ ] Birthdays from yearly all-day calendar entries (setting, on by default)
+- [ ] A device-tested beta promoted to stable (the family devices are flashed from stable)
+
+**Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) block 9.
+
+### Stage 8: Data store and several screens (week 2, until 2026-12-07)
+- [ ] Data store: each service keeps its last result in RTC memory; screens draw from it; downloads
+  only when due
+- [ ] Refresh interval per data type (moved from stage 6)
+- [ ] Several screens (opt-in, up to 4): time windows (opt-in), tap = next screen for 2 / 5 / 10 min,
+  hold 2 s = restart and refresh, screen dots in the status bar, presets in the app
+- [ ] Night sleep screen (opt-in, built-in graphic, "Schläft bis …", optional line for tomorrow)
+- [ ] Picture of the day: GitHub Action (public-domain art + own folder), the device draws it without
+  storing it
+
+**Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) block 10.
+
+### Stage 9: Profiles, gift mode, help (week 3, until 2026-12-14)
+- [ ] Profiles: ready-made (Familienplaner, Persönlicher Planer, Schreibtischuhr, Technik, Klassisch;
+  the former "example profiles") and up to 5 own with a name; one tap switches; a profile is the look
+  (screens, boxes), power settings stay device-wide
+- [ ] Gift mode "Neu einrichten" in the reset section: gift screen without power, welcome screen with
+  QR, app opens on the WLAN step
+- [ ] Short help behind a "?" on every tab of the app; the full guide as pages in the repo (linked)
+- [ ] Printable quick-start card with the device's own hotspot QR code
+
+**Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) block 11.
+
+### Stage 10: Export / import, extras, polish (week 4, until 2026-12-18)
+- [ ] Export / import (JSON, no secrets; parts chosen on import)
+- [ ] Waste collection box (town calendar link, icons, "Morgen: Gelbe Tonne" the evening before)
+- [ ] Countdown box (up to 3 entries)
+- [ ] **Estimates from measured values** (moved from stage 6): the cost model in `src/core/PowerPlan.h`
+  and `docs/POWER.md` from [DEVICE_TESTS.md](DEVICE_TESTS.md) block 8. First numbers (2026-11-20):
+  3 % in 13 hours, about 2-4 weeks per charge with every minute
+- [ ] Experiment: setup app reachable on a charger (inferred from the battery voltage), beta first;
+  to stable when reliable, otherwise to Later
+- [ ] Robustness points found so far; the old `/basic` page removed
+
+**Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) blocks 8 and 12.
+
+### Stage 11: Release and handover (spec §16, §17, Phase 7; until about 2026-12-21)
+- [ ] Feature freeze (about 2026-12-18), release candidate to stable
+- [ ] Docs: README, wiring + TTP223, battery requirements, setup guide, user guide, update guide, recovery guide, architecture, "how to add a widget"
+- [ ] Validation report: implemented / deferred / tests run / hardware tests done / limits / memory / open security points
+- [ ] The four devices flashed from stable, prepared, "Neu einrichten" with a greeting, cards printed
+
+**Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) block 13 (release validation and the release gate).
 
 ### Later (not part of the initial release, spec §10.3, §11)
 - Optional integration service (Python/FastAPI) for Proxmox, NAS, home lab, MQTT, Home Assistant; the ESP32 fetches a lightweight summary

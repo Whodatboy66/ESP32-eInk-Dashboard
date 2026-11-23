@@ -3,8 +3,9 @@
 Where a stage of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is confirmed: the plan says what is
 implemented, this file whether it works on the device. Each block starts with **Confirms**: the
 stage's gate; the stage is confirmed when all boxes of its block are ticked. Blocks 0-7 are made to
-be done in one session, in this order (each builds on the one before); blocks 8 and 9 are separate
-sessions. Tick the boxes, note what the screen showed, and add a line to the
+be done in one session, in this order (each builds on the one before); blocks 8 and 13 are separate
+sessions. Blocks 9-12 (the gift edition, stages 7-10) grow as each part is built: a part marked
+*(not built yet)* has nothing to test yet. Tick the boxes, note what the screen showed, and add a line to the
 [results log](#results-log) at the end.
 
 **You need:** the FireBeetle C6 with the 7.5" display, the TTP223 touch sensor (wired, but unplug it
@@ -290,7 +291,7 @@ described in the app.
 
 ## 8. Power measurements (separate session, needs a USB power meter)
 
-**Confirms stage 6:** measured values and the resulting battery life are documented (`docs/POWER.md`,
+**Confirms stage 6 and the estimates of stage 10:** measured values and the resulting battery life are documented (`docs/POWER.md`,
 written from these numbers).
 
 - [ ] Deep sleep current (between wakes): ____ mA, with the touch sensor and the display HAT connected
@@ -300,9 +301,72 @@ written from these numbers).
 - [ ] With these: the battery life per clock interval and with / without quiet hours (into
       `docs/POWER.md` and the estimate in the app)
 
-## 9. Release validation (stage 7, separate session)
+## 9. Stage 7: new look *(not built yet)*
 
-**Confirms stage 7:** a release candidate goes out to the first family device via the stable channel.
+**Confirms stage 7:** the screen looks like the app's sketch; holidays, school holidays and birthdays
+show where planned; a device-tested beta is on stable.
+
+- [ ] Clock: filled Montserrat digits in every layout incl. Classic, date below, AM/PM with the 12-hour
+      clock in a 2 × 1 box; readable with reflections
+- [ ] Headings with a line over the list boxes; weather weekdays and "9° / 2°"
+- [ ] Month view: today a small filled square, holiday a frame, school holidays a line, appointment
+      dots only from links with "Im Monat markieren", birthday cake, bold weekend, KW, footer
+- [ ] Month view in a full screen, a half (2 × 3), 2 × 2, 1 × 2, 2 × 1 and 1 × 1 box: each looks
+      tidy, nothing overlaps
+- [ ] Bundesland set, Feiertage on: the holiday name after the date in the status bar on a holiday
+      (or a test date), "★" entry in "Heute und morgen" today and tomorrow
+- [ ] Schulferien on: the link is filled in for the state; the line in the month view, start / end in
+      the footer
+- [ ] A yearly all-day entry in a calendar link shows as a birthday, not as an appointment dot
+- [ ] After many clock changes: no disturbing ghosting from the filled digits
+- [ ] A build with all of this promoted to stable (release gate of the week)
+
+## 10. Stage 8: data store and several screens *(not built yet)*
+
+**Confirms stage 8:** several screens switch by time and by tap, quickly and without extra battery
+use; sleep screen and picture of the day work.
+
+- [ ] One screen (default): a tap refreshes like before
+- [ ] Two screens: a tap shows the next one within a few seconds (no Wi-Fi in the log unless data is
+      due), back to the scheduled one after the chosen 2 / 5 / 10 min; dots in the status bar
+- [ ] Time windows: the screen changes at the window's start on the normal clock wake
+- [ ] Hold 2 s: restart with fresh data
+- [ ] Refresh interval per data type: e.g. the calendar every 2 h, visible in Diagnostics
+- [ ] Sleep screen: drawn at the start of the quiet hours, "Schläft bis 06:00", tomorrow line; no wakes
+      in the night (log); a tap at night shows the day screen, then the sleep screen again
+- [ ] Picture of the day: a new picture each day with title and artist; with Wi-Fi off the last one stays
+- [ ] Battery: a day with 2 screens and the picture uses about the same as a day before (Diagnostics)
+
+## 11. Stage 9: profiles, gift mode, help *(not built yet)*
+
+**Confirms stage 9:** profiles switch in one tap, a device can be prepared as a gift and set up at
+the recipient's home with WLAN only.
+
+- [ ] Switch between ready-made profiles: the screen redraws right away; calendars, tasks, location,
+      clock interval and quiet hours stay
+- [ ] Save an own profile with a name, change something, switch away and back; rename, delete
+- [ ] "Neu einrichten" with a greeting: the gift screen, then deep sleep; with the battery
+      disconnected the gift screen stays
+- [ ] Battery connected again (or a tap): the welcome screen with QR; the app opens on the WLAN step;
+      after WLAN the prepared dashboard appears
+- [ ] Help from every tab, German and English; the link to the full guide opens it
+- [ ] Quick-start card printed; its QR code joins the device's hotspot
+
+## 12. Stage 10: export / import and extras *(not built yet)*
+
+**Confirms stage 10:** a set-up copies to another device; waste and countdown boxes work.
+
+- [ ] Export a file, import it on a second device (or after a factory reset): profiles and settings
+      arrive, the target's WLAN and links stay; the file contains no password or link
+- [ ] Waste box with the town's link: next pickups with icons; "Morgen: …" in the status bar from 18:00
+- [ ] Countdown: "Noch n Tage bis …", "Heute: …" on the day, gone the day after
+- [ ] Experiment (beta): on a USB charger the app is reachable at `<name>.local` without the hold;
+      unplugged, the device is back to normal sleep within a few minutes (log); a nearly full battery
+      without a charger isn't mistaken for one for long
+
+## 13. Release validation (stage 11, separate session)
+
+**Confirms stage 11:** a release candidate goes out to the first family device via the stable channel.
 
 - [ ] First boot of a fresh device (factory reset or new board): guided setup only with a phone
 - [ ] Wi-Fi loss for an hour: last data kept, "old" badges, Wi-Fi problem shown, recovers by itself
