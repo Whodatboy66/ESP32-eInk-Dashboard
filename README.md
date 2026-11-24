@@ -87,11 +87,13 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 
 ## Credits and licenses
 
-This project: [MIT License](LICENSE) (c) 2026 Whodatboy66. The parts below keep their own licences.
+This project: [MIT License](LICENSE) (c) 2026 Whodatboy66. The third-party parts below keep their own licences.
 
 - Thanks to [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard) by VoIPshare,
-  where this project started (the services it shows and the first layout). Since build 80 none of its
-  code is left apart from facts (API addresses, field names); `tools/dev/origin_report.py` measures it.
+  where this project started (the services it shows and the first layout). Since build 80 its code is
+  rebuilt; about 2 % of the lines still read the same because they are facts (API addresses, field
+  names, settings keys, pin numbers) or single calls that can only be written one way
+  (`tools/dev/origin_report.py` measures it).
 - Material Design Icons: [pictogrammers.com](https://pictogrammers.com/library/mdi/), Pictogrammers Free
   License (the icons in `src/ui/fonts/MDI_*`, built from `@mdi/font` 7.4.47).
 - Montserrat: [Google Fonts](https://fonts.google.com/specimen/Montserrat), SIL Open Font License 1.1 (text,

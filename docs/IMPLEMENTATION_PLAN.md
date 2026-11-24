@@ -79,12 +79,11 @@ module with 8 MB flash (same chip, same code).
 
 ### A.5 Licensing (spec §1: "review licensing")
 
-- **The upstream repo has no license file** (GitHub: `license: null`). By default that means all rights
-  reserved: forking on GitHub is allowed, but modifying and distributing it is legally unclear.
-  Private family use is low-risk. **Recommended: open an issue upstream asking the author to add a license
-  (e.g. MIT)** before sharing builds more widely. Status: issue posted upstream (2026-11-19), no answer yet.
-- Fonts: Montserrat (OFL 1.1, fine), Material Design Icons (Apache 2.0, fine),
-  **HighSpeed font: personal use only**. OK for family devices, not for anything commercial.
+- *History:* the upstream repo has no license file (GitHub: `license: null`), so its code was all
+  rights reserved. An issue asking the author for a licence was posted upstream (2026-11-19) and got
+  no answer; superseded by the rebuild below.
+- Fonts: Montserrat (OFL 1.1), Material Design Icons (Pictogrammers Free License); the HighSpeed font
+  (personal use only) was removed in build 79.
 - *Now (build 80):* the upstream code is rebuilt (stage 7b, [plans/STAGE7B_OWN_CODE.md](plans/STAGE7B_OWN_CODE.md)),
   the HighSpeed font removed (build 79), all fonts built by our own tool. The repository left the fork
   network and is under the MIT licence ([LICENSE](../LICENSE), 2026-11-24).
@@ -185,7 +184,7 @@ note only.
 - [x] Enable Actions on the fork (Actions tab → "I understand my workflows, go ahead and enable them"); first green run on GitHub: 2026-11-16
 - [x] CI: compile on every push and pull request + size check (fails above the planned 1.875 MB OTA slot, flash/RAM table in the run summary); host tests (`tests/host/run.sh`); releases only from a manual run with "release" ticked
 - [x] Button input fix (A.6): pull-down (kept in deep sleep), 15 s fault limit (no gesture, no button wake while stuck), setup on release after 4 s; BOOT button backup (tap RST, then hold BOOT 1 s). Gesture logic in `src/input/ButtonGesture.h` with host tests. Tested on hardware (reported by user, 2026-11-19)
-- [x] License question to upstream (A.5): issue posted (reported by user, 2026-11-19); waiting for the author's answer
+- [x] License question to upstream (A.5): issue posted (reported by user, 2026-11-19), no answer; resolved by stage 7b (own code) and the MIT licence (2026-11-24)
 - [x] Repository layout: short README, manual in `docs/USER_GUIDE.md`, `docs/images/`, font converter in `tools/`, `CHANGELOG.md` (code moves into `src/` with stage 2)
 
 **Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) blocks 0 and 1 (done).
@@ -324,7 +323,7 @@ fork network and gets the owner's licence.
 - [x] Printer (MQTT) and its widget (build 80)
 - [x] Widgets (stocks, parcels, weather, MakerWorld, flights) and the remnants in status bar, clock, month (build 80)
 - [x] Base (pins, LED, touch, display, battery, Wi-Fi, time, problems, configuration, wake cycle) (build 80)
-- [x] Build files; README credits; `tools/dev/origin_report.py`: about 3 % left, all facts or single calls (build 80)
+- [x] Build files; README credits; `tools/dev/origin_report.py`: 2 % left (368 lines), all facts or single calls (build 80)
 - [x] Left the fork network, MIT licence added (owner, 2026-11-24)
 
 **Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) blocks 9b and M.

@@ -13,7 +13,8 @@ the family devices go out.
 **Goal:** every part that still comes from the original is rebuilt from what it does (the services'
 APIs, the file formats, the behaviour our tests and the device show), not translated line by line.
 The behaviour stays the same; problems found on the way are fixed and listed. Then the repository
-leaves the fork network (owner, DEVICE_TESTS block M) and gets a licence of the owner's choice.
+leaves the fork network (owner, DEVICE_TESTS block M) and gets a licence of the owner's choice
+(done 2026-11-24: MIT, see below).
 
 **Non-goals:** new features; changing the partition table, pin assignments or the update format
 (those are facts the devices depend on: they stay, only their code is new).
@@ -32,14 +33,14 @@ leaves the fork network (owner, DEVICE_TESTS block M) and gets a licence of the 
 | # | Part | Lines left | What it does |
 |---|---|---|---|
 | 1 | Old setup page `/basic` in `src/web/SetupServer.cpp` | ~610 | Removed: the app replaces it (checked on phones) |
-| 2 | Fonts: converter `tools/ListFontConvertV4.py`, renderer `src/ui/SparseFont.cpp`, `SparseFontBase.h`, the generated icon and text fonts | ~2,200 incl. data | Own converter, own renderer, all fonts regenerated (icons are Material Design Icons, Apache 2.0) |
+| 2 | Fonts: converter `tools/ListFontConvertV4.py`, renderer `src/ui/SparseFont.cpp`, `SparseFontBase.h`, the generated icon and text fonts | ~2,200 incl. data | Own converter, own renderer, all fonts regenerated (icons are Material Design Icons, Pictogrammers Free License) |
 | 3 | Calendar reader `src/services/Calendar.cpp` (iCal lines, dates, repeats, exceptions) | ~460 | A pure `IcsParser.h` with tests; Calendar.cpp only downloads |
 | 4 | Data services: Weather, Stocks, Tracking, Flight, MakerWorld, HttpJson, ServiceUtil, Fetchers.h | ~600 | Pure answer parsers with recorded answers as tests; thin download code |
 | 5 | Printer: `Bambu.cpp/.h` (MQTT), `Printer.cpp` (widget) | ~380 | Message parsing pure and tested |
 | 6 | Widgets: `Widgets.cpp/.h` (stocks, parcels, weather, MakerWorld, flights), remnants in StatusBar, Clock, MonthView | ~600 | Rebuilt drawing, same places |
 | 7 | Base: PinMapping, StatusLed, TouchController, EpaperDriver, BatteryMonitor / Curve, WifiService, TimeService, Problems, `configure.h`, `app.h`, ConfigManager, AppState, App.cpp, the `.ino` | ~800 | Rebuilt; pin tables and constants keep their values |
 | 8 | Build files: `sketch.yaml`, `partitions.csv`, workflow remnants, `tools/epd_test` | ~160 | Rewritten; the partition table keeps its values |
-| 9 | Repository: README credits ("started as a fork of …"), `LICENSE` (owner's choice), origin report at 0 for code | | |
+| 9 | Repository: README credits ("started as a fork of …"), `LICENSE` (owner's choice), origin report at 0 for code | – | Done: README credits, MIT `LICENSE`, out of the fork network; the report shows only facts (see the result) |
 
 Facts that have to stay as they are (partition offsets, pin numbers, API addresses and field names)
 may still show up in the origin report when written the same way; they are listed in the result.
@@ -52,10 +53,10 @@ every layout before and after (pixel-compared where nothing should change); all 
 On the device: [DEVICE_TESTS.md](../DEVICE_TESTS.md) block 9b (every service still loads, the screen
 looks the same, setup without `/basic`).
 
-## Open for the owner
+## Decided by the owner (2026-11-24)
 
-- The licence of the own code (block M): e.g. **MIT** (anyone may reuse it with your name kept), or
-  **no licence** (all rights reserved, others may only look). Not needed to start.
+- The repository left the fork network and is under the **MIT** licence ([LICENSE](../../LICENSE));
+  the third-party parts keep their own licences (README, "Credits and licenses").
 
 ## Result (build 80, 2026-11-23)
 

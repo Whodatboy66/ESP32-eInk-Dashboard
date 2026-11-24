@@ -46,7 +46,7 @@ Personal PC  <--git pull--  ------------------------------+
    arduino-cli compile + upload over USB
 ```
 
-Remotes in the WSL clone: `origin` = fork (push), `upstream` = VoIPshare (pull upstream changes).
+Remote in the WSL clone: `origin` = this repository (own since 2026-11-24: left the fork network, MIT licence; the former `upstream` remote to VoIPshare is removed).
 
 **Data feeds (stage 7):** `.github/workflows/feeds.yml` (Mondays, or by hand) publishes the school
 holidays of the 16 states as `ferien-<STATE>.ics` on the fixed pre-release **`feeds`** (never
@@ -141,6 +141,4 @@ logs `took ~3400 ms -> DISPLAY RESPONDED`.
 
 Fixed findings are in the [CHANGELOG](../CHANGELOG.md) and the [results log](DEVICE_TESTS.md#results-log).
 
-| Issue | Status |
-|---|---|
-| Upstream repo has no license; HighSpeed font was personal-use only | Solved by stage 7b (build 80): the code is rebuilt, the HighSpeed font is gone (build 79). The repository left the fork network and is MIT licensed (2026-11-24) |
+None at the moment.
