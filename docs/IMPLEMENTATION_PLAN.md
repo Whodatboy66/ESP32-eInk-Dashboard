@@ -86,8 +86,8 @@ module with 8 MB flash (same chip, same code).
 - Fonts: Montserrat (OFL 1.1, fine), Material Design Icons (Apache 2.0, fine),
   **HighSpeed font: personal use only**. OK for family devices, not for anything commercial.
 - *Now (build 80):* the upstream code is rebuilt (stage 7b, [plans/STAGE7B_OWN_CODE.md](plans/STAGE7B_OWN_CODE.md)),
-  the HighSpeed font removed (build 79), all fonts built by our own tool. Left for the owner: leave the
-  fork network and choose a licence ([DEVICE_TESTS.md](DEVICE_TESTS.md) block M).
+  the HighSpeed font removed (build 79), all fonts built by our own tool. The repository left the fork
+  network and is under the MIT licence ([LICENSE](../LICENSE), 2026-11-24).
 
 ### A.6 TTP223 touch input (spec §3.4)
 
@@ -325,7 +325,7 @@ fork network and gets the owner's licence.
 - [x] Widgets (stocks, parcels, weather, MakerWorld, flights) and the remnants in status bar, clock, month (build 80)
 - [x] Base (pins, LED, touch, display, battery, Wi-Fi, time, problems, configuration, wake cycle) (build 80)
 - [x] Build files; README credits; `tools/dev/origin_report.py`: about 3 % left, all facts or single calls (build 80)
-- [ ] Leave the fork network, licence (owner, DEVICE_TESTS block M)
+- [x] Left the fork network, MIT licence added (owner, 2026-11-24)
 
 **Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) blocks 9b and M.
 

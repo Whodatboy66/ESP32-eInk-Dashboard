@@ -87,6 +87,8 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 
 ## Credits and licenses
 
+This project: [MIT License](LICENSE) (c) 2026 Whodatboy66. The parts below keep their own licences.
+
 - Thanks to [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard) by VoIPshare,
   where this project started (the services it shows and the first layout). Since build 80 none of its
   code is left apart from facts (API addresses, field names); `tools/dev/origin_report.py` measures it.

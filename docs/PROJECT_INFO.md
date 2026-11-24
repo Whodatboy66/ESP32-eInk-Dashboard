@@ -143,4 +143,4 @@ Fixed findings are in the [CHANGELOG](../CHANGELOG.md) and the [results log](DEV
 
 | Issue | Status |
 |---|---|
-| Upstream repo has no license; HighSpeed font was personal-use only | Solved by stage 7b (build 80): the code is rebuilt, the HighSpeed font is gone (build 79). Left: leave the fork network and choose a licence (DEVICE_TESTS block M) |
+| Upstream repo has no license; HighSpeed font was personal-use only | Solved by stage 7b (build 80): the code is rebuilt, the HighSpeed font is gone (build 79). The repository left the fork network and is MIT licensed (2026-11-24) |
