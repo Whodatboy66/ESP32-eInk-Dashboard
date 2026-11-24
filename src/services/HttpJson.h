@@ -1,8 +1,21 @@
 #pragma once
-// Shared helpers of the fetchers: URL encoding and "GET a URL, parse JSON" over verified HTTPS.
+// "GET a URL, parse its JSON" over verified HTTPS (stage 7b, own code). The answer is parsed straight
+// from the stream (a filter keeps only what's needed), so large answers (MakerWorld: about 1 MB)
+// never sit in memory as a whole.
 #include <ArduinoJson.h>
-#include <stddef.h>
+#include <stdint.h>
 
-void urlEncode(const char* in, char* out, size_t cap);
-// GET url (verified TLS, redirects followed) and parse the JSON answer (optionally filtered).
-bool httpGetJson(const char* url, JsonDocument& doc, const JsonDocument* filter = nullptr);
+struct HttpHeader {
+  const char* name;
+  const char* value;
+};
+
+struct HttpJsonOptions {
+  const JsonDocument* filter = nullptr;  // only these fields
+  const HttpHeader* headers = nullptr;   // e.g. an API key
+  int headerCount = 0;
+  uint8_t nesting = 10;                  // deeper answers (skipped parts) need more
+  int* httpCode = nullptr;               // the HTTP status (0 = no connection)
+};
+
+bool httpGetJson(const char* url, JsonDocument& doc, const HttpJsonOptions& opt = HttpJsonOptions());

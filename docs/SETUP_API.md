@@ -54,6 +54,8 @@ its own password).
     "stocks": "EUNL.DE:MSCI World,PPFB.DE:Gold,^IXIC",
     "ics": [{"set": true, "hint": "calendar.google.com"}, {"set": false}, {"set": false}],
     "bday_url": {"set": false},
+    "holiday_state": "BY", "holidays_on": true, "school_on": true, "school_url": "",
+    "ics_month": [true, false, false], "cal_birthdays": true,
     "pkge_key": {"set": false}, "adb_key": {"set": false},
     "mqtt_ip": "192.168.1.50", "mqtt_sn": "01S00A123456789", "mqtt_pass": {"set": true},
     "mqtt_port": 8883, "printer_name": "X1C", "makerworld_uid": "123",
@@ -63,6 +65,7 @@ its own password).
              "display_power": 4, "battery": 0, "demo_button": 2}
   },
   "pinPresets": [{"key": "esp32_c6", "name": "ESP32 C6"}, {"key": "custom", "name": "Custom"}],
+  "holidayStates": [{"key": "BW", "name": "Baden-Württemberg"}, {"key": "BY", "name": "Bayern"}],
   "layout": {
     "template": "custom", "statusBar": true,
     "boxes": [{"c": 0, "r": 0, "w": 4, "h": 1, "widget": "agenda"}, {"c": 0, "r": 1, "w": 2, "h": 2, "widget": null}],
@@ -91,6 +94,13 @@ its own password).
   settings are filled in (`hint` says what's missing).
 - `structures`: starting points for the editor (built-in templates as boxes, plus Full, Halves, …).
 - `pinPresets`: board presets for the Device tab (advanced).
+- **Holidays, month marks, calendar birthdays (build 79, stage 7):** `holiday_state` (`""` = off, or
+  one of the 16 codes in `holidayStates`; anything else is a field error under `holiday_state`),
+  `holidays_on` / `school_on` (bool, default false; public holidays are calculated on the device,
+  school holidays read from a calendar link), `school_url` (a public link, sent back as it is; `""` =
+  our own feed for the state, see `device.schoolDefault`), `ics_month` (one bool per calendar link:
+  its appointments are dots in the month view; default all false), `cal_birthdays` (bool, default
+  true: yearly all-day entries of the calendar links count as birthdays).
 - **Language (build 78):** setting `lang`: `"de"` (default, also for devices updated from older
   builds) or `"en"`. Every text the device sends to the app (problems with their fix, field errors,
   hints, check results, `power.note`, `estimateNote`) comes in that language; the app shows its own

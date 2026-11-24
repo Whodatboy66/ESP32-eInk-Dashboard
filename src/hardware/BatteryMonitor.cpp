@@ -9,18 +9,19 @@
 
 #include "../../configure.h"
 
-// Battery: the board divides the LiPo voltage by 2 before the ADC pin.
-constexpr float BAT_DIVIDER = 2.0f;
-constexpr float BAT_CALIBRATION = 1.0f;   // multimeter voltage / displayed voltage, if they differ
-constexpr int   BAT_SAMPLES = 16;
+// The LiPo's voltage reaches the ADC pin through the board's 1:2 divider. analogReadMilliVolts()
+// applies the chip's factory calibration; 16 readings average the noise out.
+namespace {
+constexpr float DIVIDER = 2.0f;
+constexpr int SAMPLES = 16;
+}  // namespace
 
 float readBattery() {
   if (!hasBatteryPin()) return 0.0f;
   analogReadResolution(12);
-  // analogReadMilliVolts applies the chip's factory ADC calibration; average out the noise.
-  uint32_t mv = 0;
-  for (int i = 0; i < BAT_SAMPLES; i++) mv += analogReadMilliVolts(activePins.battery);
-  return mv / (float)BAT_SAMPLES / 1000.0f * BAT_DIVIDER * BAT_CALIBRATION;
+  uint32_t sum = 0;
+  for (int i = 0; i < SAMPLES; i++) sum += analogReadMilliVolts(activePins.battery);
+  return sum * DIVIDER / SAMPLES / 1000.0f;
 }
 
 // USB connected to a computer (USB-Serial/JTAG sees the host). A plain USB charger isn't seen,

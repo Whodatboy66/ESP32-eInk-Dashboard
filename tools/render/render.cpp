@@ -18,6 +18,8 @@
 #include "src/widgets/Widgets.h"
 #include "src/widgets/MonthView.h"
 #include "src/core/AppState.h"
+#include "src/services/ServiceParsers.h"
+#include "src/personal/PersonalText.h"
 #include "src/core/PowerPlan.h"
 #include "src/core/Problems.h"
 #include "src/services/Bambu.h"
@@ -46,6 +48,13 @@ char printer_name[CFG_PRINTER_NAME_MAX] = "X1C";
 char pkge_api_key[CFG_PKGE_KEY_MAX] = "key";
 char aerodatabox_key[CFG_ADB_KEY_MAX] = "";
 char bday_url[CFG_ICS_URL_MAX] = "";
+char holiday_state[4] = "BY";
+bool holidays_on = true, school_on = true;
+char school_url[CFG_ICS_URL_MAX] = "";
+uint8_t ics_month_mask = 1;
+bool cal_birthdays = true;
+school::SchoolList schoolHolidays;
+int8_t lastRssi = -60;  // three Wi-Fi bars
 uint8_t user_content = USER_HAS_TASKS | USER_HAS_NOTE | USER_HAS_BIRTHDAYS;
 extern int renderSample;  // tools/render/UserStoreSample.cpp
 char layout_template[CFG_LAYOUT_MAX] = "classic";
@@ -60,7 +69,7 @@ ServiceState serviceStates[SERVICE_COUNT];
 PinConfig activePins = makePinPreset(PinPreset::Esp32C6Default);
 uint16_t bootCount = 0;
 bool isPrinting = false, previousIsPrinting = false, printViewOnScreen = false, bambuAuthRejected = false;
-PrinterStatus printer;
+bambu::PrinterStatus printer;
 uint32_t otaAvailBuild = 0;
 char otaAvailVersion[16] = "";
 bool showPrintView() { return false; }
@@ -123,9 +132,7 @@ static void sampleData() {
     d.temp_min = 2 + i;
     d.temp_max = 9 + i;
     d.weather_code = atoi(icons[i]);
-    d.icon = weatherCodeToMDI(d.weather_code);
-    snprintf(d.sunrise, sizeof(d.sunrise), "07:3%d", i);
-    snprintf(d.sunset, sizeof(d.sunset), "16:1%d", i);
+    d.icon = svc::weatherIcon(d.weather_code);
   }
   struct Ev { const char* title; int startH; int durH; bool allDay; };
   const Ev evs[] = {{"Dentist", 2, 1, false}, {"Team meeting", 5, 1, false},
@@ -165,6 +172,12 @@ static void sampleData() {
   tracking[1].status = 5;
   tracking[1].lastDate = RENDER_TIME - 3600;
   makerworld = MakerWorld{1240, 5230, 870, 310, 42, RENDER_TIME, true};
+  // Stage 7: Bavaria's Christmas school holidays 2026/27 (as the feed has them).
+  schoolHolidays = school::SchoolList();
+  schoolHolidays.count = 1;
+  schoolHolidays.r[0].fromDay = personal::dayNumber(personal::Date{2026, 12, 24});
+  schoolHolidays.r[0].toDay = personal::dayNumber(personal::Date{2027, 1, 8});
+  snprintf(schoolHolidays.r[0].name, sizeof(schoolHolidays.r[0].name), "Weihnachtsferien");
   saveMakerWorld();  // the widget reloads its numbers from NVS
 }
 
@@ -226,12 +239,14 @@ int main(int argc, char** argv) {
   }
   if (argc > 4 && std::string(argv[4]).rfind("12h", 0) == 0) clock_24h = false;
   if (argc > 4 && std::string(argv[4]) == "empty") renderSample = 1;
+  if (argc > 4 && std::string(argv[4]) == "jan27") RENDER_TIME = 1799052080;  // Mon 2027-01-04 09:41, stage 7
+  if (argc > 4 && std::string(argv[4]).rfind("holiday", 0) == 0) RENDER_TIME = 1799224880;  // Wed 2027-01-06 09:41
   if (argc > 4 && std::string(argv[4]) == "night") {  // the status bar's note at night
     power::Plan p;
     p.mode = power::Mode::Night;
     power::note(p, 1, power::DEFAULT_QUIET_TO, powerNote, sizeof(powerNote), ui_lang);
   }
-  if (argc > 4 && std::string(argv[4]) == "saver") {
+  if (argc > 4 && (std::string(argv[4]) == "saver" || std::string(argv[4]) == "holiday-saver")) {
     power::Plan p;
     p.saverOn = true;
     p.stepMin = power::SAVER_INTERVAL_MIN;
@@ -255,6 +270,15 @@ int main(int argc, char** argv) {
   GFXcanvas1 screen(800, 480);
   setCanvas(&screen);
   sampleData();
+  if (argc > 4 && std::string(argv[4]) == "holiday") {  // review case: a trip that began before today
+    for (int i = cal.eventCount; i > 0; i--) cal.next24hEvents[i] = cal.next24hEvents[i - 1];
+    CalEventItem& trip = cal.next24hEvents[0];
+    snprintf(trip.title, sizeof(trip.title), "%s", "Skiurlaub");
+    trip.start = RENDER_TIME - 2 * 86400;
+    trip.end = RENDER_TIME + 3 * 86400;
+    trip.allDay = true;
+    cal.eventCount++;
+  }
 
   // The full refresh of the wake cycle (src/core/App.cpp), everything due.
   loadDefaultLayout();

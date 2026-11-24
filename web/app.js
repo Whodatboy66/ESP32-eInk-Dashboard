@@ -27,7 +27,8 @@ var FIELDS = {
   ics: 'data', bday_url: 'data', pkge_key: 'data', adb_key: 'data', mqtt_ip: 'data', mqtt_sn: 'data', mqtt_pass: 'data',
   mqtt_port: 'data', printer_name: 'data', makerworld_uid: 'data', ota_auto: 'device', ota_beta: 'device', clock_24h: 'screen',
   pin_preset: 'device', pins: 'device', clock_interval: 'screen', quiet_enabled: 'screen', quiet_from: 'screen',
-  quiet_to: 'screen', battery_mah: 'device', lang: 'device'
+  quiet_to: 'screen', battery_mah: 'device', lang: 'device', holiday_state: 'data', holidays_on: 'data', school_on: 'data',
+  school_url: 'data', ics_month: 'data', cal_birthdays: 'data'
 };
 
 // ---------- helpers ----------
@@ -357,17 +358,31 @@ function widgetSvg(key, w, hh) {
     case 'agenda':
       return head(t('sToday'), w) + rowsSvg(t('sAgenda'), w, hh, function (e, y) { return tx(12, y, 17, e[0], BOLD) + tx(104, y, 17, e[1]); });
     case 'month': {
+      // As the device (src/widgets/MonthModel.h): sheet (1 x 1), two weeks (low boxes), narrow (no
+      // week numbers), otherwise a grid with week numbers; today a small filled square, weekend bold.
       var now = new Date(), yr = now.getFullYear(), mo = now.getMonth(), today = now.getDate();
-      var start = (new Date(yr, mo, 1).getDay() + 6) % 7, days = new Date(yr, mo + 1, 0).getDate();
-      var weeks = Math.ceil((start + days) / 7), cw = (w - 24) / 7, top = 40, rh = Math.max(16, (hh - top - 30) / weeks);
-      var fs = Math.min(17, rh * 0.75);
-      s = head(monthName(mo) + ' ' + yr, w);
-      t('wdHead').forEach(function (d, k) { s += tx(12 + cw * k + cw / 2, top + 14, 13, d, MID + BOLD); });
-      s += ln(12, top + 20, w - 12, top + 20);
-      for (var d = 1; d <= days; d++) {
-        var idx = start + d - 1, x = 12 + cw * (idx % 7), y0 = top + 24 + rh * Math.floor(idx / 7);
-        if (d === today) s += rc(x + 2, y0 + 1, cw - 4, rh - 2, '#000', 0) + tx(x + cw / 2, y0 + rh / 2 + fs * 0.36, fs, d, MID + BOLD + ' fill="#fff"');
-        else s += tx(x + cw / 2, y0 + rh / 2 + fs * 0.36, fs, d, MID);
+      if (w < 300 && hh < 200) {
+        return tx(w / 2, 24, 19, dayShort(now.getDay()), MID + BOLD) + tx(w / 2, 92, 62, today, MID + BOLD) +
+          tx(w / 2, 120, 15, monthName(mo) + ' · ' + t('sWeek') + ' ' + isoWeek(now), MID);
+      }
+      var two = hh < 200, kw = w >= 300, cols = kw ? 8 : 7, cw = w / cols, top = 46;
+      var first = new Date(yr, mo, 1), start = (first.getDay() + 6) % 7, days = new Date(yr, mo + 1, 0).getDate();
+      var monday = new Date(yr, mo, today - (now.getDay() + 6) % 7);
+      var rows = two ? 2 : Math.ceil((start + days) / 7), rh = Math.min(two ? 46 : 60, (hh - top - (two ? 20 : 8)) / rows);
+      s = tx(w / 2, 22, 19, monthName(mo) + ' ' + yr, MID + BOLD);
+      if (kw) s += tx(cw / 2, 40, 13, t('sWeek'), MID);
+      t('wdHead').forEach(function (d, k) { s += tx((kw ? cw : 0) + cw * k + cw / 2, 40, 13, kw ? d : d.charAt(0), MID); });
+      for (var r = 0; r < rows; r++) {
+        var y0 = top + rh * r, rowStart = two ? new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7 * r)
+                                                 : new Date(yr, mo, 1 + 7 * r - start);
+        if (kw) s += tx(cw / 2, y0 + 17, 14, isoWeek(rowStart), MID);
+        for (var c = 0; c < 7; c++) {
+          var dt = new Date(rowStart.getFullYear(), rowStart.getMonth(), rowStart.getDate() + c);
+          if (!two && dt.getMonth() !== mo) continue;
+          var x = (kw ? cw : 0) + cw * c + cw / 2, isToday = dt.toDateString() === now.toDateString(), wk = c >= 5 ? BOLD : '';
+          if (isToday) s += rc(x - 14, y0 + 2, 28, 21, '#000', 0, ' rx="4"') + tx(x, y0 + 18, 16, dt.getDate(), MID + BOLD + ' fill="#fff"');
+          else s += tx(x, y0 + 18, 16, dt.getDate(), MID + wk);
+        }
       }
       return s;
     }
@@ -393,14 +408,23 @@ function widgetSvg(key, w, hh) {
       });
     case 'notes': {
       var note = S.p && S.p.note ? S.p.note : t('sNote');
-      var lines = wrapText(note, Math.max(6, Math.floor((w - 24) / 10)), Math.max(1, Math.floor((hh - 12) / 26)));
-      lines.forEach(function (l, k) { s += tx(12, 30 + k * 26, 19, l); });
-      return s;
+      var top0 = hh >= 100 ? 56 : 30;  // the device draws the heading in boxes of 100 px and more
+      var lines = wrapText(note, Math.max(6, Math.floor((w - 24) / 10)), Math.max(1, Math.floor((hh - top0 + 18) / 26)));
+      lines.forEach(function (l, k) { s += tx(12, top0 + k * 26, 19, l); });
+      return (hh >= 100 ? head(t('sNoteHead'), w) : '') + s;
     }
     case 'birthdays':
       return head(t('sBirthdays'), w) + rowsSvg(sampleBirthdays(), w, hh, function (b, y) { return tx(12, y, 17, b[0], BOLD) + tx(110, y, 17, b[1]); });
   }
   return tx(w / 2, hh / 2, 17, key, MID);
+}
+
+// ISO 8601 week number (as holidays::isoWeek on the device).
+function isoWeek(d) {
+  var t0 = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())), wd = (t0.getUTCDay() + 6) % 7;
+  t0.setUTCDate(t0.getUTCDate() - wd + 3);  // the Thursday of this week decides the year
+  var jan4 = new Date(Date.UTC(t0.getUTCFullYear(), 0, 4));
+  return 1 + Math.round(((t0 - jan4) / 86400000 - 3 + (jan4.getUTCDay() + 6) % 7) / 7);
 }
 
 function boxRect(b, statusBar) {
@@ -602,6 +626,29 @@ function calendarField(i) {
   var res = resultEl(S.res[key]);
   var check = btn(t('check'), function () { checkCalendar(key, i, res); }, 'sm', { 'data-f': 'chk:' + key });
   return secretField(key, t('calLinkN', { n: i + 1 }), { type: 'url', im: 'url', ph: 'https://calendar.google.com/…/basic.ics', extra: [check], after: res });
+}
+// Stage 7: does calendar link i mark days in the month view (setting ics_month, off by default)?
+function monthSwitch(i) {
+  var m = (cur('ics_month') || [false, false, false]).slice();
+  return switchRow(t('monthMark'), t('monthMarkSub'), !!m[i], function () { m[i] = !m[i]; setVal('ics_month', m); render(); }, 'sw:ics_month.' + i);
+}
+// Stage 7: public holidays and school holidays of a Bundesland (the list comes from the device).
+function holidaysCard() {
+  var st = cur('holiday_state') || '', list = S.state.holidayStates || [];
+  var sel = h('select', { id: uid(), 'data-f': 'in:holiday_state', onchange: function () {
+    setVal('holiday_state', sel.value);
+    if (sel.value && !cur('holidays_on') && !cur('school_on')) { setVal('holidays_on', true); setVal('school_on', true); }
+    render();
+  } }, [h('option', { value: '', selected: !st }, t('stateOff'))].concat(list.map(function (s) {
+    return h('option', { value: s.key, selected: s.key === st }, s.name);
+  })));
+  var parts = [fieldBox('holiday_state', t('f_holiday_state'), sel, t('stateNote'))];
+  if (st) parts.push(settingSwitch('holidays_on', t('holidaysTitle'), t('holidaysSub')), settingSwitch('school_on', t('schoolTitle'), t('schoolSub')));
+  if (st && cur('school_on')) {
+    parts.push(textField('school_url', t('f_school_url'), { type: 'url', im: 'url', note: t('schoolUrlNote'),
+      ph: (S.state.device && S.state.device.schoolDefault) || 'https://…/ferien.ics' }));
+  }
+  return card(parts);
 }
 function checkCalendar(key, index, el) {
   var typed = S.secrets[key], body = null;
@@ -1308,6 +1355,7 @@ function birthdaysCard() {
   var chkRes = resultEl(S.res.bday_url);
   parts.push(secretField('bday_url', t('f_bday_url'), { type: 'url', im: 'url', ph: 'https://…/basic.ics', after: chkRes,
     extra: [btn(t('check'), function () { checkCalendar('bday_url', -1, chkRes); }, 'sm', { 'data-f': 'chk:bday_url' })], note: t('bdLinkNote') }));
+  parts.push(settingSwitch('cal_birthdays', t('calBdTitle'), t('calBdSub')));
   if (!S.p.bd) { parts.push(notLoaded('bd')); return card(parts); }
   var man = S.p.bd.manual, nb = S.p.newBd;
   parts.push(h('p', { class: 'fl', style: 'font-weight:650' }, t('bdByHand', { n: man.length })));
@@ -1354,7 +1402,9 @@ function addBirthday() {
 
 function dataTab() {
   return [
-    lbl(t('calendars')), card(calendarField(0), calendarField(1), calendarField(2), h('p', { class: 'note' }, t('calNote'))),
+    lbl(t('calendars')), card(calendarField(0), monthSwitch(0), calendarField(1), monthSwitch(1), calendarField(2), monthSwitch(2),
+      h('p', { class: 'note' }, t('calNote'))),
+    lbl(t('holidaysLbl')), holidaysCard(),
     lbl(t('weather')), card(placeField()),
     lbl(t('stocks')), card(textField('stocks', t('f_stocks'), { ph: 'AAPL,NVDA,EUNL.DE:MSCI World', note: t('stocksNote') })),
     lbl(t('parcelsFlights')), card(

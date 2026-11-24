@@ -44,18 +44,18 @@ void drawWidget(LayoutItem* item, void (*draw)(LayoutItem*)) {
 }
 
 void drawFullScreen(const FullScreenParts& p) {
-  if (p.printer) drawWidget(getLayout(64), p.printView ? bambuWidget : makerWorldWidget);
-  drawWidget(getLayout(1), updateClock);
-  if (p.weather) drawWidget(getLayout(8), weatherWidget);
-  drawWidget(getLayout(128), drawStatus);
-  if (p.agenda) drawWidget(getLayout(2), gCalWidget);
-  if (p.stocks) drawWidget(getLayout(4), stockWidget);
-  if (p.month) drawWidget(getLayout(256), drawCalendar);
-  if (p.tracking) drawWidget(getLayout(16), trackingWidget);
+  if (p.printer) drawWidget(getLayout(box::PRINTER), p.printView ? bambuWidget : makerWorldWidget);
+  drawWidget(getLayout(box::CLOCK), updateClock);
+  if (p.weather) drawWidget(getLayout(box::WEATHER), weatherWidget);
+  drawWidget(getLayout(box::STATUS), drawStatus);
+  if (p.agenda) drawWidget(getLayout(box::AGENDA), gCalWidget);
+  if (p.stocks) drawWidget(getLayout(box::STOCKS), stockWidget);
+  if (p.month) drawWidget(getLayout(box::MONTH), drawCalendar);
+  if (p.tracking) drawWidget(getLayout(box::TRACKING), trackingWidget);
   // Personal widgets: local data, always drawn (only those on the layout open the file system).
-  drawWidget(getLayout(512), tasksWidget);
-  drawWidget(getLayout(1024), noteWidget);
-  drawWidget(getLayout(2048), birthdaysWidget);
+  drawWidget(getLayout(box::TASKS), tasksWidget);
+  drawWidget(getLayout(box::NOTE), noteWidget);
+  drawWidget(getLayout(box::BIRTHDAYS), birthdaysWidget);
   // Box layouts: a widget without its settings shows what to set up, in its box.
   for (int i = 0; i < missingHintCount; i++) {
     const MissingHint& h = missingHints[i];
@@ -63,5 +63,5 @@ void drawFullScreen(const FullScreenParts& p) {
     drawFittedString(h.rect.x + 8, h.rect.y + 22, h.rect.w - 16, tr(widgetInfo(h.id).hint), GxEPD_BLACK);
     clearCanvasClip();
   }
-  if (!getLayout(128)) drawProblemCorner();  // no status bar
+  if (!getLayout(box::STATUS)) drawProblemCorner();  // no status bar
 }

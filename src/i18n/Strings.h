@@ -85,7 +85,7 @@ enum class Lang : uint8_t { De, En };
   X(ProbStocks,        "Aktien",                           "Stocks") \
   X(ProbCalendar,      "Kalender",                         "Calendar") \
   X(ProbPrinter,       "Drucker",                          "Printer") \
-  X(ProbPrinterCode,   "Zugangscode",                      "Access code") \
+  X(ProbPrinterCode,   "Druckercode",                      "Access code") \
   X(ProbMakerWorld,    "MakerWorld",                       "MakerWorld") \
   X(ProbTracking,      "Pakete",                           "Tracking") \
   X(ProbFlight,        "Flug",                             "Flight") \
@@ -102,6 +102,34 @@ enum class Lang : uint8_t { De, En };
   X(WTasks,            "Aufgaben",                         "Tasks") \
   X(WNote,             "Notiz",                            "Note") \
   X(WBirthdays,        "Geburtstage",                      "Birthdays") \
+  X(HeadAgenda,        "Heute und morgen",                 "Today and tomorrow") \
+  X(HeadTracking,      "Sendungen",                        "Parcels") \
+  X(HeadUpcoming,      "Demnächst",                        "Coming up") \
+  X(MonthWeekCol,      "KW",                               "Wk") \
+  X(HlSchoolFrom,      "%s ab %s",                         "%s from %s") \
+  X(HlSchoolUntil,     "%s bis %s",                        "%s until %s") \
+  X(HlBirthdayAge,     "%s wird %d",                       "%s turns %d") \
+  X(HlSchoolStarts,    "%s beginnen",                      "%s start") \
+  X(HlSchoolEnds,      "%s enden",                         "%s end") \
+  X(HolNewYear,       "Neujahr",                            "New Year's Day") \
+  X(HolEpiphany,      "Heilige Drei Könige",                "Epiphany") \
+  X(HolWomensDay,     "Frauentag",                          "Women's Day") \
+  X(HolGoodFriday,    "Karfreitag",                         "Good Friday") \
+  X(HolEaster,        "Ostersonntag",                       "Easter Sunday") \
+  X(HolEasterMonday,  "Ostermontag",                        "Easter Monday") \
+  X(HolLabour,        "Tag der Arbeit",                     "Labour Day") \
+  X(HolAscension,     "Christi Himmelfahrt",                "Ascension Day") \
+  X(HolWhitSunday,    "Pfingstsonntag",                     "Whit Sunday") \
+  X(HolWhitMonday,    "Pfingstmontag",                      "Whit Monday") \
+  X(HolCorpusChristi, "Fronleichnam",                       "Corpus Christi") \
+  X(HolAssumption,    "Mariä Himmelfahrt",                  "Assumption Day") \
+  X(HolChildrensDay,  "Weltkindertag",                      "Children's Day") \
+  X(HolUnity,         "Tag der Deutschen Einheit",          "German Unity Day") \
+  X(HolReformation,   "Reformationstag",                    "Reformation Day") \
+  X(HolAllSaints,     "Allerheiligen",                      "All Saints' Day") \
+  X(HolRepentance,    "Buß- und Bettag",                    "Day of Repentance") \
+  X(HolChristmas,     "1. Weihnachtstag",                   "Christmas Day") \
+  X(HolBoxing,        "2. Weihnachtstag",                   "Boxing Day") \
   X(HintWeather,       "Wetter: Ort in der App eintragen", "Weather: set a place in the app") \
   X(HintAgenda,        "Termine: Kalender-Link in der App eintragen", "Agenda: add a calendar link in the app") \
   X(HintStocks,        "Aktien: Symbole in der App eintragen", "Stocks: add symbols in the app") \
@@ -252,6 +280,7 @@ enum class Lang : uint8_t { De, En };
   X(ErrBatteryMah,     "Zwischen 100 und 20000 mAh.",      "Between 100 and 20000 mAh.") \
   X(ErrTimezone,       "Zeitzone nicht erkannt: gib einen Namen wie Europe/Berlin oder CET ein, oder eine Regel wie CET-1CEST,M3.5.0,M10.5.0/3.", "Time zone not recognized: use a name like Europe/Berlin or CET, or a rule like CET-1CEST,M3.5.0,M10.5.0/3.") \
   X(ErrStocks,         "Yahoo-Finance-Symbole (Buchstaben, Ziffern, ^ . = -) durch Kommas getrennt, z. B. AAPL,NVDA,^IXIC.", "Yahoo Finance symbols (letters, digits, ^ . = -) separated by commas, e.g. AAPL,NVDA,^IXIC.") \
+  X(ErrState,          "Unbekanntes Bundesland.",          "Unknown German state.") \
   X(ErrLink,           "Keine Adresse mit https://, http:// oder webcal://.", "Not an https://, http:// or webcal:// address.") \
   X(ErrPrinterAddress, "Eine Adresse in deinem Heimnetz (z. B. 192.168.1.100) oder dort der Name des Druckers.", "An address in your home network (e.g. 192.168.1.100) or the printer's name there.") \
   X(ErrPort,           "Eine Zahl von 1 bis 65535 (meist 8883).", "A number from 1 to 65535 (usually 8883).") \

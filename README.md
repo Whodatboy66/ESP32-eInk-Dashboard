@@ -1,4 +1,4 @@
-# ESP32 ePaper Desk Dashboard (fork)
+# ESP32 ePaper Desk Dashboard
 
 ![Dashboard (Planner layout, drawn on the PC with the firmware's code)](docs/images/layouts/planner.png)
 
@@ -7,9 +7,10 @@ weather, stocks, parcels, Bambu Lab printer, MakerWorld statistics, and your own
 birthdays. Everything is set up in a setup app served by the device itself (phone or computer, no
 internet needed); the device talks to each service directly, with no cloud in between.
 
-This is a fork of [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard),
-being turned step by step into a modular dashboard for family devices, with secure over-the-air updates
-and phone setup. Progress: [implementation plan](docs/IMPLEMENTATION_PLAN.md), [changelog](CHANGELOG.md).
+A dashboard for family devices, with secure over-the-air updates and phone setup. It started in
+November 2026 as a fork of [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard);
+since build 80 its code is its own (rebuilt with the same behaviour, stage 7b). Progress:
+[implementation plan](docs/IMPLEMENTATION_PLAN.md), [changelog](CHANGELOG.md).
 
 ![Personal layout](docs/images/layouts/personal.png)
 
@@ -59,7 +60,7 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 | [OTA tests](docs/OTA_TESTS.md) | Broken-update tests on the beta channel |
 | [Setup app API](docs/SETUP_API.md) | JSON interface between the setup app and the firmware |
 | [Adding a widget](docs/ADD_A_WIDGET.md) | Steps for a new widget |
-| [Fonts](src/ui/fonts/README.md) | Font conversion (`tools/ListFontConvertV4.py`) |
+| [Fonts](src/ui/fonts/README.md) | Font building (`tools/fonts/make_font.py`, `tools/fonts/fonts.txt`) |
 
 ## Repository layout
 
@@ -74,7 +75,7 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 | `src/layout/` | Layout engine, templates and box layouts (pure C++, tested on the PC) |
 | `src/personal/` | Tasks, note and birthdays, stored on the user-data partition (LittleFS) |
 | `src/widgets/`, `src/ui/` | Drawing of the dashboard (widget registry, full-screen drawing); fonts (`src/ui/fonts/`, conversion notes there), QR codes (`src/ui/qr/`) and the canvas everything draws on |
-| `src/web/` | Setup and edit mode: serves the setup app, its JSON API, the old `/basic` page; `generated/WebApp.h` is the built app |
+| `src/web/` | Setup and edit mode: serves the setup app and its JSON API; `generated/WebApp.h` is the built app |
 | `src/update/`, `src/input/` | Over-the-air updates; button gestures |
 | `web/` | Source of the setup app (`index.html`, `app.js`, `layout.js`, `app.css`); `web/dev/` runs it on the PC against a fake device |
 | `tests/host/`, `tests/web/` | Tests that run on the PC (`tests/host/run.sh`, `node --test tests/web/*.test.cjs`) |
@@ -86,11 +87,13 @@ The first firmware with updates (build 64) has to be flashed once over USB; sett
 
 ## Credits and licenses
 
-- Original project: [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard) by VoIPshare.
-  The upstream repository has no license file yet (asked upstream); this fork is for personal and family use.
-- Material Design Icons: [materialdesignicons.com](https://materialdesignicons.com/), Apache 2.0.
-- Montserrat: [Google Fonts](https://fonts.google.com/specimen/Montserrat), SIL Open Font License 1.1.
-- HighSpeed: [dafont.com/high-speed.font](https://www.dafont.com/high-speed.font), free for personal use;
-  commercial use requires permission.
+- Thanks to [VoIPshare/ESP32-eInk-Dashboard](https://github.com/VoIPshare/ESP32-eInk-Dashboard) by VoIPshare,
+  where this project started (the services it shows and the first layout). Since build 80 none of its
+  code is left apart from facts (API addresses, field names); `tools/dev/origin_report.py` measures it.
+- Material Design Icons: [pictogrammers.com](https://pictogrammers.com/library/mdi/), Pictogrammers Free
+  License (the icons in `src/ui/fonts/MDI_*`, built from `@mdi/font` 7.4.47).
+- Montserrat: [Google Fonts](https://fonts.google.com/specimen/Montserrat), SIL Open Font License 1.1 (text,
+  headings, clock and month digits).
+- School holidays: [OpenHolidays API](https://www.openholidaysapi.org), ODbL 1.0 (the published calendar files).
 - QR Code generator library: [Project Nayuki](https://www.nayuki.io/page/qr-code-generator-library), MIT License
   (`src/ui/qr/`, setup screens).

@@ -31,8 +31,9 @@ T* lazy(T*& p) {
 personal::TaskList* tasksP = nullptr;
 personal::BirthdayList* birthdaysP = nullptr;
 personal::BirthdayList* feedP = nullptr;
+personal::BirthdayList* calP = nullptr;  // stage 7: birthdays found in the calendar links
 char note[personal::NOTE_BYTES];
-bool tasksLoaded = false, noteLoaded = false, bdayLoaded = false, feedLoaded = false;
+bool tasksLoaded = false, noteLoaded = false, bdayLoaded = false, feedLoaded = false, calLoaded = false;
 
 bool mount() {
   if (mountTried) return mounted;
@@ -127,7 +128,8 @@ bool hasOpenTasks(const personal::TaskList& l) {
 }
 
 void updateBirthdayFlag() {
-  setContent(USER_HAS_BIRTHDAYS, (birthdaysP && birthdaysP->count > 0) || (feedP && feedP->count > 0));
+  setContent(USER_HAS_BIRTHDAYS, (birthdaysP && birthdaysP->count > 0) || (feedP && feedP->count > 0) ||
+                                     (calP && calP->count > 0));
 }
 
 }  // namespace
@@ -184,6 +186,16 @@ const personal::BirthdayList& userFeedBirthdays() {
   return *b;
 }
 
+const personal::BirthdayList& userCalBirthdays() {
+  personal::BirthdayList* b = lazy(calP);
+  if (!b) return EMPTY_BIRTHDAYS;
+  if (!calLoaded) {
+    calLoaded = true;
+    loadBirthdayFile(USER_BDAY_CAL_FILE, "cal", *b);
+  }
+  return *b;
+}
+
 bool saveUserTasks(const personal::TaskList& list) {
   personal::TaskList* t = lazy(tasksP);
   if (!t) return false;
@@ -218,6 +230,28 @@ bool saveUserFeedBirthdays(const personal::BirthdayList& list) {
   userBirthdays();
   updateBirthdayFlag();
   return saveJson(USER_BDAY_FEED_FILE, [&](char* b, size_t cap) { return personal::writeBirthdays(*f, "feed", b, cap); });
+}
+
+bool saveUserCalBirthdays(const personal::BirthdayList& list) {
+  const personal::BirthdayList& stored = userCalBirthdays();
+  if (personal::sameBirthdays(stored, list)) return true;  // unchanged: no flash write
+  personal::BirthdayList* c = lazy(calP);
+  if (!c) return false;
+  if (&list != c) *c = list;
+  userBirthdays();
+  userFeedBirthdays();
+  updateBirthdayFlag();
+  return saveJson(USER_BDAY_CAL_FILE, [&](char* b, size_t cap) { return personal::writeBirthdays(*c, "cal", b, cap); });
+}
+
+bool clearUserCalBirthdays() {
+  personal::BirthdayList* c = lazy(calP);
+  if (!c) return false;
+  userCalBirthdays();  // loaded, so an empty file isn't written again
+  if (c->count == 0) return true;
+  c->count = 0;
+  updateBirthdayFlag();
+  return saveJson(USER_BDAY_CAL_FILE, [&](char* b, size_t cap) { return personal::writeBirthdays(*c, "cal", b, cap); });
 }
 
 void purgeOldDoneTasks() {
@@ -281,6 +315,7 @@ void eraseUserData() {
   LittleFS.remove(USER_NOTE_FILE);
   LittleFS.remove(USER_BDAY_FILE);
   LittleFS.remove(USER_BDAY_FEED_FILE);
+  LittleFS.remove(USER_BDAY_CAL_FILE);
   LittleFS.remove("/log.txt");  // diagnostics (src/core/Logger.cpp)
   LittleFS.remove("/log.1");
   LittleFS.remove("/battery.csv");
@@ -288,6 +323,7 @@ void eraseUserData() {
   note[0] = '\0';
   if (birthdaysP) birthdaysP->count = 0;
   if (feedP) feedP->count = 0;
+  if (calP) calP->count = 0;
   user_content = 0;  // the NVS key goes with the factory reset of "config"
   DBG("[User] personal data erased");
 }

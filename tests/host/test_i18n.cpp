@@ -6,18 +6,19 @@
 
 #include "src/i18n/Dates.h"
 #include "src/i18n/Strings.h"
+#include "src/widgets/StatusMarks.h"
 #include "tests/host/check.h"
 
 // The screen font (src/ui/fonts/epaperFont.h) with the glyph type of tests/host/shim/Adafruit_GFX.h.
 #include <Adafruit_GFX.h>
-struct SparseGFXfont {
-  const uint8_t* bitmap;
-  const GFXglyph* glyph;
-  const uint32_t* charMap;
-  uint16_t glyphCount;
-  uint8_t yAdvance;
-};
 #include "src/ui/fonts/epaperFont.h"
+#include "src/ui/fonts/ClockDigits_64.h"
+#include "src/ui/fonts/ClockDigits_110.h"
+#include "src/ui/fonts/ClockDigits_180.h"
+#include "src/ui/fonts/Heading_22.h"
+#include "src/ui/fonts/DigitsBold_16.h"
+#include "src/ui/fonts/Digits_22.h"
+#include "src/ui/fonts/DigitsBold_22.h"
 
 using i18n::Lang;
 using i18n::S;
@@ -221,8 +222,9 @@ void test_fits_on_screen() {
   fits(S::Unavailable1, 190);  // centered in a one-cell box (196 px)
   fits(S::Unavailable2, 190);
   fits(S::Stale, 34);
+  // MakerWorld (stage 7b): a label, then its number right-aligned at the end of a 196 px half.
   for (S k : {S::MwLikes, S::MwDownloads, S::MwPrints, S::MwCollections, S::MwBoosts})
-    fits(k, 100 + width("  ") - 4);  // a number right-aligned in 7 places 100 px further (up to 5 digits)
+    fits(k, 196 - 8 - width("99999") - 8);
   fits(S::PrinterDone, 72, 100);  // the bed temperature follows 75 px further
   fits(S::PrinterEmpty, 60);
   fits(S::BdayToday, 92 - 10);  // birthday names start at 92 px; "Heute" in a black box (+6)
@@ -236,9 +238,12 @@ void test_fits_on_screen() {
   for (S k : {S::TrackChecking, S::TrackNoInfo, S::TrackInTransit, S::TrackPickup, S::TrackNotDelivered,
               S::TrackError, S::TrackPreparing, S::TrackEnded, S::TrackUnknown})
     for (Lang l : LANGS) {  // Classic's parcel line: icon (28 px) + 332 px
-      char b[96];
-      std::snprintf(b, sizeof(b), "12345678  %s  %s 30.12.", i18n::text(k, l), i18n::text(S::TrackEta, l));
-      fitsText(b, 332);
+      // Number, status and arrival with 10 px between them (stage 7b: no double spaces).
+      char eta[48];
+      std::snprintf(eta, sizeof(eta), "%s 30.12.", i18n::text(S::TrackEta, l));
+      int w = width("12345678") + 10 + width(i18n::text(k, l)) + 10 + width(eta);
+      if (w > 332) std::printf("parcel line \"%s\": %d px, room for 332\n", i18n::text(k, l), w);
+      CHECK(w <= 332);
     }
 
   // Charge and update screens: centered on the 800 px screen.
@@ -271,8 +276,74 @@ void test_fits_on_screen() {
 
 }  // namespace
 
+// The first character of s that font f can't draw (spaces count as drawable), 0 if none.
+uint32_t missingIn(const SparseGFXfont& f, const char* s) {
+  for (const char* p = s; *p;) {
+    uint32_t cp = nextCodepoint(p);
+    if (cp == ' ') continue;
+    bool found = false;
+    for (int i = 0; i < f.glyphCount && !found; i++) found = f.charMap[i] == cp;
+    if (!found) return cp;
+  }
+  return 0;
+}
+
+void checkCovers(const SparseGFXfont& f, const char* fontName, const char* s) {
+  uint32_t cp = missingIn(f, s);
+  if (cp) std::printf("%s: U+%04X of \"%s\" missing\n", fontName, (unsigned)cp, s);
+  CHECK(cp == 0);
+}
+
+// Stage 7: headings, the date under the clock and AM/PM use Heading_22; the clock digits and the
+// bold weekend digits have exactly what they draw.
+void test_heading_font_covers() {
+  const S heads[] = {S::HeadAgenda, S::WTasks, S::WBirthdays, S::WNote, S::WStocks, S::HeadTracking};
+  for (Lang l : LANGS) {
+    for (S k : heads) checkCovers(Heading_22, "Heading_22", i18n::text(k, l));
+    for (int m = 0; m < 12; m++) checkCovers(Heading_22, "Heading_22", i18n::monthLong(m, l));
+    for (int d = 0; d < 7; d++) checkCovers(Heading_22, "Heading_22", i18n::weekdayLong(d, l));
+  }
+  checkCovers(Heading_22, "Heading_22", "AM PM 0123456789,.:");
+  checkCovers(ClockDigits_64, "ClockDigits_64", "0123456789:");
+  checkCovers(ClockDigits_110, "ClockDigits_110", "0123456789:");
+  checkCovers(ClockDigits_180, "ClockDigits_180", "0123456789:");
+  checkCovers(DigitsBold_16, "DigitsBold_16", "0123456789");
+  checkCovers(Digits_22, "Digits_22", "0123456789");
+  checkCovers(DigitsBold_22, "DigitsBold_22", "0123456789");
+  for (Lang l : LANGS) checkCovers(Heading_22, "Heading_22", i18n::text(S::HeadUpcoming, l));
+}
+
+// Review Focus 2 (stage 7): the longest holiday name after the longest date in the status bar,
+// with the longest power note and the right part (version, Wi-Fi bars, battery, "100 %"). The name
+// shows in full without a note; with the battery saver's note it still gets room (shortened if
+// needed), and nothing overlaps.
+void test_status_holiday_fit() {
+  int dateW = 0;
+  for (int m = 1; m <= 12; m++)
+    for (int d = 1; d <= 28; d++) {
+      char b[32];
+      i18n::formatStatusDate(day(2027, m, d), Lang::De, b, sizeof(b));
+      if (width(b) > dateW) dateW = width(b);
+    }
+  int nameW = 0;
+  for (int k = static_cast<int>(S::HolNewYear); k <= static_cast<int>(S::HolBoxing); k++) {
+    std::string t = std::string("· ") + i18n::text(static_cast<S>(k), Lang::De);
+    if (width(t.c_str()) > nameW) nameW = width(t.c_str());
+  }
+  const int dateEnd = 4 + dateW + 10;
+  const int right = 800 - 4 - (width("100 %") + 4) - 22 - 20 - width("v.79");  // pct, battery, Wi-Fi, version
+  std::printf("status bar: date to %d, longest name %d, right part from %d\n", dateEnd, nameW, right);
+  CHECK(statusbar::holidaySpace(dateEnd, 0, right) >= nameW);
+  int saver = width("Akku-Sparen: alle 15 Min.");
+  int space = statusbar::holidaySpace(dateEnd, saver, right);
+  CHECK(space >= statusbar::MIN_HOLIDAY_W);
+  CHECK(dateEnd + space + 12 + saver <= right - 8 || space == 0);
+}
+
 int main() {
   test_every_text();
+  test_status_holiday_fit();
+  test_heading_font_covers();
   test_dates();
   test_fits_on_screen();
   return finish("i18n");

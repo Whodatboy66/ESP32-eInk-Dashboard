@@ -13,16 +13,14 @@ void initTime() {
   configTzTime(device_timezone[0] ? device_timezone : "UTC0", "pool.ntp.org", "time.nist.gov");
 }
 
-
-
-// Waits for the SNTP client (started by initTime) to set the clock.
+// Waits for SNTP (started by initTime) to set the clock. The status is read once per round: reading
+// COMPLETED resets it.
 bool waitForNtpSync(unsigned long timeoutMs) {
-  // sntp_get_sync_status() resets COMPLETED back to RESET once read, so read it once per loop.
-  unsigned long start = millis();
-  bool ok = false;
-  while (!(ok = sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED) && millis() - start < timeoutMs)
-    delay(50);
-  DBGF("NTP %s after %lu ms", ok ? "synced" : "NOT synced", millis() - start);
-  return ok;
+  const unsigned long t0 = millis();
+  bool synced = false;
+  for (; millis() - t0 < timeoutMs; delay(50))
+    if ((synced = sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED)) break;
+  if (!synced) synced = sntp_get_sync_status() == SNTP_SYNC_STATUS_COMPLETED;
+  DBGF("NTP %s after %lu ms", synced ? "synced" : "NOT synced", millis() - t0);
+  return synced;
 }
-

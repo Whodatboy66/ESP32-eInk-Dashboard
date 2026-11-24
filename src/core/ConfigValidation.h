@@ -6,6 +6,7 @@
 #include <cstring>
 
 #include "../services/LanAddress.h"
+#include "Holidays.h"
 
 namespace cfgdetail {
 
@@ -27,6 +28,11 @@ inline bool startsWithNoCase(const char* s, size_t n, const char* prefix) {
 // iCal feed URL: empty, or https://host/... . webcal:// and webcals:// (Apple / Outlook
 // "subscribe" links) and http:// become https:// (every request uses TLS, so plain http:// could
 // never work). The result goes to `out`; false if unusable.
+// Stage 7: the Bundesland for holidays ("" = off, else one of the 16 codes, upper case).
+inline bool validStateCode(const char* code) {
+  return code && (!code[0] || holidays::parseState(code) != holidays::State::None);
+}
+
 inline bool validateIcsUrl(const char* in, char* out, size_t cap) {
   if (!in || !out || cap == 0) return false;
   size_t n = std::strlen(in);

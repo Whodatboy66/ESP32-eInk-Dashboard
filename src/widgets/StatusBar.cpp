@@ -1,4 +1,8 @@
 #include "StatusBar.h"
+#include "StatusMarks.h"
+#include "Personal.h"
+#include "../core/Holidays.h"
+#include "../services/WifiService.h"
 
 #include <time.h>
 
@@ -13,46 +17,54 @@
 #include "Widgets.h"
 #include "../ui/Canvas.h"
 
-// Alert icon followed by the names of the failing sources, e.g. "[!] WiFi Weather".
-// Names that don't fit before maxX are summarized as "+N".
+// The failing sources' names in flag order (PROBLEM_LIST, Problems.h); returns how many.
+static int activeProblems(const char* names[PROBLEM_COUNT]) {
+  int n = 0;
+  for (int bit = 0; bit < PROBLEM_COUNT; bit++)
+    if (problems & (1u << bit)) names[n++] = tr(PROBLEM_LABELS[bit]);
+  return n;
+}
+
+// "⚠ WLAN Wetter +2": the alert icon, then the names that fit before maxX; the rest as "+N" (room
+// for it is kept unless the name is the last one).
 static void drawProblems(int16_t x, int16_t y, int16_t maxX) {
   problemsShown = problems;
-  if (!problems) return;
-
+  const char* names[PROBLEM_COUNT];
+  const int n = activeProblems(names);
+  if (!n) return;
   drawSparseChar(&MDI_22_Sparse, x, y, MDI_ALERT, ALERT_COLOR);
   x += 24;
-
-  const int count = sizeof(PROBLEM_LABELS) / sizeof(PROBLEM_LABELS[0]);
-  int remaining = __builtin_popcount(problems);
-  for (int i = 0; i < count; i++) {
-    if (!(problems & (1 << i))) continue;
-    const char* label = tr(PROBLEM_LABELS[i]);
-    int16_t w = getSparseStringWidth(&epaperFont, label);
-    char more[16];
-    snprintf(more, sizeof(more), "+%d", remaining);
-    // Keep room for a "+N" summary unless this is the last name.
-    int16_t reserve = remaining > 1 ? getSparseStringWidth(&epaperFont, more) + 6 : 0;
-    if (x + w + reserve > maxX) {
-      drawSparseString(&epaperFont, x, y, more, ALERT_COLOR);
+  for (int i = 0; i < n; i++) {
+    char rest[8];
+    snprintf(rest, sizeof(rest), "+%d", n - i);
+    const int16_t w = getSparseStringWidth(&epaperFont, names[i]);
+    const int16_t keep = i + 1 < n ? getSparseStringWidth(&epaperFont, rest) + 6 : 0;
+    if (x + w + keep > maxX) {
+      drawSparseString(&epaperFont, x, y, rest, ALERT_COLOR);
       return;
     }
-    drawSparseString(&epaperFont, x, y, label, ALERT_COLOR);
+    drawSparseString(&epaperFont, x, y, names[i], ALERT_COLOR);
     x += w + 8;
-    remaining--;
   }
 }
 
 void drawStatus(LayoutItem* item) {
-  DBG(F("Battery Draw"));
 
   float voltage = 0.0f;
   char buf[40] = "";
   // A full-width bar (grid layouts) starts with the date ("Fr 20. Nov" / "Fri 20 Nov"): the clock
   // widget has no room for it below its digits. Classic keeps its own date in the agenda.
+  holidays::Holiday holiday;
+  bool isHoliday = false;
   if (item->Width >= 600) {
     time_t now = time(nullptr);
     struct tm lt;
-    if (now > 1700000000 && localtime_r(&now, &lt)) i18n::formatStatusDate(lt, ui_lang, buf, sizeof(buf));
+    if (now > 1700000000 && localtime_r(&now, &lt)) {
+      i18n::formatStatusDate(lt, ui_lang, buf, sizeof(buf));
+      // Stage 7: a public holiday's name after the date ("Mi 6. Jan · Heilige Drei Könige").
+      isHoliday = holidays_on && holidays::holidayOn(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday,
+                                                     holidays::parseState(holiday_state), &holiday);
+    }
   }
   // Right end: the battery icon and, right of it, the charge in percent (the voltage is in the log
   // and Diagnostics); without a measured battery "USB" (the board runs on USB power).
@@ -84,8 +96,11 @@ void drawStatus(LayoutItem* item) {
   constexpr int16_t ICON_STEP = 22;
   constexpr int16_t RIGHT_PAD = 4;
 
+  constexpr int16_t WIFI_W = 24;  // the Wi-Fi bars (15 px) with gaps to the version and the battery
+  const int bars = statusbar::signalBars(lastRssi, (problems & PROBLEM_WIFI) != 0);
   int16_t iconReserve = RIGHT_PAD + pctW;
   if (hasBatteryPin())                  iconReserve += ICON_STEP;
+  if (bars)                             iconReserve += WIFI_W;
   if (isPrinting || previousIsPrinting) iconReserve += ICON_STEP;
 
   int16_t versionWidth = getSparseStringWidth(&epaperFont, versionBuf);
@@ -93,6 +108,18 @@ void drawStatus(LayoutItem* item) {
   int16_t minVersionX = item->PosX + (buf[0] ? getSparseStringWidth(&epaperFont, buf) + 8 : 0);
   if (versionX < minVersionX) versionX = minVersionX;
   drawSparseString(&epaperFont, versionX, item->PosY + 16, versionBuf, GxEPD_BLACK);
+
+  if (isHoliday) {
+    int powerW = powerNote[0] ? getSparseStringWidth(&epaperFont, powerNote) : 0;
+    int space = statusbar::holidaySpace(leftX, powerW, versionX);
+    if (space) {
+      char name[64];
+      snprintf(name, sizeof(name), "· %s", tr(holiday.name));
+      int w = getSparseStringWidth(&epaperFont, name);
+      drawFittedString(leftX, item->PosY + 16, space, name, GxEPD_BLACK);
+      leftX += (w < space ? w : space) + 12;
+    }
+  }
 
   // Power note (stage 6): "Nacht bis 06:00", "Akku-Sparen: alle 15 Min.", "Uhr alle 5 Min.".
   powerNoteShown = textHash(powerNote);
@@ -114,11 +141,19 @@ void drawStatus(LayoutItem* item) {
     int percentage = batteryPercent(voltage);
     if (batteryReadingPlausible(voltage)) DBGF("[Battery] %.2f V, %d%%", voltage, percentage);
     else DBGF("[Battery] %.2f V: no battery measured (USB power)", voltage);
-    // MDI battery-10 .. battery-90 are 0xF007A .. 0xF0082, full battery is 0xF0079.
+    // battery-10 .. battery-90 follow each other (Icons.h), then the full one.
     int tenths = constrain((percentage + 5) / 10, 1, 10);
-    uint32_t charCode = tenths == 10 ? 0xF0079 : 0xF007A + (tenths - 1);
+    uint32_t charCode = tenths == 10 ? MDI_BATTERY_FULL : MDI_BATTERY_10 + (tenths - 1);
     ix -= ICON_STEP;
     drawSparseChar(&MDI_22_Sparse, ix, item->PosY + 16, charCode, GxEPD_BLACK);
+  }
+  if (bars) {  // four bars, 3 px wide, 4 to 13 px high: filled up to the strength, else outlined
+    ix -= WIFI_W;
+    for (int i = 0; i < 4; i++) {
+      int h = 4 + 3 * i, x = ix + 6 + i * 4, y = item->PosY + 17 - h;
+      if (i < bars) canvas().fillRect(x, y, 3, h, GxEPD_BLACK);
+      else canvas().drawRect(x, y, 3, h, GxEPD_BLACK);
+    }
   }
   if (isPrinting || previousIsPrinting) {
     ix -= ICON_STEP;
@@ -130,20 +165,14 @@ void drawStatus(LayoutItem* item) {
 // only while there is a problem.
 void drawProblemCorner() {
   problemsShown = problems;
-  if (!problems) return;
-  const int count = sizeof(PROBLEM_LABELS) / sizeof(PROBLEM_LABELS[0]);
-  const char* first = "";
-  for (int i = 0; i < count; i++)
-    if (problems & (1 << i)) {
-      first = tr(PROBLEM_LABELS[i]);
-      break;
-    }
+  const char* names[PROBLEM_COUNT];
+  const int n = activeProblems(names);
+  if (!n) return;
   char text[32];
-  int n = __builtin_popcount(problems);
-  if (n > 1) snprintf(text, sizeof(text), "%s +%d", first, n - 1);
-  else snprintf(text, sizeof(text), "%s", first);
-  int16_t w = getSparseStringWidth(&epaperFont, text) + 26;
-  int16_t x = 800 - w - 6, y = 480 - 6;
+  if (n > 1) snprintf(text, sizeof(text), "%s +%d", names[0], n - 1);
+  else snprintf(text, sizeof(text), "%s", names[0]);
+  const int16_t w = getSparseStringWidth(&epaperFont, text) + 26;
+  const int16_t x = 800 - w - 6, y = 480 - 6;  // the bottom-right corner, white on black
   canvas().fillRect(x - 4, y - 19, w + 8, 23, GxEPD_BLACK);
   drawSparseChar(&MDI_22_Sparse, x, y + 2, MDI_ALERT, GxEPD_WHITE);
   drawSparseString(&epaperFont, x + 24, y, text, GxEPD_WHITE);

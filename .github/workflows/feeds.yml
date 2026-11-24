@@ -1,0 +1,39 @@
+# Data feeds the dashboards read (stage 7, docs/plans/GIFT_EDITION.md): the school holidays of the
+# 16 German states as calendar files (ferien-<STATE>.ics), from the OpenHolidays API (ODbL 1.0).
+# Published on the fixed pre-release "feeds". It must never become GitHub's "latest" release:
+# stable devices read releases/latest for firmware updates.
+name: Data feeds
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"  # Mondays 03:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: feeds
+  cancel-in-progress: false
+
+jobs:
+  school-holidays:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test the feed script
+        run: python3 -m unittest discover -s tools/feeds
+      - name: Build the calendar files
+        run: python3 tools/feeds/school_holidays.py "$RUNNER_TEMP/feeds"
+      - name: Publish on the "feeds" pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view feeds --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create feeds --repo "$GITHUB_REPOSITORY" --prerelease --latest=false \
+              --title "Data feeds (not a firmware release)" \
+              --notes "Calendar files the dashboards read: school holidays per German state (ferien-BY.ics, ...), updated weekly. Data: OpenHolidays API (https://www.openholidaysapi.org), licensed under ODbL 1.0 (https://opendatacommons.org/licenses/odbl/1-0/). Not a firmware release."
+          fi
+          gh release upload feeds "$RUNNER_TEMP"/feeds/*.ics --repo "$GITHUB_REPOSITORY" --clobber
+          # Stays a pre-release, never "latest".
+          gh release edit feeds --repo "$GITHUB_REPOSITORY" --prerelease --latest=false

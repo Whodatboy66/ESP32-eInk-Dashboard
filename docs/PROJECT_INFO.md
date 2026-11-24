@@ -48,6 +48,11 @@ Personal PC  <--git pull--  ------------------------------+
 
 Remotes in the WSL clone: `origin` = fork (push), `upstream` = VoIPshare (pull upstream changes).
 
+**Data feeds (stage 7):** `.github/workflows/feeds.yml` (Mondays, or by hand) publishes the school
+holidays of the 16 states as `ferien-<STATE>.ics` on the fixed pre-release **`feeds`** (never
+"latest": stable devices read `releases/latest` for updates). Source: OpenHolidays API, ODbL 1.0;
+script and tests in `tools/feeds/`. A state whose download fails keeps its last published file.
+
 ## Build and flash (personal PC, Windows)
 
 One-time setup:
@@ -138,4 +143,4 @@ Fixed findings are in the [CHANGELOG](../CHANGELOG.md) and the [results log](DEV
 
 | Issue | Status |
 |---|---|
-| Upstream repo has no license; HighSpeed font is personal-use only | Issue posted upstream (2026-11-19), no answer yet. See plan A.5 |
+| Upstream repo has no license; HighSpeed font was personal-use only | Solved by stage 7b (build 80): the code is rebuilt, the HighSpeed font is gone (build 79). Left: leave the fork network and choose a licence (DEVICE_TESTS block M) |

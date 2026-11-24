@@ -1,3 +1,6 @@
+// The ESP32-C6 SuperMini's LEDs (stage 7b, own code): GPIO15 a plain LED, GPIO8 an RGB LED. Feedback
+// while the button is held and pulses when a print starts or ends. Other boards: nothing (those
+// pins are display pins there: FireBeetle C6 GPIO8 = DC, ESP32 GPIO15 = CS).
 #include "StatusLed.h"
 
 #include <esp32-hal-rgb-led.h>
@@ -5,76 +8,58 @@
 #include "../services/Bambu.h"
 #include "PinMapping.h"
 
+namespace {
+
+constexpr uint8_t PLAIN_LED = 15, RGB_LED = 8;
+constexpr uint8_t ON = 48;  // brightness of a colour channel (of 255)
+
+bool superMini() { return activePinPreset == PinPreset::Esp32C6SuperMini; }
+
+// on for onMs out of every periodMs, starting at the phase's beginning
+bool blink(unsigned long sinceMs, unsigned long periodMs, unsigned long onMs) { return sinceMs % periodMs < onMs; }
+
+}  // namespace
+
 void forceSuperMiniLedsOff() {
-  // GPIO8 / GPIO15 are the SuperMini's LEDs only: on other boards they are display pins
-  // (FireBeetle C6: GPIO8 = e-paper DC; ESP32: GPIO15 = CS), so leave them alone there.
-  if (activePinPreset != PinPreset::Esp32C6SuperMini) return;
-  pinMode(15, OUTPUT);
-  digitalWrite(15, LOW);
-  rgbLedWrite(8, 0, 0, 0);
+  if (!superMini()) return;
+  pinMode(PLAIN_LED, OUTPUT);
+  digitalWrite(PLAIN_LED, LOW);
+  rgbLedWrite(RGB_LED, 0, 0, 0);
   delay(2);
-  rgbLedWrite(8, 0, 0, 0);
-}
-
-void flashSuperMiniStatusLed(uint8_t red, uint8_t green, uint8_t blue, uint8_t flashes, uint16_t onMs, uint16_t offMs) {
-  if (activePinPreset != PinPreset::Esp32C6SuperMini) return;
-
-  for (uint8_t i = 0; i < flashes; ++i) {
-    rgbLedWrite(8, red, green, blue);
-    delay(onMs);
-    forceSuperMiniLedsOff();
-    if (i + 1 < flashes) {
-      delay(offMs);
-    }
-  }
+  rgbLedWrite(RGB_LED, 0, 0, 0);  // twice: the first write after a wake is sometimes lost
 }
 
 void setSuperMiniStatusLed(uint8_t red, uint8_t green, uint8_t blue) {
-  if (activePinPreset != PinPreset::Esp32C6SuperMini) return;
-  rgbLedWrite(8, red, green, blue);
+  if (superMini()) rgbLedWrite(RGB_LED, red, green, blue);
 }
 
-void updateSuperMiniHoldFeedback(unsigned long heldMs) {
-  if (activePinPreset != PinPreset::Esp32C6SuperMini) return;
-
-  if (heldMs < BUTTON_REBOOT_HOLD_MS) {
-    // Green stays on while the button is being held.
-    setSuperMiniStatusLed(0, 48, 0);
-    return;
-  }
-
-  if (heldMs < BUTTON_SETUP_HOLD_MS) {
-    // Reboot threshold reached (release now to reboot): flash cyan.
-    const unsigned long phase = (heldMs - BUTTON_REBOOT_HOLD_MS) % 320UL;
-    setSuperMiniStatusLed(0, 48, phase < 120UL ? 48 : 0);
-    return;
-  }
-
-  // Setup threshold reached: flash white.
-  const unsigned long phase = (heldMs - BUTTON_SETUP_HOLD_MS) % 180UL;
-  if (phase < 110UL) {
-    setSuperMiniStatusLed(48, 48, 48);
-  } else {
-    setSuperMiniStatusLed(0, 48, 0);
-  }
-}
-
-void signalPrintTransition() {
-  if (activePinPreset != PinPreset::Esp32C6SuperMini) return;
-
-  if (!previousIsPrinting && isPrinting) {
-    // Green pulse when a print starts.
-    flashSuperMiniStatusLed(0, 48, 0, 2, 140, 90);
-  } else if (previousIsPrinting && !isPrinting) {
-    // Blue pulse when a print finishes or leaves the printing state.
-    flashSuperMiniStatusLed(0, 0, 48, 3, 120, 80);
-  }
-}
-
-void applyBoardSpecificPinSetup() {
-  if (activePinPreset == PinPreset::Esp32C6SuperMini) {
-    // SuperMini board LEDs: GPIO15 simple LED and GPIO8 WS2812 RGB LED.
+void flashSuperMiniStatusLed(uint8_t red, uint8_t green, uint8_t blue, uint8_t flashes, uint16_t onMs, uint16_t offMs) {
+  if (!superMini()) return;
+  for (uint8_t i = 0; i < flashes; i++) {
+    rgbLedWrite(RGB_LED, red, green, blue);
+    delay(onMs);
     forceSuperMiniLedsOff();
+    if (i + 1 < flashes) delay(offMs);
   }
 }
 
+// Held: green; past the restart hold: green with cyan flashes; past the setup hold: white flashes.
+void updateSuperMiniHoldFeedback(unsigned long heldMs) {
+  if (!superMini()) return;
+  if (heldMs < BUTTON_REBOOT_HOLD_MS)
+    setSuperMiniStatusLed(0, ON, 0);
+  else if (heldMs < BUTTON_SETUP_HOLD_MS)
+    setSuperMiniStatusLed(0, ON, blink(heldMs - BUTTON_REBOOT_HOLD_MS, 320, 120) ? ON : 0);
+  else if (blink(heldMs - BUTTON_SETUP_HOLD_MS, 180, 110))
+    setSuperMiniStatusLed(ON, ON, ON);
+  else
+    setSuperMiniStatusLed(0, ON, 0);
+}
+
+// Two green pulses when a print starts, three blue ones when it ends.
+void signalPrintTransition() {
+  if (!previousIsPrinting && isPrinting) flashSuperMiniStatusLed(0, ON, 0, 2, 140, 90);
+  else if (previousIsPrinting && !isPrinting) flashSuperMiniStatusLed(0, 0, ON, 3, 120, 80);
+}
+
+void applyBoardSpecificPinSetup() { forceSuperMiniLedsOff(); }

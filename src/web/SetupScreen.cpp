@@ -98,7 +98,7 @@ void drawHome(const void* p) {
   drawLines(40, 115, lines, 4);
   drawSparseString(&epaperFont, 40, 300, tr(S::EditCode), GxEPD_BLACK);
   // The code in the clock digits (they have 0-9).
-  drawSparseString(&HighSpeed_130, 40, 450, h.code, GxEPD_BLACK);
+  drawSparseString(&ClockDigits_110, 40, 450, h.code, GxEPD_BLACK);
   // Below the QR code, above the code digits (they span x 40-550, y 346-477).
   drawSparseString(&epaperFont, 520, 318, tr(S::EditTimeout), GxEPD_BLACK);
 }

@@ -1,69 +1,23 @@
 #pragma once
+// A Bambu printer in the local network (MQTT over TLS), stage 7b own code: a short connection per
+// wake (connect, ask for the full status, read it, disconnect). The report is read by PrinterReport.h.
 #include "../../app.h"
 #include "../widgets/Widgets.h"
+#include "PrinterReport.h"
 
-#define MAX_AMS             4
-#define MAX_TRAYS           4
-#define NAME_LEN            64
-#define ID_LEN              16
-#define WEIGHT_LEN          16
+extern bambu::PrinterStatus printer;  // the last full report
+extern bool isPrinting;               // RTC memory: printing (also preparing, paused)
+extern bool previousIsPrinting;       // RTC memory: the state before this wake's report
+extern bool printViewOnScreen;        // RTC memory: the printer view (not MakerWorld) is drawn
+extern bool bambuAuthRejected;        // the last connection was refused: wrong LAN access code
 
-struct Tray {
-  char id[ID_LEN];
-  int remain;
-  char weight[WEIGHT_LEN];
-  char tray_type[10];
-  int state;
-};
+// The printer view stays this long after a print ends, then MakerWorld's counters come back.
+constexpr long PRINT_FINISHED_HOLD_S = 5 * 60;
 
-struct AMS {
-  char id[ID_LEN];
-  Tray trays[MAX_TRAYS];
-  int trayCount;
-  int humidity;
-  float temp;
-};
-
-struct PrinterStatus {
-
-  // Progress
-  int layer_num;
-  int total_layer_num;
-  int percent;
-  unsigned int remainTime;
-  char gcode_state[20];
-
-  // Temps
-  float bed_temp;
-  float nozzle_temp;
-
-  // Fans
-  int fan_speed;
-  int cooling_fan_speed;
-  int big_fan1_speed;
-  int big_fan2_speed;
-  // Job
-  char job_name[NAME_LEN];
-  char stage_state[16];
-  int amsCount;
-  uint8_t error;
-  // AMS
-  AMS ams[MAX_AMS];
-  
-};
-
-
-extern PrinterStatus printer;    // last report received over MQTT
-extern bool isPrinting;          // RTC memory (attribute on the definition only)
-extern bool previousIsPrinting;  // RTC memory
-extern bool printViewOnScreen;
-extern bool bambuAuthRejected;  // last connect failed because the LAN access code was refused
-
-// Keep showing the printer status for this long after a print ends, then switch to MakerWorld stats.
-#define PRINT_FINISHED_HOLD_S  (5 * 60)
-
-// True while printing and during the PRINT_FINISHED_HOLD_S window after a print ends.
+// Printing, or within PRINT_FINISHED_HOLD_S after the end of a print.
 bool showPrintView();
 
-bool fetchBambu(  LayoutItem*  );
-void bambuWidget(LayoutItem* );
+// Reads the printer's status (mqtt_ip, mqtt_sn, mqtt_pass, mqtt_port). False without a full report.
+bool fetchBambu(LayoutItem* item);
+// The printer widget (layout id 64) while printing and shortly after.
+void bambuWidget(LayoutItem* item);

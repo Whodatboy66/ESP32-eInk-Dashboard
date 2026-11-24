@@ -4,13 +4,63 @@ Where a stage of [IMPLEMENTATION_PLAN.md](IMPLEMENTATION_PLAN.md) is confirmed: 
 implemented, this file whether it works on the device. Each block starts with **Confirms**: the
 stage's gate; the stage is confirmed when all boxes of its block are ticked. Blocks 0-7 are made to
 be done in one session, in this order (each builds on the one before); blocks 8 and 13 are separate
-sessions. Blocks 9-12 (the gift edition, stages 7-10) grow as each part is built: a part marked
+sessions. Block M lists the manual tasks outside the device (GitHub Actions, releases, accounts). Blocks 9-12 (the gift edition, stages 7-10) grow as each part is built: a part marked
 *(not built yet)* has nothing to test yet. Tick the boxes, note what the screen showed, and add a line to the
 [results log](#results-log) at the end.
 
 **You need:** the FireBeetle C6 with the 7.5" display, the TTP223 touch sensor (wired, but unplug it
 for block 1), a USB cable and the PC with `arduino-cli`, a phone (iPhone and/or Android, ideally both),
 a laptop for the GitHub workflows, about 2-3 hours (block 4 waits for 03:00 or is skipped, see there).
+
+## M. Manual tasks (GitHub, accounts, releases)
+
+Everything that isn't done on the device itself but by you, in one place. Tick per build where it
+says so; the rest once.
+
+**After every push to main (each new build):**
+- [ ] GitHub → Actions → **Build firmware**: the run of the push is green (host tests, web tests, feed
+      script tests, all four profiles)
+- [ ] Releases: **firmware-.NN** exists as a pre-release with the "What's new" lines, and the fixed
+      **beta** pre-release was refreshed (beta devices update at night or with a double tap)
+
+**Data feeds (school holidays, build 79 on):**
+- [ ] Once after the first push of build 79: Actions → **Data feeds** → Run workflow (branch main)
+- [ ] Releases: the pre-release **feeds** has 16 files `ferien-BW.ics` … `ferien-TH.ics`, and it is
+      **not** marked "Latest" (the stable firmware release stays "Latest")
+- [ ] A week later: the Monday run happened by itself (Actions → Data feeds, scheduled), green
+- [ ] If a run fails: the old files stay online (devices keep their holidays); look at the log of the
+      failed state, run again by hand later
+
+**Promote a tested beta to stable (the family devices get only these):**
+- [ ] Only a build whose device-test block is complete. Its `FW_BUILD` must still be the one on main:
+      promote **before** pushing the next build
+- [ ] Actions → **Build firmware** → Run workflow: branch **main**, "Publish" **on**, channel
+      **stable**, "What's new" empty (the beta's lines stay), oldest build **0**, "Allow a changed
+      signing public key" **off**
+- [ ] Releases: **firmware-.NN** is now "Latest" (not a pre-release); a stable device updates at night
+      (or double tap → update screen shows it)
+
+**Accounts and calendars (once):**
+- [ ] Google Calendar → Settings → "Geburtstage" (contacts' birthdays) → "Kalender integrieren": is there
+      a "Privatadresse im iCal-Format"? Yes: it can go into the birthday link. No: birthdays as yearly
+      events in a normal calendar (found automatically, build 79) or typed into the app. Note the answer
+      in the results log
+- [ ] Waste collection: does each family member's town offer a calendar link (ICS) for the pickups?
+      (needed for stage 10's waste box) Note per town
+- [ ] Signing key: a backup of `~/ota-signing-key/` exists in a safe place (not in the repository);
+      copies on the Windows desktop are deleted
+
+**Own repository (stage 7b, before the handover):**
+- [ ] Before detaching: Releases (stable "Latest", "beta", "feeds") and Settings → Secrets → Actions
+      `OTA_SIGNING_KEY` are there (screenshot or note)
+- [ ] GitHub → this repository → Settings → General → Danger Zone → **Leave fork network** (permanent;
+      the name and address stay, so the devices' updates keep working)
+- [ ] After: the repository no longer says "forked from VoIPshare/…"; the releases and the secret are
+      still there; Actions → Build firmware runs green on the next push; a device's update check still
+      works (double tap → update screen)
+- [ ] The repository stays **public**: devices download updates and the school holidays without
+      logging in (a private repository would stop both)
+- [ ] Licence for your own code chosen (see stage 7b) and the `LICENSE` file is on main
 
 ## 0. Bring the device to the current build (USB, once)
 
@@ -78,7 +128,7 @@ opening **edit mode** (new in build 71) is checked in block 6.
 - [x] Each service once (status bar shows no problem after a few minutes): weather, stocks, calendar
       (all links), parcels, flight (if one is in a calendar), printer (if on), MakerWorld
 - [x] Serial log: no secret (Wi-Fi password, keys, calendar links) printed in clear text (masked as `***`)
-- [x] Old setup page `http://192.168.4.1/basic` (in setup mode): saving a wrong value (e.g. stock symbol
+- [x] *(page removed in stage 7b)* Old setup page `http://192.168.4.1/basic` (in setup mode): saving a wrong value (e.g. stock symbol
       `AAPL!`) shows what to fix and saves nothing; a `webcal://` link is accepted and turned into `https://`
 - [x] Factory reset from the serial console: type `factory-reset` during the BOOT window after a reset
       (only if you're willing to type all settings again; the app's factory reset is in block 7)
@@ -301,25 +351,67 @@ written from these numbers).
 - [ ] With these: the battery life per clock interval and with / without quiet hours (into
       `docs/POWER.md` and the estimate in the app)
 
-## 9. Stage 7: new look *(not built yet)*
+## 9. Stage 7: new look (build 79)
 
 **Confirms stage 7:** the screen looks like the app's sketch; holidays, school holidays and birthdays
 show where planned; a device-tested beta is on stable.
 
+PC renders of every case (German): [docs/images/layouts/](images/layouts/) (`month-*.png`, `clock-*.png`,
+`holiday*.png`, January 2027 in Bavaria as the test date).
+
+**Before the device test:** block M (after every push, Data feeds run once, the Google birthday question).
+
+**On the device:**
 - [ ] Clock: filled Montserrat digits in every layout incl. Classic, date below, AM/PM with the 12-hour
       clock in a 2 × 1 box; readable with reflections
-- [ ] Headings with a line over the list boxes; weather weekdays and "9° / 2°"
+- [ ] A clock in a 1 × 1 box (editor allows it now): small digits, short date
+- [ ] Headings with a line over the list boxes (not in Classic); weather weekdays and "9° / 2°"
+- [ ] Status bar: Wi-Fi bars left of the battery (after a wake with Wi-Fi), not touching the version
+- [ ] Edit mode code screen: the 6 digits in the new font, readable
 - [ ] Month view: today a small filled square, holiday a frame, school holidays a line, appointment
       dots only from links with "Im Monat markieren", birthday cake, bold weekend, KW, footer
-- [ ] Month view in a full screen, a half (2 × 3), 2 × 2, 1 × 2, 2 × 1 and 1 × 1 box: each looks
-      tidy, nothing overlaps
-- [ ] Bundesland set, Feiertage on: the holiday name after the date in the status bar on a holiday
-      (or a test date), "★" entry in "Heute und morgen" today and tomorrow
-- [ ] Schulferien on: the link is filled in for the state; the line in the month view, start / end in
-      the footer
-- [ ] A yearly all-day entry in a calendar link shows as a birthday, not as an appointment dot
+- [ ] Month view in a full screen, a half (2 × 3), 2 × 2, 1 × 2, 2 × 1 (two weeks) and 1 × 1 (sheet)
+      box, and in Classic: each looks tidy, nothing overlaps (the editor allows 1 × 1 now)
+- [ ] App → Data → "Feiertage und Ferien": Bundesland list, both switches turn on when a state is
+      chosen; the school link field shows our link as placeholder
+- [ ] Bundesland set, Feiertage on: the holiday name after the date in the status bar on a holiday,
+      "★" entry in "Heute und morgen" today and tomorrow (next real one: 25 Dec, or the 6 Jan in BW / BY / ST)
+- [ ] Schulferien on: within an hour the line appears in the month view (Christmas holidays), start /
+      end in the footer; Diagnostics log: "school holidays: read, n ranges"
+- [ ] After the update from build 78 the month view has **no appointment dots** until "Im Monat
+      markieren" is switched on for a link (off by default); on: dots, off: none
+- [ ] **Before** running the "Data feeds" workflow (feed missing) with Schulferien on: the log shows
+      one failed attempt, then none for 6 hours (no Wi-Fi every minute; Diagnostics battery curve normal)
+- [ ] Bundesland → "Aus" (or another state): the old school holiday lines disappear at the next wake
+- [ ] "Heute und morgen" with an entry that began before today (e.g. a holiday trip) on a public
+      holiday: every day once, in date order, the ★ line under today
+- [ ] Wi-Fi switched off at the router: "! WLAN" shows, the Wi-Fi bars disappear
+- [ ] A yearly all-day entry in a calendar link shows as a birthday (cake, birthday box), not as an
+      appointment dot; "Name (1966)" shows the age
 - [ ] After many clock changes: no disturbing ghosting from the filled digits
-- [ ] A build with all of this promoted to stable (release gate of the week)
+- [ ] A build with all of this promoted to stable (block M, "Promote a tested beta to stable")
+
+## 9b. Stage 7b: own code base (build 80)
+
+**Confirms stage 7b:** after the rebuild everything works and looks as before. The PC renders are
+pixel-identical except the text font ([plans/STAGE7B_OWN_CODE.md](plans/STAGE7B_OWN_CODE.md), result).
+
+- [ ] Every service loads as before: weather (also a place given as "lat, lon"), stocks (incl. own
+      names), calendar, parcels, flight with live status, printer (MQTT) and MakerWorld
+- [ ] Calendar: repeating entries (weekly on several days, "2nd Tuesday", yearly), an entry cancelled
+      or excluded in a series, all-day entries, an entry with a time from Outlook / Exchange (were
+      missing before), an entry with an alarm (its title stays)
+- [ ] The screen looks as before in every layout; the text font looks slightly different (rebuilt),
+      nothing is cut off; the problem names show "Druckercode" for a wrong printer code
+- [ ] MakerWorld numbers right-aligned in their columns; the parcel line has even gaps
+- [ ] Printer with an AMS: spools 1-4 with their fill level; with two AMS units nothing overlaps
+- [ ] Setup only through the app; `/basic` is gone (the address shows the app); with JavaScript off the
+      page says it needs JavaScript
+- [ ] Button: tap, double tap, 2 s and 4 s holds; the BOOT button backup after a reset; the setup hold
+      while the dashboard is refreshing
+- [ ] Battery, Wi-Fi fast connect (log: "WiFi connected in … ms (… dBm)"), time zone, update check:
+      as before
+- [ ] Settings kept after the update to build 80 (Wi-Fi, calendar links, printer, layout, pins)
 
 ## 10. Stage 8: data store and several screens *(not built yet)*
 

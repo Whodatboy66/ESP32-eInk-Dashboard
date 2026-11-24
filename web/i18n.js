@@ -17,7 +17,14 @@ var I18N = (function () {
     f_mqtt_pass: 'Printer access code', f_mqtt_port: 'Printer port', f_printer_name: 'Printer name',
     f_makerworld_uid: 'MakerWorld user ID', f_ota_auto: 'Automatic updates', f_ota_beta: 'Update channel', f_clock_24h: 'Clock',
     f_pin_preset: 'Board', f_pins: 'Pins', f_clock_interval: 'Clock refresh', f_quiet_enabled: 'Quiet hours',
-    f_quiet_from: 'Quiet hours from', f_quiet_to: 'Quiet hours until', f_battery_mah: 'Battery capacity', f_lang: 'Language',
+    f_quiet_from: 'Quiet hours from', f_quiet_to: 'Quiet hours until', f_battery_mah: 'Battery capacity', f_lang: 'Language', f_holiday_state: 'German state', f_holidays_on: 'Public holidays', f_school_on: 'School holidays',
+    f_school_url: 'School holiday link', f_ics_month: 'Mark in the month', f_cal_birthdays: 'Birthdays from the calendar',
+    holidaysLbl: 'Holidays', stateOff: 'Off', stateNote: 'Public holidays are calculated on the device; school holidays come from a calendar link.',
+    holidaysTitle: 'Public holidays', holidaysSub: 'In the status bar, today / tomorrow and the month view',
+    schoolTitle: 'School holidays', schoolSub: 'A line in the month view, start and end below it',
+    schoolUrlNote: 'Empty: the school holidays of the chosen state (updated weekly). Or a link of your own, e.g. from the school.',
+    monthMark: 'Mark in the month', monthMarkSub: 'A dot under days with appointments of this calendar',
+    calBdTitle: 'Birthdays from the calendars', calBdSub: 'Yearly all-day entries count as birthdays (cake in the month view)',
     calLinkN: 'Calendar link {n}', pinPower: 'Display power (optional)', pinBattery: 'Battery (optional)', pinButton: 'Button (optional)',
     months: ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'],
     days: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'],
@@ -27,7 +34,7 @@ var I18N = (function () {
     sAgenda: [['10:00', 'Dentist'], ['13:00', 'Team meeting'], ['18:30', 'Football training'], ['All day', 'Birthday Anna'],
       ['Wed 7:15', 'LH 400 FRA → JFK'], ['Wed 12:00', 'Lunch with Ben'], ['Thu 9:00', 'Car service'], ['Thu 19:00', 'Book club'],
       ['Fri 16:00', 'Pick up parcel'], ['Sat', 'Market'], ['Sun 11:00', 'Brunch'], ['Mon 8:00', 'Standup'], ['Mon 14:00', 'Review']],
-    sStocks: 'Stocks', sParcels: 'Parcels', sParcelRows: [['DHL', 'Out for delivery'], ['UPS', 'In transit, Fri'], ['Hermes', 'Delivered']],
+    sStocks: 'Stocks', sParcels: 'Parcels', sWeek: 'Wk', sNoteHead: 'Note', sParcelRows: [['DHL', 'Out for delivery'], ['UPS', 'In transit, Fri'], ['Hermes', 'Delivered']],
     sPrinting: '{name} printing', sPrinter: 'Printer', sPrintLeft: 'Benchy.3mf, 41 min left', sTasks: 'Tasks',
     sTaskRows: [['Buy milk', 'today'], ['Call the plumber', 'Fri'], ['Return library books', ''], ['Water the plants', ''], ['Pay invoice', '24.11.']],
     sOverdue: 'overdue', sTodayLow: 'today', sNote: 'Wi-Fi for guests: Sunflower-42\nBins out on Thursday', sBirthdays: 'Birthdays',
@@ -65,7 +72,7 @@ var I18N = (function () {
     tzFilled: ' Filled in from your phone ({n}).', tzUnknown: ' Your phone\'s time zone ({n}) isn\'t in the list: type its rule.',
     tzNames: ['Germany, Austria, Switzerland, most of Central Europe', 'United Kingdom', 'Ireland', 'Portugal', 'Finland, Greece, Romania',
       'US Eastern', 'US Central', 'US Mountain', 'US Pacific', 'UTC'],
-    cantReach: 'Can\'t reach the device', tryAgain: 'Try again', basicHint: 'If it keeps failing, the old setup page is at /basic.',
+    cantReach: 'Can\'t reach the device', tryAgain: 'Try again', basicHint: 'If it keeps failing: restart the device (hold the button 2 s) and connect again.',
     all6: 'Type all 6 digits.', wrongCode: 'Wrong code',
     codeRetry: '{e}. Check the code on the display and type it again; after 5 wrong codes the display shows a new one.',
     openSetup: 'Open setup', codeTitle: 'Type the 6-digit code shown on the display',
@@ -210,7 +217,7 @@ var I18N = (function () {
     saveRestart: 'Save and restart', pickWifiFirst: 'Pick your Wi-Fi network first.', testingWifi: 'Testing the Wi-Fi…',
     layoutNotTakenShort: 'The screen layout wasn\'t taken: {e}', notAccepted: 'The device didn\'t accept the settings.',
     setupTitle: '{n} setup', sections: 'Sections', connectingDev: 'Connecting to the device…',
-    badAnswer: 'The device sent an answer this page doesn\'t understand. Update the firmware, or use /basic.'
+    badAnswer: 'The device sent an answer this page doesn\'t understand. Update the firmware.'
   };
   D.de = {
     noAnswer: 'Das Gerät antwortet nicht. Prüfe, ob dein Handy noch mit dem WLAN des Geräts verbunden ist, und versuche es noch einmal.',
@@ -225,7 +232,14 @@ var I18N = (function () {
     f_mqtt_pass: 'Drucker-Zugangscode', f_mqtt_port: 'Drucker-Port', f_printer_name: 'Druckername',
     f_makerworld_uid: 'MakerWorld-Benutzer-ID', f_ota_auto: 'Automatische Updates', f_ota_beta: 'Update-Kanal', f_clock_24h: 'Uhr',
     f_pin_preset: 'Platine', f_pins: 'Pins', f_clock_interval: 'Uhr-Aktualisierung', f_quiet_enabled: 'Ruhezeit',
-    f_quiet_from: 'Ruhezeit ab', f_quiet_to: 'Ruhezeit bis', f_battery_mah: 'Akku-Kapazität', f_lang: 'Sprache',
+    f_quiet_from: 'Ruhezeit ab', f_quiet_to: 'Ruhezeit bis', f_battery_mah: 'Akku-Kapazität', f_lang: 'Sprache', f_holiday_state: 'Bundesland', f_holidays_on: 'Feiertage', f_school_on: 'Schulferien',
+    f_school_url: 'Schulferien-Link', f_ics_month: 'Im Monat markieren', f_cal_birthdays: 'Geburtstage aus dem Kalender',
+    holidaysLbl: 'Feiertage und Ferien', stateOff: 'Aus', stateNote: 'Feiertage rechnet das Gerät selbst aus; Schulferien kommen über einen Kalender-Link.',
+    holidaysTitle: 'Feiertage', holidaysSub: 'In der Statusleiste, bei Heute / Morgen und im Monat',
+    schoolTitle: 'Schulferien', schoolSub: 'Eine Linie im Monat, Beginn und Ende darunter',
+    schoolUrlNote: 'Leer: die Schulferien des gewählten Bundeslands (wöchentlich aktualisiert). Oder ein eigener Link, z. B. von der Schule.',
+    monthMark: 'Im Monat markieren', monthMarkSub: 'Ein Punkt unter Tagen mit Terminen dieses Kalenders',
+    calBdTitle: 'Geburtstage aus den Kalendern', calBdSub: 'Jährliche ganztägige Termine zählen als Geburtstage (Kuchen im Monat)',
     calLinkN: 'Kalender-Link {n}', pinPower: 'Display-Strom (optional)', pinBattery: 'Akku (optional)', pinButton: 'Taste (optional)',
     months: ['Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'],
     days: ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'],
@@ -235,7 +249,7 @@ var I18N = (function () {
     sAgenda: [['10:00', 'Zahnarzt'], ['13:00', 'Teambesprechung'], ['18:30', 'Fußballtraining'], ['Ganztags', 'Geburtstag Anna'],
       ['Mi 7:15', 'LH 400 FRA → JFK'], ['Mi 12:00', 'Mittagessen mit Ben'], ['Do 9:00', 'Autowerkstatt'], ['Do 19:00', 'Buchclub'],
       ['Fr 16:00', 'Paket abholen'], ['Sa', 'Wochenmarkt'], ['So 11:00', 'Brunch'], ['Mo 8:00', 'Standup'], ['Mo 14:00', 'Review']],
-    sStocks: 'Aktien', sParcels: 'Pakete', sParcelRows: [['DHL', 'In Zustellung'], ['UPS', 'Unterwegs, Fr'], ['Hermes', 'Zugestellt']],
+    sStocks: 'Aktien', sParcels: 'Sendungen', sWeek: 'KW', sNoteHead: 'Notiz', sParcelRows: [['DHL', 'In Zustellung'], ['UPS', 'Unterwegs, Fr'], ['Hermes', 'Zugestellt']],
     sPrinting: '{name} druckt', sPrinter: 'Drucker', sPrintLeft: 'Benchy.3mf, noch 41 Min.', sTasks: 'Aufgaben',
     sTaskRows: [['Milch kaufen', 'heute'], ['Klempner anrufen', 'Fr'], ['Bücher zurückgeben', ''], ['Blumen gießen', ''], ['Rechnung zahlen', '24.11.']],
     sOverdue: 'überfällig', sTodayLow: 'heute', sNote: 'WLAN für Gäste: Sonnenblume-42\nDonnerstag Müll raus', sBirthdays: 'Geburtstage',
@@ -273,7 +287,7 @@ var I18N = (function () {
     tzFilled: ' Von deinem Handy übernommen ({n}).', tzUnknown: ' Die Zeitzone deines Handys ({n}) steht nicht in der Liste: gib ihre Regel ein.',
     tzNames: ['Deutschland, Österreich, Schweiz, fast ganz Mitteleuropa', 'Großbritannien', 'Irland', 'Portugal', 'Finnland, Griechenland, Rumänien',
       'USA Ostküste', 'USA Mitte', 'USA Mountain', 'USA Westküste', 'UTC'],
-    cantReach: 'Gerät nicht erreichbar', tryAgain: 'Noch einmal', basicHint: 'Wenn es weiter nicht klappt: die alte Einrichtungsseite ist unter /basic.',
+    cantReach: 'Gerät nicht erreichbar', tryAgain: 'Noch einmal', basicHint: 'Wenn es weiter nicht klappt: Gerät neu starten (Taste 2 s halten) und neu verbinden.',
     all6: 'Gib alle 6 Ziffern ein.', wrongCode: 'Falscher Code',
     codeRetry: '{e}. Prüfe den Code auf der Anzeige und gib ihn noch einmal ein; nach 5 falschen Codes zeigt die Anzeige einen neuen.',
     openSetup: 'Einrichtung öffnen', codeTitle: 'Gib den 6-stelligen Code von der Anzeige ein',
@@ -418,7 +432,7 @@ var I18N = (function () {
     saveRestart: 'Speichern und neu starten', pickWifiFirst: 'Wähle zuerst dein WLAN.', testingWifi: 'Teste das WLAN…',
     layoutNotTakenShort: 'Das Bildschirm-Layout wurde nicht übernommen: {e}', notAccepted: 'Das Gerät hat die Einstellungen nicht angenommen.',
     setupTitle: '{n} – Einrichtung', sections: 'Bereiche', connectingDev: 'Verbinde mit dem Gerät…',
-    badAnswer: 'Das Gerät hat eine Antwort geschickt, die diese Seite nicht versteht. Aktualisiere die Firmware oder nutze /basic.'
+    badAnswer: 'Das Gerät hat eine Antwort geschickt, die diese Seite nicht versteht. Aktualisiere die Firmware.'
   };
 
   var cur = 'de';

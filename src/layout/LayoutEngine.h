@@ -40,10 +40,10 @@ struct Limits {
 inline const Limits& limitsOf(WidgetId id) {
   static const Limits table[WIDGET_COUNT] = {
       {4, 1, 4, 1},  // StatusBar (not in the grid)
-      {2, 1, 4, 3},  // Clock: the 130 px digits need 2 cells of width
+      {1, 1, 4, 3},  // Clock: one cell with the 64 px digits (stage 7), larger boxes larger digits
       {1, 1, 4, 3},  // Weather: one day per 100 px
       {2, 1, 4, 3},  // Agenda
-      {2, 2, 4, 3},  // Month: header + 6 week rows
+      {1, 1, 4, 3},  // Month: a design for every size (stage 7: sheet, two weeks, narrow, full, wide)
       {2, 1, 4, 3},  // Stocks: fixed columns up to 400 px
       {2, 1, 4, 3},  // Tracking
       {2, 1, 4, 3},  // Printer / MakerWorld: fixed columns up to 400 px
@@ -83,6 +83,11 @@ struct Result {
   int count = 0;
   bool fellBack = false;  // the template was invalid: Classic was used
 };
+
+// Stage 7: list widgets start with a heading and a line in the grid layouts; Classic (a pixel
+// layout) keeps its places, and a box lower than 100 px keeps its lines for content.
+constexpr int HEADING_H = 30;
+inline bool wantsHeading(bool pixelLayout, int boxH) { return !pixelLayout && boxH >= 100; }
 
 inline Rect cellRect(Span s) {
   int16_t x = static_cast<int16_t>(s.col * CELL_W);

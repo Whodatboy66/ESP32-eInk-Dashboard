@@ -135,9 +135,6 @@ Over USB the same lines appear live in a serial monitor (115200 baud).
 tasks, note, birthdays and the log, then restarts into the first setup. Without the app: connect USB,
 open a serial monitor at 115200 baud, tap **RST** and type `factory-reset` within 3 seconds.
 
-**The old setup page** is still there for now, in setup mode only, at `http://192.168.4.1/basic`. It
-stays until the app has been checked on phones.
-
 ## Data and Device tab fields
 
 | Field | What to enter |
@@ -516,20 +513,20 @@ Connect the board over USB and open a serial monitor at 115200 baud (or open Dia
 
 | Log line | Meaning and fix |
 | --- | --- |
-| `[Bambu]: MQTT fail rc=5` / `Access code rejected` | Wrong LAN access code. Re-enter it on the app's Data tab. |
-| `[Bambu]: MQTT fail rc=-2` / `Printer unreachable` | Printer unreachable: check the address, that the printer is on, and that LAN / Developer Mode is enabled. Asked again after 10, 20, 40, then 60 minutes. |
-| `[Bambu] Full report NOT received` | Connected but the printer sent nothing: check the serial number. |
-| `[Direct] HTTP 404 for …finance…/XYZ` | Unknown stock symbol (e.g. `APPL` instead of `AAPL`). |
+| `[Bambu] MQTT failed rc=5` / `Access code rejected` | Wrong LAN access code. Re-enter it on the app's Data tab. |
+| `[Bambu] MQTT failed rc=-2` / `Printer unreachable` | Printer unreachable: check the address, that the printer is on, and that LAN / Developer Mode is enabled. Asked again after 10, 20, 40, then 60 minutes. |
+| `[Bambu] full report NOT received` | Connected but the printer sent nothing: check the serial number. |
+| `[HTTP] HTTP 404 for query1.finance.yahoo.com`, then `[Stocks] No quote for XYZ` | Unknown stock symbol (e.g. `APPL` instead of `AAPL`). |
 | `[Weather] Location not found` | Try `City, CC` with a country code, or coordinates. |
 | `[ICS] HTTP 404` | The calendar link is wrong, or the public link is used for a private calendar. |
-| `[ICS] … 0 upcoming` | Nothing in the next 24 hours. The month view still marks days with events. |
-| `[MakerWorld] HTTP …` | Wrong user ID, or the service is down. Retried after an hour. |
+| `[ICS] … 0 upcoming` | Nothing today or tomorrow. The month view still marks days of the links with "Im Monat markieren". |
+| `[HTTP] HTTP … for api.bambulab.com` | MakerWorld: wrong user ID, or the service is down. Retried after an hour. |
 | `[Flight] HTTP 204` or `404` | AeroDataBox doesn't know that flight number on that date: check the title (`TS399`) and the event's date. |
 | `[Flight] HTTP 401` / `403` / `429` | Wrong RapidAPI key, not subscribed to AeroDataBox, or monthly quota used up. |
-| `[Tracking] HTTP 401` | Wrong PKGE API key. Copy it again from your PKGE Business account. |
+| `[HTTP] HTTP 401 for api.pkge.net` / `[Tracking] 401: wrong API key` | Wrong PKGE API key. Copy it again from your PKGE Business account. |
 | `[Tracking] … showing 0` | No package on its way and none delivered in the last day. |
 | `NTP NOT synced` | No internet time this wake. The clock keeps running and re-syncs later. |
-| `WiFi FAILED → keeping the previous content` | Wrong Wi-Fi password or weak signal. Widgets keep their last content and `WiFi` appears in the status bar. |
+| `WiFi failed: the screen keeps its content` | Wrong Wi-Fi password or weak signal. Widgets keep their last content and `WiFi` appears in the status bar. |
 
 The setup app doesn't open automatically: browse to `http://192.168.4.1` while connected to `Dashboard-Setup`. Some phones ask whether to stay on a network without internet; answer yes.
 

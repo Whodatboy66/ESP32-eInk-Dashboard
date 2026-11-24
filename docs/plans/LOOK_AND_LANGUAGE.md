@@ -85,3 +85,8 @@ English), not yet on the device.
   English (it goes away).
 - Bundle 48 KB of the 60 KB limit; firmware 87 % of the app slot.
 
+## Result of part 2 (build 79)
+
+Implemented as stage 7 of the gift edition, together with the month view rework, holidays and
+calendar birthdays: [STAGE7_NEW_LOOK.md](STAGE7_NEW_LOOK.md) (result section there). Not yet checked
+on the device.

@@ -108,10 +108,12 @@ struct Upcoming {
   bool fromFeed;
 };
 
-// The birthdays in the next `horizon` days from both lists, soonest first (same name and day once;
-// the hand-entered entry wins, it may know the year). Returns how many were written.
+// The birthdays in the next `horizon` days from the lists, soonest first (same name and day once;
+// the hand-entered entry wins, it may know the year). `cal`: birthdays found in the normal calendar
+// links (stage 7), may be nullptr. Returns how many were written.
 inline int upcomingBirthdays(const BirthdayList& manual, const BirthdayList& feed, const Date& today,
-                             Upcoming* out, int max, int horizon = BDAY_HORIZON_DAYS) {
+                             Upcoming* out, int max, int horizon = BDAY_HORIZON_DAYS,
+                             const BirthdayList* cal = nullptr) {
   if (!today.valid()) return 0;
   int n = 0;
   auto add = [&](const Birthday& b, bool fromFeed) {
@@ -128,6 +130,8 @@ inline int upcomingBirthdays(const BirthdayList& manual, const BirthdayList& fee
   };
   for (int i = 0; i < manual.count; i++) add(manual.items[i], false);
   for (int i = 0; i < feed.count; i++) add(feed.items[i], true);
+  if (cal)
+    for (int i = 0; i < cal->count; i++) add(cal->items[i], true);
   // soonest first (stable)
   for (int a = 1; a < n; a++) {
     Upcoming v = out[a];
@@ -139,6 +143,23 @@ inline int upcomingBirthdays(const BirthdayList& manual, const BirthdayList& fee
     out[b + 1] = v;
   }
   return n;
+}
+
+// Same entries (name, day, month, year), in any order. Stage 7: the calendar's birthday file is only
+// written when this says something changed (flash wear, the calendar is read every 30-60 minutes).
+inline bool sameBirthdays(const BirthdayList& a, const BirthdayList& b) {
+  if (a.count != b.count) return false;
+  bool used[MAX_BIRTHDAYS] = {};
+  for (int i = 0; i < a.count; i++) {
+    bool found = false;
+    for (int j = 0; j < b.count && !found; j++) {
+      if (used[j]) continue;
+      const Birthday &x = a.items[i], &y = b.items[j];
+      if (x.day == y.day && x.month == y.month && x.year == y.year && !std::strcmp(x.name, y.name)) found = used[j] = true;
+    }
+    if (!found) return false;
+  }
+  return true;
 }
 
 // "Heute" / "Today", "Morgen" / "Tomorrow", "in 12 T." / "in 12 d".

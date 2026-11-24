@@ -1,5 +1,5 @@
 #pragma once
-// Pin presets (configure.h) and the active pin map: which preset / custom pins are used, stored in
+// The pins in use (stage 7b, own code): a preset (src/hardware/PinPresets.h) or custom pins, kept in
 // NVS ("pin_preset", "pin_*"), logged at boot.
 #include <Arduino.h>
 #include <Preferences.h>
@@ -9,12 +9,7 @@
 extern PinConfig customPins;
 extern PinPreset activePinPreset;
 
-const char* pinPresetValue(PinPreset preset);
-const char* pinPresetLabel(PinPreset preset);
 void logPinConfiguration();
-PinPreset parsePinPreset(const String& value);
-void applyStoredPinSelection();
+void applyStoredPinSelection();  // activePins from the preset or the custom pins, board LEDs off
 void saveCustomPinConfig(Preferences& prefs, const PinConfig& pins);
 PinConfig loadCustomPinConfig(Preferences& prefs, const PinConfig& fallback);
-void pinValueToText(int16_t pin, char* out, size_t outSize);
-bool hasRequiredDisplayPins(const PinConfig& pins);

@@ -1,3 +1,6 @@
+// The touch sensor / button (stage 7b, own code): the gesture at wake-up, a watcher while awake,
+// and the BOOT button as a backup way into setup mode. The gestures themselves are decided by
+// src/input/ButtonGesture.h (tested on the PC).
 #include "TouchController.h"
 
 #include <driver/gpio.h>
@@ -5,135 +8,110 @@
 #include "../update/OtaFlow.h"
 #include "StatusLed.h"
 
+namespace {
 
-static constexpr ButtonTiming BUTTON_TIMING{
-  BUTTON_REBOOT_HOLD_MS, BUTTON_SETUP_HOLD_MS, BUTTON_FAULT_MS, BUTTON_DEBOUNCE_MS, BUTTON_DOUBLE_TAP_MS};
+constexpr ButtonTiming TIMING{BUTTON_REBOOT_HOLD_MS, BUTTON_SETUP_HOLD_MS, BUTTON_FAULT_MS, BUTTON_DEBOUNCE_MS,
+                              BUTTON_DOUBLE_TAP_MS};
 
-// Set when the input read "pressed" for BUTTON_FAULT_MS (stuck, disconnected or recalibrating
-// sensor). Kept across deep sleep: while it is set and the input still reads HIGH, the input is
-// ignored and the board doesn't wake on it. Cleared as soon as the input reads LOW.
-RTC_DATA_ATTR volatile bool buttonFaulted = false;
+bool pressedNow() { return digitalRead(activePins.demoButton) == HIGH; }
 
-// Input with the internal pull-down: an unconnected pin reads LOW ("not pressed").
-static void configureButtonInput() {
-  // Before deep sleep the pad's pull-down is latched (pad hold) by the sleep code; release it so
-  // pinMode() takes effect.
+// The input with the internal pull-down (an unconnected pin reads "not pressed"). The sleep code
+// latches the pad (pad hold): released here so pinMode() works.
+void configureInput() {
   gpio_hold_dis(getDemoWakeGpio());
   pinMode(activePins.demoButton, INPUT_PULLDOWN);
 }
 
-int readWakeButtonAction() {
-  if (!hasDemoButtonPin()) {
-    return BUTTON_ACTION_NONE;
+// What a finished gesture shows and logs: the LED feedback (SuperMini) and a log line.
+void announce(ButtonEvent e) {
+  forceSuperMiniLedsOff();
+  switch (e) {
+    case ButtonEvent::DoubleTap:
+      logPrintln("Button double tap -> update screen");
+      break;
+    case ButtonEvent::Reboot:
+      logPrintln("Button held -> reboot");
+      flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);  // blue
+      break;
+    case ButtonEvent::Setup:
+      logPrintln("Button held -> setup / edit mode");
+      flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);  // red
+      break;
+    case ButtonEvent::Fault:
+      logPrintf("[Button] HIGH for %u s: sensor fault, ignored until it reads LOW\n", (unsigned)(BUTTON_FAULT_MS / 1000));
+      break;
+    default:
+      break;
   }
+}
 
-  configureButtonInput();
-  bool high = digitalRead(activePins.demoButton) == HIGH;
-  bool buttonWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
-  DBGF("[Button] GPIO%d is %s at %lu ms%s", activePins.demoButton,
-       high ? "HIGH (pressed)" : "LOW", millis(), buttonFaulted ? " (sensor fault flagged)" : "");
+}  // namespace
+
+// Kept in deep sleep: the input read "pressed" for BUTTON_FAULT_MS (stuck, disconnected or
+// recalibrating). While set and the input still reads HIGH, it is ignored and doesn't wake the
+// board; cleared as soon as it reads LOW.
+RTC_DATA_ATTR volatile bool buttonFaulted = false;
+// A restart clears RTC_DATA_ATTR: the setup request lives in no-init RTC memory (with a magic value).
+RTC_NOINIT_ATTR uint32_t setupRequest;
+volatile bool buttonBusy = false;  // a press, its release debounce or the double-tap window is open
+volatile ButtonEvent buttonMailbox = ButtonEvent::None;  // the last tap / double tap while awake
+
+int readWakeButtonAction() {
+  if (!hasDemoButtonPin()) return BUTTON_ACTION_NONE;
+  configureInput();
+  const bool high = pressedNow();
+  const bool buttonWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
+  DBGF("[Button] GPIO%d is %s at %lu ms%s", activePins.demoButton, high ? "HIGH (pressed)" : "LOW", millis(),
+       buttonFaulted ? " (sensor fault flagged)" : "");
   if (!high) {
     buttonFaulted = false;
-    // A tap woke the board and was already released: wait briefly for a second tap.
-    if (!buttonWake) return BUTTON_ACTION_NONE;
+    if (!buttonWake) return BUTTON_ACTION_NONE;  // a tap woke us and is over: wait for a second one
   } else if (buttonFaulted) {
     DBG(F("[Button] still HIGH since the fault: ignored"));
     return BUTTON_ACTION_NONE;
   }
-
-  ButtonGesture gesture(BUTTON_TIMING);
-  if (high) {
-    // After a button wake the press began at wake time, so count the boot time as held time.
-    gesture.beginPress(buttonWake ? 0 : millis());
-  } else {
-    gesture.beginAfterTap(millis());
-  }
+  ButtonGesture gesture(TIMING);
+  if (high) gesture.beginPress(buttonWake ? 0 : millis());  // after a wake the press began at boot
+  else gesture.beginAfterTap(millis());
   for (;;) {
-    uint32_t now = millis();
-    switch (gesture.update(digitalRead(activePins.demoButton) == HIGH, now)) {
-      case ButtonEvent::None:
-        if (gesture.isPressed()) updateSuperMiniHoldFeedback(gesture.heldMs(now));
-        delay(10);
-        break;
-      case ButtonEvent::Tap:
-        forceSuperMiniLedsOff();
-        return BUTTON_ACTION_NONE;
-      case ButtonEvent::DoubleTap:
-        forceSuperMiniLedsOff();
-        logPrintln("Button double tap -> update screen");
-        return BUTTON_ACTION_UPDATE;
-      case ButtonEvent::Reboot:
-        forceSuperMiniLedsOff();
-        logPrintln("Button held -> reboot");
-        flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
-        return BUTTON_ACTION_REBOOT;
-      case ButtonEvent::Setup:
-        forceSuperMiniLedsOff();
-        logPrintln("Button held -> setup / edit mode");
-        flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
-        return BUTTON_ACTION_AP;
-      case ButtonEvent::Fault:
-        forceSuperMiniLedsOff();
-        logPrintf("[Button] HIGH for %u s: sensor fault, ignored until it reads LOW\n",
-                      (unsigned)(BUTTON_FAULT_MS / 1000));
-        buttonFaulted = true;
-        return BUTTON_ACTION_NONE;
+    const uint32_t now = millis();
+    const ButtonEvent e = gesture.update(pressedNow(), now);
+    if (e == ButtonEvent::None) {
+      if (gesture.isPressed()) updateSuperMiniHoldFeedback(gesture.heldMs(now));
+      delay(10);
+      continue;
+    }
+    announce(e);
+    switch (e) {
+      case ButtonEvent::DoubleTap: return BUTTON_ACTION_UPDATE;
+      case ButtonEvent::Reboot: return BUTTON_ACTION_REBOOT;
+      case ButtonEvent::Setup: return BUTTON_ACTION_AP;
+      case ButtonEvent::Fault: buttonFaulted = true; return BUTTON_ACTION_NONE;
+      default: return BUTTON_ACTION_NONE;  // a single tap: the wake itself refreshes
     }
   }
 }
 
-// A setup hold while awake restarts the board into setup mode. RTC_DATA_ATTR is reset by a
-// restart, so the request lives in no-init RTC memory, guarded by a magic value.
-RTC_NOINIT_ATTR uint32_t setupRequest;
-
-// True while the watch task tracks a press (including the release debounce and the double-tap
-// window) or is acting on a gesture (restarting). The sleep path waits for it, so a release just
-// before sleep isn't lost.
-volatile bool buttonBusy = false;
-// The last tap / double tap seen by the watch task (ButtonEvent), for the update screen's confirm
-// tap and for a double tap while the dashboard refreshes. Reset to None by the reader.
-volatile ButtonEvent buttonMailbox = ButtonEvent::None;
-
-// Watches the button while the dashboard is awake (WiFi, fetching, drawing), so a hold works at
-// any time, not only from deep sleep. A short tap is ignored: the dashboard is already refreshing.
+// While awake (Wi-Fi, downloads, drawing): holds restart or open setup at any time; taps go to the
+// mailbox (update screen, confirm tap).
 void buttonWatchTask(void*) {
-  ButtonGesture gesture(BUTTON_TIMING, buttonFaulted);
+  ButtonGesture gesture(TIMING, buttonFaulted);
   for (;;) {
-    uint32_t now = millis();
-    switch (gesture.update(digitalRead(activePins.demoButton) == HIGH, now)) {
-      case ButtonEvent::None:
-        if (gesture.isPressed()) updateSuperMiniHoldFeedback(gesture.heldMs(now));
-        break;
-      case ButtonEvent::Tap:
-        forceSuperMiniLedsOff();
-        buttonMailbox = ButtonEvent::Tap;
-        break;
-      case ButtonEvent::DoubleTap:
-        forceSuperMiniLedsOff();
-        logPrintln("Button double tap -> update screen");
-        buttonMailbox = ButtonEvent::DoubleTap;
-        break;
-      case ButtonEvent::Reboot:
-        buttonBusy = true;
-        otaConfirmByUser("reboot hold");
-        forceSuperMiniLedsOff();
-        logPrintln("Button held -> reboot");
-        flashSuperMiniStatusLed(0, 0, 48, 2, 100, 70);
-        ESP.restart();
-        break;
-      case ButtonEvent::Setup:
-        buttonBusy = true;
-        otaConfirmByUser("setup hold");
-        setupRequest = SETUP_REQUEST_MAGIC;
-        forceSuperMiniLedsOff();
-        logPrintln("Button held -> setup / edit mode");
-        flashSuperMiniStatusLed(48, 0, 0, 2, 90, 70);
-        ESP.restart();
-        break;
-      case ButtonEvent::Fault:
-        forceSuperMiniLedsOff();
-        logPrintln("[Button] held past BUTTON_FAULT_MS: sensor fault, ignored until it reads LOW");
-        break;
+    const uint32_t now = millis();
+    const ButtonEvent e = gesture.update(pressedNow(), now);
+    if (e == ButtonEvent::None) {
+      if (gesture.isPressed()) updateSuperMiniHoldFeedback(gesture.heldMs(now));
+    } else if (e == ButtonEvent::Tap || e == ButtonEvent::DoubleTap) {
+      announce(e);
+      buttonMailbox = e;
+    } else if (e == ButtonEvent::Reboot || e == ButtonEvent::Setup) {
+      buttonBusy = true;
+      otaConfirmByUser(e == ButtonEvent::Reboot ? "reboot hold" : "setup hold");
+      if (e == ButtonEvent::Setup) setupRequest = SETUP_REQUEST_MAGIC;
+      announce(e);
+      ESP.restart();
+    } else {
+      announce(e);  // a fault
     }
     buttonFaulted = gesture.isFaulted();
     buttonBusy = gesture.isBusy();
@@ -142,35 +120,30 @@ void buttonWatchTask(void*) {
 }
 
 #ifdef BOOT_BUTTON_PIN
-// Right after a reset: true when BOOT is pressed within BOOT_SETUP_WINDOW_MS and held for
-// BOOT_SETUP_HOLD_MS (backup way into setup mode without the touch sensor). Without a press
-// this waits the whole window, which also gives a USB serial monitor time to attach.
+// Right after a reset: BOOT pressed within BOOT_SETUP_WINDOW_MS and held BOOT_SETUP_HOLD_MS. Without
+// a press this waits the whole window (time for a USB serial monitor to attach, too).
 bool waitForBootButtonSetup() {
-  pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);  // BOOT pulls the pin LOW; boards have a pull-up too
-  unsigned long start = millis();
-  unsigned long pressStart = 0;
-  bool pressed = false;
-  for (;;) {
-    unsigned long now = millis();
+  pinMode(BOOT_BUTTON_PIN, INPUT_PULLUP);  // BOOT pulls the pin LOW
+  const unsigned long start = millis();
+  unsigned long downSince = 0;
+  bool down = false;
+  for (;; delay(10)) {
+    const unsigned long now = millis();
     if (digitalRead(BOOT_BUTTON_PIN) == LOW) {
-      if (!pressed) {
-        pressed = true;
-        pressStart = now;
-      }
-      if (now - pressStart >= BOOT_SETUP_HOLD_MS) return true;
+      if (!down) downSince = now;
+      down = true;
+      if (now - downSince >= BOOT_SETUP_HOLD_MS) return true;
     } else {
-      pressed = false;
+      down = false;
       if (now - start >= BOOT_SETUP_WINDOW_MS) return false;
     }
-    delay(10);
   }
 }
 
 bool isPinInActiveConfig(int16_t pin) {
   const PinConfig& p = activePins;
-  return pin == p.epdCs || pin == p.epdDc || pin == p.epdRst || pin == p.epdBusy ||
-         pin == p.epdSck || pin == p.epdMosi || pin == p.displayPower || pin == p.battery ||
-         pin == p.demoButton;
+  for (int16_t used : {p.epdCs, p.epdDc, p.epdRst, p.epdBusy, p.epdSck, p.epdMosi, p.displayPower, p.battery, p.demoButton})
+    if (pin == used) return true;
+  return false;
 }
 #endif
-

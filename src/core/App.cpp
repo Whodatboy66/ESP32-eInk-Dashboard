@@ -18,6 +18,7 @@
 #include "../hardware/TouchController.h"
 #include "../services/Bambu.h"
 #include "../services/Fetchers.h"
+#include "FeedSchedule.h"
 #include "../services/TimeService.h"
 #include "../services/WifiService.h"
 #include "../update/OtaFlow.h"
@@ -47,18 +48,17 @@ static long clockDrawnMinute = -1;
 // calendar link: the day it was read, and when to try again after a failure.
 RTC_DATA_ATTR static long personalDrawnDay = 0;
 RTC_DATA_ATTR static long tasksPurgedDay = 0;  // done tasks older than 30 days: removed once a day
-RTC_DATA_ATTR static long bdayFeedDay = 0;
-RTC_DATA_ATTR static time_t bdayFeedRetryAt = 0;
-RTC_DATA_ATTR static uint32_t bdayFeedUrlHash = 0;
+// The birthday link: once a day, after a failure once an hour. School holidays (stage 7): once a
+// week, after a failure after 6 hours (src/core/FeedSchedule.h).
+RTC_DATA_ATTR static FeedState bdayFeed;
+RTC_DATA_ATTR static FeedState schoolFeed;
 // Printer (MQTT): failed connections in a row and the time before which it isn't asked again.
 RTC_DATA_ATTR static uint8_t bambuFailures = 0;
 RTC_DATA_ATTR static time_t bambuRetryAfter = 0;  // a changed link is read right away
 
 
-// Minutes since the epoch: changes exactly when the displayed HH:MM changes.
-static long currentMinute() {
-  return (long)(time(nullptr) / 60);
-}
+// The minute on the clock (changes exactly when HH:MM does).
+static long minuteNow() { return (long)(time(nullptr) / 60); }
 
 // Records a fetch result for the retry backoff and the "old data" mark (ServiceState.h).
 static void recordFetch(Service svc, bool ok, LayoutItem* item) {
@@ -73,58 +73,78 @@ static bool turnedStale(Service svc, LayoutItem* item) {
   return isStale(serviceStates[(int)svc], time(nullptr), interval);
 }
 
+// After a data service's download: its result for the retries and the "old" mark, its problem
+// flag (also for a part that failed, e.g. one stock symbol), and whether its box is redrawn: after
+// a success, on a full refresh, or once a failure made the data old.
+static bool afterFetch(Service svc, bool ok, bool partFailed, uint16_t problem, LayoutItem* box) {
+  recordFetch(svc, ok, box);
+  setProblem(problem, !ok || partFailed);
+  return ok || fullRefresh || turnedStale(svc, box);
+}
+
+// The time zone for the calendar and the flight: the clock widget's own, else the device's.
+static const char* clockZone(const LayoutItem* clock) {
+  return clock && clock->Option[0] ? clock->Option : device_timezone;
+}
+
+// The next flight in the calendar is followed from 6 hours before departure until it lands.
+static void followNextFlight(time_t now) {
+  const CalEventItem& next = cal.nextFlight;
+  if (!next.start || next.start == liveFlight.calStart || next.start - now >= FLIGHT_LIVE_BEFORE_S) return;
+  liveFlight = {};
+  liveFlight.calStart = next.start;
+  liveFlight.calEnd = next.end;
+  snprintf(liveFlight.title, sizeof(liveFlight.title), "%s", next.title);
+  extractFlightNumber(liveFlight.title, liveFlight.number, sizeof(liveFlight.number));
+}
+
+constexpr uint32_t LOW_POWER_MHZ = 80;
+constexpr unsigned long SERIAL_BAUD = 115200;
+
 // Power (stage 6): battery saver on at the last wake (hysteresis), the night note already shown,
 // the "please charge" screen shown, the wake interval of the last wake.
 RTC_DATA_ATTR static bool saverWasOn = false;
 RTC_DATA_ATTR static bool nightShown = false;
 RTC_DATA_ATTR static bool criticalShown = false;
 
+// The button wakes the board from deep sleep (input HIGH). A press still going on is finished first
+// by the button task (it restarts for a gesture, or flags a fault after BUTTON_FAULT_MS), so it
+// isn't lost; the pin is read too, for a press the task hasn't polled yet (bounded wait).
+static void armButtonWake() {
+  const gpio_num_t pin = getDemoWakeGpio();
+  const unsigned long t0 = millis();
+  while ((buttonBusy || digitalRead(activePins.demoButton) == HIGH) && !buttonFaulted &&
+         millis() - t0 < BUTTON_FAULT_MS + 1000UL)
+    delay(10);
+  if (digitalRead(activePins.demoButton) == HIGH) {
+    // Stuck HIGH: a button wake would fire at once and keep the board awake. Timer wakes only,
+    // until it reads LOW again.
+    DBG(F("[Button] input stuck HIGH: button wake off for this sleep"));
+    return;
+  }
+  buttonFaulted = false;  // it reads LOW: the sensor is fine again
+  esp_sleep_enable_ext1_wakeup(1ULL << pin, ESP_EXT1_WAKEUP_ANY_HIGH);
+  // The pull-down stays on in sleep (latched by the pad hold, released at the next wake), so a
+  // missing sensor can't float HIGH and wake the board.
+  if (rtc_gpio_is_valid_gpio(pin)) {
+    rtc_gpio_pullup_dis(pin);
+    rtc_gpio_pulldown_en(pin);
+  }
+}
+
 // Deep sleep: display off (if it was used), button wake armed, the diagnostics log written.
 // timerUs 0: no timer wake (critical battery: only the button wakes it).
 [[noreturn]] static void sleepNow(uint64_t timerUs, bool displayUsed, bool hibernateDisplay, bool keepLog) {
-  // hibernate() clears the controller's internal frame buffer used for partial refresh XOR. Only
-  // when the next wake is a full refresh; powerOff() keeps the controller RAM for partial ones.
-  if (displayUsed) {
-    if (hibernateDisplay) display.hibernate();
-    else display.powerOff();
-  }
-  if (hasDisplayPowerPin()) {
-    gpio_hold_en((gpio_num_t)activePins.displayPower);
-  }
-
-  if (hasDemoButtonPin()) {
-    const gpio_num_t buttonGpio = getDemoWakeGpio();
-    // A press in progress: let the button task finish it (it restarts the board for a gesture, or
-    // flags a fault after BUTTON_FAULT_MS), instead of sleeping and losing it. The pin is checked
-    // too, for a press the task hasn't polled yet. Bounded in case the task isn't running.
-    unsigned long waitStart = millis();
-    while ((buttonBusy || digitalRead(activePins.demoButton) == HIGH) && !buttonFaulted &&
-           millis() - waitStart < BUTTON_FAULT_MS + 1000UL) {
-      delay(10);
-    }
-    if (digitalRead(activePins.demoButton) == HIGH) {
-      // Stuck HIGH: a button wake would fire at once and keep the board awake. Timer wakes only,
-      // until the input reads LOW again.
-      DBG(F("[Button] input stuck HIGH: button wake off for this sleep"));
-    } else {
-      buttonFaulted = false;  // reads LOW: the sensor is fine again (the task may not have seen it yet)
-      esp_sleep_enable_ext1_wakeup((1ULL << buttonGpio), ESP_EXT1_WAKEUP_ANY_HIGH);  // wake on HIGH
-      // Keep the pull-down during deep sleep, so a missing sensor can't float HIGH and wake the
-      // board. The sleep code latches it with the pad hold (released in configureButtonInput()).
-      if (rtc_gpio_is_valid_gpio(buttonGpio)) {
-        rtc_gpio_pullup_dis(buttonGpio);
-        rtc_gpio_pulldown_en(buttonGpio);
-      }
-    }
-  }
-
+  // hibernate() also clears the controller's buffer that partial refreshes compare against: only
+  // before a full refresh. powerOff() keeps it for the next partial one.
+  if (displayUsed) hibernateDisplay ? display.hibernate() : display.powerOff();
+  if (hasDisplayPowerPin()) gpio_hold_en((gpio_num_t)activePins.displayPower);  // stays as it is in sleep
+  if (hasDemoButtonPin()) armButtonWake();
   if (timerUs) esp_sleep_enable_timer_wakeup(timerUs);
-
   // Diagnostics (setup app): the battery once an hour; this wake's log if it did something.
   batteryHistorySample();
   if (keepLog) logKeepThisWake();
   logFlush();
-
   esp_deep_sleep_start();
   for (;;) {}  // not reached
 }
@@ -142,46 +162,40 @@ static void drawCriticalScreen(float volts) {
 
 // One wake: boot checks, button, update requests, plan (WakePlan), Wi-Fi + fetches, drawing, sleep.
 void appSetup() {
-  // Most wakes only redraw the clock: run them at 80 MHz, and go back to full speed only when
-  // Wi-Fi is needed (TLS handshakes are CPU bound, so the radio would stay on longer at 80 MHz).
+  // Most wakes only redraw the clock: 80 MHz, full speed only for Wi-Fi (TLS is CPU bound: at
+  // 80 MHz the radio would stay on longer).
   cpuFullMhz = getCpuFrequencyMhz();
-  setCpuFrequencyMhz(80);
-
-  Serial.begin(115200);
-  bool coldBoot = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_UNDEFINED;
+  setCpuFrequencyMhz(LOW_POWER_MHZ);
+  Serial.begin(SERIAL_BAUD);
+  const esp_sleep_wakeup_cause_t wakeCause = esp_sleep_get_wakeup_cause();
+  const bool coldBoot = wakeCause == ESP_SLEEP_WAKEUP_UNDEFINED;
   // After a reset / flash (not a timer wake): watch the BOOT button for a few seconds (backup
   // way into setup mode). The wait also gives the USB serial monitor time to attach.
   [[maybe_unused]] bool bootButtonSetup = false;
+  if (coldBoot) {
 #ifdef BOOT_BUTTON_PIN
-  if (coldBoot) bootButtonSetup = waitForBootButtonSetup();
+    bootButtonSetup = waitForBootButtonSetup();
 #elif DEBUG
-  if (coldBoot) delay(3000);
+    delay(3000);  // no BOOT button watch: still time for a serial monitor
 #endif
 #if CONFIG_IDF_TARGET_ESP32
-  // Only after power-up / reset: waking from deep sleep needs no settle time, and this
-  // ran on every minute's wake.
-  if (coldBoot) delay(2000);
+    delay(2000);  // the classic ESP32 after power-up / reset (not on every wake)
 #endif
-
-  if (activePinPreset == PinPreset::Esp32C6SuperMini) {
-    forceSuperMiniLedsOff();
   }
+  forceSuperMiniLedsOff();  // the SuperMini's LEDs (does nothing on other boards)
 
-  fullRefresh = (bootCount % (60 * 24) == 0);
-
-
-  int wakeup_reason = esp_sleep_get_wakeup_cause();
-
+  // A full refresh once a day (bootCount counts minutes) and after a button wake.
+  fullRefresh = bootCount % (60 * 24) == 0;
+  const bool buttonWoke = wakeCause == ESP_SLEEP_WAKEUP_EXT1;
+  if (buttonWoke) {
+    fullRefresh = true;
+    bootCount = 0;
+  }
   // Logged after the settings are loaded: the time zone (log times) comes with them.
-  const char* wakeMsg = "Wakeup was not caused by deep sleep";
-  switch (wakeup_reason) {
-    case ESP_SLEEP_WAKEUP_EXT0: wakeMsg = "Wakeup caused by external signal using RTC_IO"; break;
-    case ESP_SLEEP_WAKEUP_EXT1: wakeMsg = "Wakeup caused by the button (RTC_CNTL)"; fullRefresh=true; bootCount=0; break;
-    case ESP_SLEEP_WAKEUP_TIMER: wakeMsg = "Wakeup caused by timer"; break;
-    case ESP_SLEEP_WAKEUP_TOUCHPAD: wakeMsg = "Wakeup caused by touchpad"; break;
-    case ESP_SLEEP_WAKEUP_ULP: wakeMsg = "Wakeup caused by ULP program"; break;
-    default: break;
-  }
+  const char* wakeMsg = buttonWoke ? "Wake: the button"
+                        : wakeCause == ESP_SLEEP_WAKEUP_TIMER ? "Wake: timer"
+                        : coldBoot ? "Start: power-up, reset or update"
+                                   : "Wake: other cause";
   // An update screen covered the dashboard during the last wake: redraw (and refetch) everything.
   if (redrawAll) {
     redrawAll = false;
@@ -218,14 +232,12 @@ void appSetup() {
     startAP();
     return;
   }
-  if (setupRequest == SETUP_REQUEST_EDIT_MAGIC) {  // settings saved in edit mode: back into it
+  // Restarted into setup: after saving in edit mode (back into it), or by a setup hold while awake.
+  const uint32_t request = setupRequest;
+  if (request == SETUP_REQUEST_EDIT_MAGIC || request == SETUP_REQUEST_MAGIC) {
     setupRequest = 0;
-    startEditMode();
-    return;
-  }
-  if (setupRequest == SETUP_REQUEST_MAGIC) {
-    setupRequest = 0;
-    startSetup();
+    if (request == SETUP_REQUEST_EDIT_MAGIC) startEditMode();
+    else startSetup();
     return;
   }
 
@@ -242,27 +254,22 @@ void appSetup() {
   }
 #endif
 
-  // Check the button as early as possible, so the hold time matches what the user feels.
-  bool updateScreenRequested = false;
-  switch (readWakeButtonAction()) {
-    case BUTTON_ACTION_AP:
-      startSetup();
-      return;
-    case BUTTON_ACTION_REBOOT:
-      otaConfirmByUser("reboot hold");
-      logFlush(true);
-      ESP.restart();
-      return;
-    case BUTTON_ACTION_UPDATE:
-      updateScreenRequested = true;
-      break;
-    case BUTTON_ACTION_NONE:
-    default:
-      break;
+  // The button first: the hold time counts from the wake, as the user feels it.
+  const int action = readWakeButtonAction();
+  if (action == BUTTON_ACTION_AP) {
+    startSetup();
+    return;
   }
-  if (hasDemoButtonPin()) {
-    xTaskCreate(buttonWatchTask, "button", 3072, nullptr, 2, nullptr);
+  if (action == BUTTON_ACTION_REBOOT) {
+    otaConfirmByUser("reboot hold");
+    logFlush(true);
+    ESP.restart();
   }
+  const bool updateScreenRequested = action == BUTTON_ACTION_UPDATE;
+  // From here a watcher task follows the button while the dashboard is awake (TouchController.cpp).
+  constexpr uint32_t BUTTON_TASK_STACK = 3072;
+  constexpr UBaseType_t BUTTON_TASK_PRIORITY = 2;
+  if (hasDemoButtonPin()) xTaskCreate(buttonWatchTask, "button", BUTTON_TASK_STACK, nullptr, BUTTON_TASK_PRIORITY, nullptr);
 
   // Update screen: double tap, or "Check for updates now" on the setup page (before the restart).
   bool setupPageUpdate = updateRequest == UPDATE_REQUEST_MAGIC;
@@ -283,17 +290,12 @@ void appSetup() {
 #endif
 
 
-  // Start an AP and server to configure it
-  if (wifi_ssid[0] == '\0' || wifi_pass[0] == '\0') {
+  // Not set up yet (no Wi-Fi): the setup hotspot.
+  if (!wifi_ssid[0] || !wifi_pass[0]) {
     startAP();
     return;
   }
-
-  if (activePinPreset == PinPreset::Esp32C6SuperMini) {
-    forceSuperMiniLedsOff();
-  }
-
-  DBG(F("============= STARTING ============="));
+  DBG(F("--- dashboard wake ---"));
 
   // The configured template with the configured widgets. A changed layout (template, a widget on
   // or off) is drawn with a full refresh, everything fetched, so no ghosts of the old one stay.
@@ -323,7 +325,7 @@ void appSetup() {
   powerIn.usb = usbPowered();
   powerIn.saverWasOn = saverWasOn;
   powerIn.criticalWasOn = criticalShown;
-  powerIn.buttonWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
+  powerIn.buttonWake = buttonWoke;
   const power::Plan powerPlan = power::decide(powerIn);
   if (powerPlan.saverOn != saverWasOn)
     DBGF("[Power] battery saver %s (%d %%)", powerPlan.saverOn ? "on" : "off", powerIn.batteryPct);
@@ -359,7 +361,7 @@ void appSetup() {
     bool drew = false;
     if (!nightShown) {  // first wake of the night: the note in the status bar, then one long sleep
       DBGF("[Power] night until %02d:%02d", quiet_to / 60, quiet_to % 60);
-      LayoutItem* bar = getLayout(128);
+      LayoutItem* bar = getLayout(box::STATUS);
       if (bar) {
         initDisplay(false);
         updatePartial(bar, drawStatus);
@@ -379,25 +381,18 @@ void appSetup() {
     bootCount = 0;
   }
 
-  LayoutItem* infoClock = getLayout(1);
-  LayoutItem* infoEvent = getLayout(2);
-  LayoutItem* infoStocks = getLayout(4);
-  LayoutItem* infoOpenMeteo = getLayout(8);
-  LayoutItem* infoBambu = getLayout(64);
-  LayoutItem* infoTracking = getLayout(16);
-  LayoutItem* infoBattery = getLayout(128);
-  LayoutItem* infoCalendar = getLayout(256);
+  // The boxes on the screen (nullptr: the widget isn't on this layout).
+  LayoutItem* infoClock = getLayout(box::CLOCK);
+  LayoutItem* infoEvent = getLayout(box::AGENDA);
+  LayoutItem* infoStocks = getLayout(box::STOCKS);
+  LayoutItem* infoOpenMeteo = getLayout(box::WEATHER);
+  LayoutItem* infoBambu = getLayout(box::PRINTER);
+  LayoutItem* infoTracking = getLayout(box::TRACKING);
+  LayoutItem* infoBattery = getLayout(box::STATUS);
+  LayoutItem* infoCalendar = getLayout(box::MONTH);
 
   time_t nowTs = time(nullptr);
-  // Live flight status: follow the next flight from 6 hours before its departure until it lands.
-  if (cal.nextFlight.start && cal.nextFlight.start != liveFlight.calStart &&
-      cal.nextFlight.start - nowTs < FLIGHT_LIVE_BEFORE_S) {
-    liveFlight = {};
-    liveFlight.calStart = cal.nextFlight.start;
-    liveFlight.calEnd = cal.nextFlight.end;
-    snprintf(liveFlight.title, sizeof(liveFlight.title), "%s", cal.nextFlight.title);
-    extractFlightNumber(liveFlight.title, liveFlight.number, sizeof(liveFlight.number));
-  }
+  followNextFlight(nowTs);
   // Daily update check at night (installs or only marks, see runNightCheck).
   int otaTodayKey = 0;
   bool otaNightDue = !otaPendingVerify && otaNightCheckDue(&otaTodayKey);
@@ -408,7 +403,7 @@ void appSetup() {
   wake.bootCount = bootCount;
   wake.stepMin = powerPlan.stepMin;
   wake.fullRefresh = fullRefresh;
-  wake.buttonWake = esp_sleep_get_wakeup_cause() == ESP_SLEEP_WAKEUP_EXT1;
+  wake.buttonWake = buttonWoke;
   // Present = on the layout and active (loadDefaultLayout adds only active items, all with
   // refresh > 0, so this equals the old "pointer not null" checks).
   auto refreshOf = [](LayoutItem* item) { return item && item->Active ? item->Refresh : 0; };
@@ -469,9 +464,9 @@ void appSetup() {
   otaNightDue = plan.otaNight;
   bool needWiFi = plan.needWiFi;
   // Personal widgets: redraw when the date changed; the birthday link is read once a day.
-  LayoutItem* infoTasks = getLayout(512);
-  LayoutItem* infoNote = getLayout(1024);
-  LayoutItem* infoBirthdays = getLayout(2048);
+  LayoutItem* infoTasks = getLayout(box::TASKS);
+  LayoutItem* infoNote = getLayout(box::NOTE);
+  LayoutItem* infoBirthdays = getLayout(box::BIRTHDAYS);
   const personal::Date today = localToday();
   const long todayNum = today.valid() ? personal::dayNumber(today) : 0;
   bool personalRedraw = todayNum && todayNum != personalDrawnDay && (infoTasks || infoNote || infoBirthdays);
@@ -480,11 +475,24 @@ void appSetup() {
     purgeOldDoneTasks();  // also when only done tasks are left (they don't set USER_HAS_TASKS)
   }
   const uint32_t bdayHash = textHash(bday_url);
-  if (bdayHash != bdayFeedUrlHash) bdayFeedRetryAt = 0;
-  bool bdayFeedDue = infoBirthdays && bday_url[0] && todayNum &&
-                     (todayNum != bdayFeedDay || bdayHash != bdayFeedUrlHash) && nowTs >= bdayFeedRetryAt;
+  bool bdayFeedDue = infoBirthdays && bday_url[0] && feedDue(bdayFeed, bdayHash, todayNum, 1, nowTs);
   if (bdayFeedDue && !plan.wifiBackoff) needWiFi = true;
   else bdayFeedDue = false;
+  // School holidays: only for the month view, our feed for the state or the user's own link.
+  char schoolUrl[CFG_ICS_URL_MAX + 96];
+  const bool schoolSet = school_on && school::feedUrl(schoolUrl, sizeof(schoolUrl), OTA_REPO, holiday_state, school_url);
+  const uint32_t schoolHash = schoolSet ? textHash(schoolUrl) : 0;
+  // Only the list of the current state / link is drawn: switched off or changed, the old one goes.
+  if (!keepFeedData(schoolFeed, schoolSet, schoolHash)) {
+    if (schoolHolidays.count) {
+      schoolHolidays = school::SchoolList();
+      calendarIf = true;
+    }
+    dropFeedData(schoolFeed);
+  }
+  bool schoolFeedDue = schoolSet && infoCalendar && feedDue(schoolFeed, schoolHash, todayNum, 7, nowTs);
+  if (schoolFeedDue && !plan.wifiBackoff) needWiFi = true;
+  else schoolFeedDue = false;
   if (needWiFi) logKeepThisWake();  // stored for the diagnostics view (quiet clock wakes aren't)
   bool makerworldRedraw = false;
   // A parcel delivered more than a day ago is still on screen: remove it without a download
@@ -492,41 +500,39 @@ void appSetup() {
   bool trackingRedraw = infoTracking && !dueByWakes(wake.trackingRefresh, bootCount) && trackingDropExpired();
   if (plan.wifiBackoff) DBGF("WiFi backoff: next attempt in %ld s", plan.backoffRemaining);
 
-  // Draw the clock right away from the RTC, before any (slow) network work, so it changes
-  // within a couple of seconds of the minute. Full-refresh boots draw it with everything else.
-  if (!fullRefresh && infoClock) {
+  // The clock first, from the RTC, before the (slow) downloads: it changes within a few seconds of
+  // the minute. A full refresh draws it with everything else.
+  if (infoClock && !fullRefresh) {
     initDisplay(false);
     updatePartial(infoClock, updateClock);
-    clockDrawnMinute = currentMinute();
-    display.powerOff();  // keeps controller RAM; the panel is powered again for the next update
+    clockDrawnMinute = minuteNow();
+    display.powerOff();  // the controller keeps its RAM for the next partial update
   }
 
-  DBGF("Bambu %d Print %d Prev %d Weather %d Stocks %d Events %d Calendar %d MW %d NTP %d Full %d",
-       bambuIf, isPrinting, previousIsPrinting, openMeteoIf, stocksIf, eventIf, calendarIf,
-       makerworldDue, ntpDue, fullRefresh);
+  DBGF("Plan: printer %d (printing %d, before %d) weather %d stocks %d agenda %d month %d MakerWorld %d NTP %d full %d",
+       bambuIf, isPrinting, previousIsPrinting, openMeteoIf, stocksIf, eventIf, calendarIf, makerworldDue, ntpDue,
+       fullRefresh);
 
   if (needWiFi) {
-    setCpuFrequencyMhz(cpuFullMhz);
-    if (startWiFiReliable(wifi_ssid, wifi_pass)) {
-      DBG("WiFi connected.");
+    setCpuFrequencyMhz(cpuFullMhz);  // TLS at full speed: the radio is on for a shorter time
+    const bool online = startWiFiReliable(wifi_ssid, wifi_pass);
+    setProblem(PROBLEM_WIFI, !online);
+    if (online) {
       otaWifiOk = true;
       wifiFailures = 0;
-      setProblem(PROBLEM_WIFI, false);
       initTime();
 
-      if (bambuIf)
-      {
-        bool bambuOk = fetchBambu(infoBambu);
-        // Retry once at the next wake; after that wait for the next scheduled poll (the printer is
-        // probably off). A rejected access code won't fix itself: don't retry it at all.
+      if (bambuIf) {
+        const bool bambuOk = fetchBambu(infoBambu);
+        // Not answering (usually switched off): one quick retry at the next wake, then ask again
+        // after 10, 20, 40, then 60 minutes. A refused access code won't fix itself: no retry.
         pendingBambuRetry = !bambuOk && !bambuAuthRejected && !bambuRetry;
-        // Not answering (usually switched off): ask again after 10, 20, 40, then 60 minutes.
         if (bambuOk) {
           bambuFailures = 0;
           bambuRetryAfter = 0;
         } else {
           if (bambuFailures < 255) bambuFailures++;
-          if (bambuFailures > 1) pendingBambuRetry = false;  // one quick retry, then the backoff
+          if (bambuFailures > 1) pendingBambuRetry = false;
           bambuRetryAfter = time(nullptr) + bambuBackoffSeconds(bambuFailures);
           DBGF("[Bambu] next try in %ld min", (long)(bambuBackoffSeconds(bambuFailures) / 60));
         }
@@ -535,94 +541,73 @@ void appSetup() {
         signalPrintTransition();
         forceUpdateStatusBar = true;
       }
-
-      // Weather, stocks and calendar come straight from Open-Meteo, Yahoo Finance and the iCal feeds.
-      // On a failed fetch keep the old content on screen instead of drawing "unavailable".
-      if (openMeteoIf) {
-        bool ok = fetchWeatherDirect(infoOpenMeteo);
-        recordFetch(Service::Weather, ok, infoOpenMeteo);
-        setProblem(PROBLEM_WEATHER, !ok);
-        if (!ok && !fullRefresh && !turnedStale(Service::Weather, infoOpenMeteo)) openMeteoIf = false;
-      }
+      // The data services: a failed download keeps the box's picture (afterFetch).
+      if (openMeteoIf)
+        openMeteoIf = afterFetch(Service::Weather, fetchWeatherDirect(infoOpenMeteo), false, PROBLEM_WEATHER, infoOpenMeteo);
       if (stocksIf) {
         int failed = 0;
-        bool ok = fetchStocksDirect(&failed);
-        recordFetch(Service::Stocks, ok, infoStocks);
-        setProblem(PROBLEM_STOCKS, !ok || failed > 0);
-        if (!ok && !fullRefresh && !turnedStale(Service::Stocks, infoStocks)) stocksIf = false;
+        const bool ok = fetchStocksDirect(&failed);
+        stocksIf = afterFetch(Service::Stocks, ok, failed > 0, PROBLEM_STOCKS, infoStocks);
       }
       if ((eventIf || calendarIf) && hasIcsFeeds()) {
-        const char* tz = (infoClock && infoClock->Extra1[0]) ? infoClock->Extra1 : device_timezone;
         int failed = 0;
-        bool ok = fetchCalendarIcs(tz, &failed);
-        recordFetch(Service::Calendar, ok, (infoEvent ? infoEvent : infoCalendar));
-        setProblem(PROBLEM_CALENDAR, !ok || failed > 0);
-        if (!ok && !fullRefresh && !turnedStale(Service::Calendar, infoEvent ? infoEvent : infoCalendar))
+        const bool ok = fetchCalendarIcs(clockZone(infoClock), &failed);
+        if (!afterFetch(Service::Calendar, ok, failed > 0, PROBLEM_CALENDAR, infoEvent ? infoEvent : infoCalendar))
           eventIf = calendarIf = false;
       }
       if (bdayFeedDue) {
-        bool ok = fetchBirthdayFeed(device_timezone);
+        const bool ok = fetchBirthdayFeed(device_timezone);
         setProblem(PROBLEM_BIRTHDAYS, !ok);
-        if (ok) {
-          bdayFeedDay = todayNum;
-          bdayFeedUrlHash = bdayHash;
-          bdayFeedRetryAt = 0;
-          personalRedraw = true;
-        } else {
-          bdayFeedRetryAt = time(nullptr) + 3600;  // a broken link: once an hour, not every minute
-        }
+        feedResult(bdayFeed, bdayHash, ok, todayNum, time(nullptr), 3600);  // a broken link: once an hour
+        if (ok) personalRedraw = true;
       }
-      if (trackingIf) {
-        bool ok = fetchTrackingDirect();
-        recordFetch(Service::Tracking, ok, infoTracking);
-        setProblem(PROBLEM_TRACKING, !ok);
-        if (!ok && !fullRefresh && !turnedStale(Service::Tracking, infoTracking)) trackingIf = false;
+      if (schoolFeedDue) {
+        school::SchoolList fresh;
+        const bool ok = fetchSchoolHolidays(schoolUrl, device_timezone, fresh);
+        if (school::apply(schoolHolidays, fresh, ok, schoolHash != schoolFeed.appliedHash)) calendarIf = true;
+        // A failure: again after 6 hours, no problem mark (the month view keeps the last list).
+        feedResult(schoolFeed, schoolHash, ok, todayNum, time(nullptr), 6 * 3600);
       }
+      if (trackingIf)
+        trackingIf = afterFetch(Service::Tracking, fetchTrackingDirect(), false, PROBLEM_TRACKING, infoTracking);
       if (flightStatusDue) {
-        const char* tz = (infoClock && infoClock->Extra1[0]) ? infoClock->Extra1 : device_timezone;
-        bool ok = fetchFlightStatus(tz);
-        liveFlight.lastFetch = time(nullptr);  // also after a failure: retried at the next interval
+        const bool ok = fetchFlightStatus(clockZone(infoClock));
+        liveFlight.lastFetch = time(nullptr);  // also after a failure: tried again at the next interval
         liveFlight.requests++;
         setProblem(PROBLEM_FLIGHT, !ok);
-        if (ok && infoEvent) eventRedraw = true;  // show the new status right away
+        if (ok && infoEvent) eventRedraw = true;  // the new status right away
       }
 
-      // Re-check after the Bambu fetch: a print may have just started.
+      // After the printer: a print that just started shows the printer instead of MakerWorld.
       if (makerworldDue && !showPrintView()) {
         makerworldRedraw = fetchMakerWorldDirect();
-        makerworldLastFetch = time(nullptr);  // also after a failure, so a bad ID retries hourly, not every wake
+        makerworldLastFetch = time(nullptr);  // also after a failure: a wrong id is tried hourly
         setProblem(PROBLEM_MAKERWORLD, !makerworldRedraw);
       }
-
-      // Usually already done while the fetches ran; wait a bit longer when a re-sync is due.
-      if (waitForNtpSync(ntpDue ? 5000 : 1000)) {
-        lastNtpSync = time(nullptr);
-        setProblem(PROBLEM_TIME, false);
-      } else if (ntpDue) {
-        setProblem(PROBLEM_TIME, true);
-      }
+      // The time is usually synced while the downloads ran; a due re-sync waits a little longer.
+      const bool timeOk = waitForNtpSync(ntpDue ? 5000 : 1000);
+      if (timeOk) lastNtpSync = time(nullptr);
+      if (timeOk || ntpDue) setProblem(PROBLEM_TIME, !timeOk);
 
       // Last, so the dashboard data is already fetched. An auto install restarts the board.
       if (otaNightDue && runNightCheck(otaTodayKey)) redrawAll = true;
 
     } else {
-      DBG("WiFi FAILED → keeping the previous content");
-      setProblem(PROBLEM_WIFI, true);
-      if (wifiFailures < 255) wifiFailures++;
+      DBG("WiFi failed: the screen keeps its content");
+      wifiFailures = wifiFailures < 255 ? wifiFailures + 1 : 255;
       wifiRetryAfter = time(nullptr) + wifiBackoffSeconds(wifiFailures);  // 2, 4, 8, 16, 30 min
       if (!fullRefresh) openMeteoIf = stocksIf = eventIf = calendarIf = trackingIf = false;
       if (bambuIf) pendingBambuRetry = true;
     }
     WiFi.disconnect(true);
     WiFi.mode(WIFI_OFF);
-    setCpuFrequencyMhz(80);
+    setCpuFrequencyMhz(LOW_POWER_MHZ);
   }
 
 
-  DBGF("Boot Count %d", bootCount);
-
-  // Printer status while printing and for 5 minutes after; MakerWorld stats otherwise.
-  bool printView = showPrintView();
+  DBGF("Minute %d since the last full refresh", bootCount);
+  // The printer while printing and 5 minutes after, MakerWorld's counters otherwise.
+  const bool printView = showPrintView();
   if (bambuIf || makerworldRedraw) printViewOnScreen = printView;
 
   // Without a status bar the problems are a mark in a corner, drawn over a widget: a change of
@@ -634,13 +619,9 @@ void appSetup() {
     openMeteoIf = stocksIf = eventIf = calendarIf = trackingIf = makerworldRedraw = true;
   }
 
-  // Start SPI and initialize display after deciding refresh mode (no-op if the early clock did it).
-  initDisplay(fullRefresh);
-
-  DBGF("What refresh %d", fullRefresh);
-  /* FullREFRESH */
+  initDisplay(fullRefresh);  // does nothing if the clock was drawn early
   if (fullRefresh) {
-    DBG(F("Do the full refresh"));
+    DBG(F("Full refresh"));
 
     // "Updated to" after an update restart stays at least OTA_DONE_SCREEN_MS.
     while (otaUpdatedShownAt && millis() - otaUpdatedShownAt < OTA_DONE_SCREEN_MS) delay(50);
@@ -666,39 +647,29 @@ void appSetup() {
   }
   /* PARTIAL REFRESH */
   else {
-    DBG(F("Do Partial refresh"));
-
-    // Already drawn before the network work; redraw only if the minute changed meanwhile.
-    if (clockDrawnMinute != currentMinute())
-      updatePartial(infoClock, updateClock);
-
-    if (openMeteoIf)
-      updatePartial(infoOpenMeteo, weatherWidget);
-
-    if (bambuIf || makerworldRedraw)
-      updatePartial(infoBambu, printView ? bambuWidget : makerWorldWidget);
-
-    if (eventIf || eventRedraw)
-      updatePartial(infoEvent, gCalWidget);
-
-    if (stocksIf)
-      updatePartial(infoStocks, stockWidget);
-
-    if (calendarIf)
-      updatePartial(infoCalendar, drawCalendar);
-
-    if (trackingIf || trackingRedraw)
-      updatePartial(infoTracking, trackingWidget);
-
-    if (infoBattery && (batteryIf || forceUpdateStatusBar || problems != problemsShown))
-      updatePartial(infoBattery, drawStatus);
-
-    if (personalRedraw) {
-      if (infoTasks) updatePartial(infoTasks, tasksWidget);
-      if (infoNote) updatePartial(infoNote, noteWidget);
-      if (infoBirthdays) updatePartial(infoBirthdays, birthdaysWidget);
-      personalDrawnDay = todayNum;
-    }
+    DBG(F("Partial refresh"));
+    // Each box whose data changed, in this order (the clock was drawn before the downloads: again
+    // only if the minute changed meanwhile). A box not on the layout (nullptr) is skipped.
+    const struct {
+      LayoutItem* box;
+      bool due;
+      void (*draw)(LayoutItem*);
+    } redraws[] = {
+        {infoClock, clockDrawnMinute != minuteNow(), updateClock},
+        {infoOpenMeteo, openMeteoIf, weatherWidget},
+        {infoBambu, bambuIf || makerworldRedraw, printView ? bambuWidget : makerWorldWidget},
+        {infoEvent, eventIf || eventRedraw, gCalWidget},
+        {infoStocks, stocksIf, stockWidget},
+        {infoCalendar, calendarIf, drawCalendar},
+        {infoTracking, trackingIf || trackingRedraw, trackingWidget},
+        {infoBattery, batteryIf || forceUpdateStatusBar || problems != problemsShown, drawStatus},
+        {infoTasks, personalRedraw, tasksWidget},
+        {infoNote, personalRedraw, noteWidget},
+        {infoBirthdays, personalRedraw, birthdaysWidget},
+    };
+    for (const auto& r : redraws)
+      if (r.due && r.box) updatePartial(r.box, r.draw);
+    if (personalRedraw) personalDrawnDay = todayNum;
   }
   // A double tap while the dashboard was refreshing: open the update screen now. A tap may still
   // be waiting for its second tap.
@@ -727,7 +698,7 @@ void appSetup() {
                           ? (uint64_t)power::nightSleepMicros(tv.tv_sec, tv.tv_usec, powerPlan.nightMinutesLeft, WAKE_AFTER_MINUTE_MS)
                           : (uint64_t)power::alignedSleepMicros(tv.tv_sec, tv.tv_usec, powerPlan.stepMin, WAKE_AFTER_MINUTE_MS);
   if (redrawAll) sleep_us = 1000000ULL;  // redraw the dashboard right away
-  DBGF("Awake %lu ms, sleeping %llu ms", millis(), sleep_us / 1000ULL);
+  DBGF("Done after %lu ms, next wake in %llu s", millis(), sleep_us / 1000000ULL);
 
   bool nextBootIsFullRefresh = (bootCount % (60 * 24) == 0);
   sleepNow(sleep_us, true, nextBootIsFullRefresh, fullRefresh || problems != problemsAtStart);

@@ -69,6 +69,8 @@ void drawFittedString(int16_t x, int16_t y, int maxWidth, const char* text, uint
 
 void tasksWidget(LayoutItem* item) {
   if (!item) return;
+  LayoutItem body = headed(*item, tr(i18n::S::WTasks));
+  item = &body;
   const TaskList& list = userTasks();
   Date today = localToday();
   int order[MAX_TASKS];
@@ -110,6 +112,8 @@ void tasksWidget(LayoutItem* item) {
 
 void noteWidget(LayoutItem* item) {
   if (!item) return;
+  LayoutItem body = headed(*item, tr(i18n::S::WNote));
+  item = &body;
   const char* text = userNote();
   int x = item->PosX, y = item->PosY + FIRST_LINE;
   int maxWidth = item->Width - 8;
@@ -141,9 +145,12 @@ void noteWidget(LayoutItem* item) {
 
 void birthdaysWidget(LayoutItem* item) {
   if (!item) return;
+  LayoutItem body = headed(*item, tr(i18n::S::WBirthdays));
+  item = &body;
   Date today = localToday();
   Upcoming up[MAX_BIRTHDAYS];
-  int n = upcomingBirthdays(userBirthdays(), userFeedBirthdays(), today, up, MAX_BIRTHDAYS);
+  int n = upcomingBirthdays(userBirthdays(), userFeedBirthdays(), today, up, MAX_BIRTHDAYS, BDAY_HORIZON_DAYS,
+                            &userCalBirthdays());
   int x = item->PosX, y = item->PosY + FIRST_LINE;
   int right = item->PosX + item->Width - 6;
   if (n == 0) {

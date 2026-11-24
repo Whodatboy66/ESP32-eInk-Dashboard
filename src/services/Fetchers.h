@@ -1,44 +1,33 @@
 #pragma once
-// Data services: each fetch fills the globals the widgets draw from. All over verified HTTPS.
+// The data services (stage 7b, own code): each fetch fills the globals the widgets draw from
+// (src/widgets/Widgets.h). All over verified HTTPS; the answers are read by ServiceParsers.h and
+// IcsParser.h. A failed fetch keeps the data on screen.
 #include "../widgets/Widgets.h"
+#include "SchoolHolidays.h"
 
-// Widget data fetched directly by the ESP32. Each fetch fills the globals the widgets draw
-// from (weather, stocks, cal, makerworld).
-
-// Open-Meteo forecast. Location comes from `weather_location`: "City", "City, CC" or "lat,lon".
+// Weather of `weather_location` ("City", "City, CC" or "lat, lon"), as many days as `item` shows.
 bool fetchWeatherDirect(LayoutItem* item);
-
-// Yahoo Finance quotes for the comma separated symbols in `stock_symbols`.
-// Returns true if at least one quote was read; `failed` (optional) gets the number of symbols that failed.
+// Quotes of `stock_symbols` ("SYMBOL" or "SYMBOL:Label", comma-separated). True if any was read;
+// `failed` gets the number of symbols without a quote.
 bool fetchStocksDirect(int* failed = nullptr);
-
-// Parcels in the PKGE account of `pkge_api_key` (packages are added on the PKGE side).
-// Keeps the active ones and those delivered in the last day, newest first.
+// Parcels of the PKGE account `pkge_api_key`: those on their way and those delivered in the last day.
 bool fetchTrackingDirect();
-// Removes parcels delivered more than a day ago from the shown list (no download).
-// Returns true if any was removed, so the widget needs a redraw.
+// Removes parcels delivered more than a day ago (no download); true if any was removed.
 bool trackingDropExpired();
-
-// Live status (delay, gate, departed/landed) of `liveFlight` from AeroDataBox via RapidAPI,
-// using `aerodatabox_key`. `tz` is used to compute the local departure date.
+// Live status of `liveFlight` (AeroDataBox, `aerodatabox_key`); tz gives the local departure date.
 bool fetchFlightStatus(const char* tz);
-
-// MakerWorld totals (likes, downloads, prints, collections, boosts) for `makerworld_uid`.
-// On success the totals are stored in NVS (saveMakerWorld) for makerWorldWidget.
+// MakerWorld counters of `makerworld_uid`, stored with saveMakerWorld().
 bool fetchMakerWorldDirect();
 
-// iCalendar (.ics) feeds from `ics_urls` (up to ICS_MAX_FEEDS, merged),
-// e.g. Google Calendar's public or secret address in iCal format.
-// `tz` is the POSIX TZ string used to interpret floating / TZID times and day boundaries.
-// Returns true if at least one feed was read; `failed` (optional) gets the number of feeds that failed.
+// The calendar links `ics_urls` (merged): agenda, month marks, next flight, calendar birthdays.
+// True if any link was read; `failed` gets the number that failed. tz: the dashboard's zone.
 bool fetchCalendarIcs(const char* tz, int* failed = nullptr);
-// Birthdays from the birthday calendar link (bday_url) into /bday_feed.json (stage 4).
+// The birthday link `bday_url` into /bday_feed.json (stage 4).
 bool fetchBirthdayFeed(const char* tz);
-// Setup app checks (stage 5): a calendar link's number of events (-1 + reason), places for a
-// weather search (-1 if the search didn't answer).
+// The school holidays of a calendar link (stage 7).
+bool fetchSchoolHolidays(const char* url, const char* tz, school::SchoolList& out);
+
+// Setup app checks (stage 5): a calendar link's number of events (-1 and a reason in err); places
+// for the weather search (-1 if the search didn't answer).
 int checkIcsLink(const char* url, char* err, size_t cap);
-struct PlaceResult {
-  char name[65];    // "Berlin, DE": what goes into the weather setting
-  char detail[96];  // "Berlin, Germany"
-};
 int searchPlaces(const char* query, PlaceResult* out, int max);

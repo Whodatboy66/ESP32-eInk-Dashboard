@@ -11,6 +11,7 @@ const personal::TaskList& userTasks();
 const char* userNote();
 const personal::BirthdayList& userBirthdays();      // hand-entered
 const personal::BirthdayList& userFeedBirthdays();  // from the birthday calendar link
+const personal::BirthdayList& userCalBirthdays();   // yearly all-day entries of the calendar links (stage 7)
 
 // Saving (the API, the birthday feed): validated data, written atomically. False if the flash
 // can't be written.
@@ -18,6 +19,9 @@ bool saveUserTasks(const personal::TaskList& list);
 bool saveUserNote(const char* note);
 bool saveUserBirthdays(const personal::BirthdayList& list);
 bool saveUserFeedBirthdays(const personal::BirthdayList& list);
+// Written only if different from what is stored (the calendar is read every 30-60 minutes).
+bool saveUserCalBirthdays(const personal::BirthdayList& list);
+bool clearUserCalBirthdays();  // empty (setting off); no write if it is already empty
 
 // The stored files as JSON, for the API (empty lists when there is none). Returns the length.
 size_t readUserFile(const char* path, char* out, size_t cap);
@@ -45,3 +49,4 @@ bool screenFontHas(uint32_t codepoint);
 #define USER_NOTE_FILE "/notes.json"
 #define USER_BDAY_FILE "/birthdays.json"
 #define USER_BDAY_FEED_FILE "/bday_feed.json"
+#define USER_BDAY_CAL_FILE "/bday_cal.json"

@@ -15,8 +15,8 @@ function codes(result) { return result.errors.map((e) => e.code); }
 
 test('vectors: widget table as specified', () => {
   const t = Layout.table(W);
-  assert.deepStrictEqual([t.clock.minW, t.clock.minH], [2, 1]);
-  assert.deepStrictEqual([t.month.minW, t.month.minH], [2, 2]);
+  assert.deepStrictEqual([t.clock.minW, t.clock.minH], [1, 1]);  // stage 7: 64 px digits in one cell
+  assert.deepStrictEqual([t.month.minW, t.month.minH], [1, 1]);  // stage 7: a design for every size
   assert.deepStrictEqual([t.notes.minW, t.notes.minH], [1, 1]);
   assert.strictEqual(W.length, 10);
   assert.ok(vectors.cases.length >= 12);
@@ -39,9 +39,11 @@ test('vectors: every rule has an invalid case and there are valid ones', () => {
 test('fits', () => {
   const t = Layout.table(W);
   assert.strictEqual(Layout.fits(t.clock, box(2, 0, 2, 1)), true);
-  assert.strictEqual(Layout.fits(t.clock, box(0, 0, 1, 3)), false);
+  assert.strictEqual(Layout.fits(t.clock, box(0, 0, 1, 3)), true);
+  assert.strictEqual(Layout.fits(t.stocks, box(0, 0, 1, 3)), false);
   assert.strictEqual(Layout.fits(t.month, box(0, 0, 2, 2)), true);
-  assert.strictEqual(Layout.fits(t.month, box(0, 0, 4, 1)), false);
+  assert.strictEqual(Layout.fits(t.month, box(0, 0, 4, 1)), true);
+  assert.strictEqual(Layout.fits(t.stocks, box(0, 0, 1, 1)), false);
   assert.strictEqual(Layout.fits(t.notes, box(0, 0, 1, 1)), true);
   assert.strictEqual(Layout.fits(undefined, box(0, 0, 4, 3)), false);
   // a table passed by the caller wins: no copy of the sizes inside layout.js
@@ -79,9 +81,9 @@ test('split: widget stays in the first part when it fits there, or is dropped', 
   // 1 x 3 -> 1 x 2 + 1 x 1: the note stays first (first part preferred when both fit)
   out = Layout.split([box(0, 0, 1, 3, 'notes')], 0, W);
   assert.deepStrictEqual(out.map((b) => b.widget), ['notes', null]);
-  // 2 x 2 -> 2 x 1 + 2 x 1: the month fits neither part, the box becomes empty
+  // 2 x 2 -> 2 x 1 + 2 x 1: the month (1 x 1 since stage 7) stays in the first part
   out = Layout.split([box(0, 0, 2, 2, 'month')], 0, W);
-  assert.deepStrictEqual(out.map((b) => b.widget), [null, null]);
+  assert.deepStrictEqual(out.map((b) => b.widget), ['month', null]);
   // 2 x 1 -> 1 x 1 + 1 x 1: the agenda (2 x 1) fits neither part
   out = Layout.split([box(0, 0, 2, 1, 'agenda'), box(2, 0, 2, 1)], 0, W);
   assert.deepStrictEqual(out.slice(0, 2), [box(0, 0, 1, 1, null), box(1, 0, 1, 1, null)]);
@@ -151,7 +153,7 @@ test('validate: rules', () => {
   assert.deepStrictEqual(codes(Layout.validate({ boxes: [box(0, 0, 4, 2)] }, W, GRID)), ['gap']);
   assert.deepStrictEqual(codes(Layout.validate({ boxes: [box(0, 0, 2, 3, 'clock'), box(2, 0, 2, 3, 'clock')] }, W, GRID)), ['duplicate']);
   assert.deepStrictEqual(codes(Layout.validate({ boxes: [box(0, 0, 4, 3, 'radio')] }, W, GRID)), ['unknown']);
-  assert.deepStrictEqual(codes(Layout.validate({ boxes: [box(0, 0, 1, 3, 'clock'), box(1, 0, 3, 3)] }, W, GRID)), ['size']);
+  assert.deepStrictEqual(codes(Layout.validate({ boxes: [box(0, 0, 1, 3, 'stocks'), box(1, 0, 3, 3)] }, W, GRID)), ['size']);
   assert.deepStrictEqual(codes(Layout.validate({ boxes: [box(0, 0, 1.5, 3), box(1, 0, 3, 3)] }, W, GRID)).slice(0, 1), ['outside']);
   const thirteen = [];
   for (let i = 0; i < 12; i++) thirteen.push(box(i % 4, Math.floor(i / 4), 1, 1));
@@ -160,9 +162,9 @@ test('validate: rules', () => {
   // empty widget values are fine
   assert.ok(Layout.validate({ boxes: [box(0, 0, 4, 3, '')] }, W, GRID).ok);
   // errors carry a readable text and the box index
-  const e = Layout.validate({ boxes: [box(0, 0, 4, 1, 'month'), box(0, 1, 4, 2)] }, W, GRID).errors[0];
+  const e = Layout.validate({ boxes: [box(0, 0, 1, 1, 'stocks'), box(1, 0, 3, 1), box(0, 1, 4, 2)] }, W, GRID).errors[0];
   assert.strictEqual(e.box, 0);
-  assert.match(e.text, /needs 2 × 2/);
+  assert.match(e.text, /needs 2 × 1/);
 });
 
 test('validate: the caller\'s widget table and grid are used', () => {
@@ -185,7 +187,7 @@ test('generic structures are valid, cover all 12 cells and keep their suggested 
 });
 
 test('fromStructure drops widgets that are unknown, too big or used twice', () => {
-  const s = { boxes: [box(0, 0, 1, 3, 'clock'), box(1, 0, 3, 1, 'agenda'), box(1, 1, 3, 1, 'agenda'), box(1, 2, 3, 1, 'radio')] };
+  const s = { boxes: [box(0, 0, 1, 3, 'stocks'), box(1, 0, 3, 1, 'agenda'), box(1, 1, 3, 1, 'agenda'), box(1, 2, 3, 1, 'radio')] };
   assert.deepStrictEqual(Layout.fromStructure(s, W).map((b) => b.widget), [null, 'agenda', null, null]);
 });
 

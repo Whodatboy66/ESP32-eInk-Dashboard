@@ -48,6 +48,18 @@ custom-top-agenda v1;sb1;0,0,4,1,agenda;0,1,2,2,tasks;2,1,2,2,month
 custom-no-status-bar v1;sb0;0,0,2,1,clock;2,0,2,1,weather;0,1,2,2,agenda;2,1,2,2,notes - problems
 planner-night planner - night
 classic-saver classic - saver
+clock-2x1-12h v1;sb1;0,0,2,1,clock;2,0,2,1,weather;0,1,2,2,agenda;2,1,2,2,month - 12h1258
+clock-1x1 v1;sb1;0,0,1,1,clock;1,0,3,1,weather;0,1,2,2,agenda;2,1,2,2,month
+month-full v1;sb1;0,0,4,3,month - jan27
+month-half v1;sb1;0,0,2,3,month;2,0,2,3,agenda - jan27
+month-2x2 planner - jan27
+month-1x2 v1;sb1;0,0,1,2,month;1,0,3,2,agenda;0,2,4,1,weather - jan27
+month-2x1 v1;sb1;0,0,2,1,month;2,0,2,1,clock;0,1,4,2,agenda - jan27
+month-4x1 v1;sb1;0,0,4,1,month;0,1,4,2,agenda - jan27
+month-1x1 v1;sb1;0,0,1,1,month;1,0,3,1,weather;0,1,4,2,agenda - jan27
+month-classic classic - jan27
+holiday planner - holiday
+holiday-saver planner - holiday-saver
 LIST
 if [[ "$SCREENS" == "screens" ]]; then
   for screen in setup-ap setup-home update-info update-available update-progress update-failed update-battery \

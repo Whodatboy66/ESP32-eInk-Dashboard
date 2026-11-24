@@ -13,18 +13,18 @@ namespace {
 // Indexed by WidgetId. Metrics and refresh as in the original fixed layout.
 using i18n::S;
 const WidgetInfo WIDGETS[layouts::WIDGET_COUNT] = {
-    {WidgetId::StatusBar, layouts::WIDGET_KEYS[0], S::WStatusBar, 128, "Battery", 0, 0, 60, NO_HINT},
-    {WidgetId::Clock, layouts::WIDGET_KEYS[1], S::WClock, 1, "Clock", 10, 10, 1, NO_HINT},
-    {WidgetId::Weather, layouts::WIDGET_KEYS[2], S::WWeather, 8, "OpenMeteo", 0, 100, 360, S::HintWeather},
-    {WidgetId::Agenda, layouts::WIDGET_KEYS[3], S::WAgenda, 2, "Cal Events", 22, 10, 60, S::HintAgenda},
-    {WidgetId::Month, layouts::WIDGET_KEYS[4], S::WMonth, 256, "Calendar", 28, 210, 60, NO_HINT},
-    {WidgetId::Stocks, layouts::WIDGET_KEYS[5], S::WStocks, 4, "Stocks", 22, 10, 60, S::HintStocks},
-    {WidgetId::Tracking, layouts::WIDGET_KEYS[6], S::WTracking, 16, "Tracking", 22, 0, 120, S::HintTracking},
-    {WidgetId::Printer, layouts::WIDGET_KEYS[7], S::WPrinter, 64, "Bambu", 22, 70, 4, S::HintPrinter},
+    {WidgetId::StatusBar, layouts::WIDGET_KEYS[0], S::WStatusBar, box::STATUS, 0, 0, 60, NO_HINT},
+    {WidgetId::Clock, layouts::WIDGET_KEYS[1], S::WClock, box::CLOCK, 10, 10, 1, NO_HINT},
+    {WidgetId::Weather, layouts::WIDGET_KEYS[2], S::WWeather, box::WEATHER, 0, 100, 360, S::HintWeather},
+    {WidgetId::Agenda, layouts::WIDGET_KEYS[3], S::WAgenda, box::AGENDA, 22, 10, 60, S::HintAgenda},
+    {WidgetId::Month, layouts::WIDGET_KEYS[4], S::WMonth, box::MONTH, 28, 210, 60, NO_HINT},
+    {WidgetId::Stocks, layouts::WIDGET_KEYS[5], S::WStocks, box::STOCKS, 22, 10, 60, S::HintStocks},
+    {WidgetId::Tracking, layouts::WIDGET_KEYS[6], S::WTracking, box::TRACKING, 22, 0, 120, S::HintTracking},
+    {WidgetId::Printer, layouts::WIDGET_KEYS[7], S::WPrinter, box::PRINTER, 22, 70, 4, S::HintPrinter},
     // Personal widgets (stage 4): local data, drawn on full refreshes and when the date changes.
-    {WidgetId::Tasks, layouts::WIDGET_KEYS[8], S::WTasks, 512, "Tasks", 22, 0, 1440, S::HintTasks},
-    {WidgetId::Notes, layouts::WIDGET_KEYS[9], S::WNote, 1024, "Note", 22, 0, 1440, S::HintNote},
-    {WidgetId::Birthdays, layouts::WIDGET_KEYS[10], S::WBirthdays, 2048, "Birthdays", 22, 0, 1440, S::HintBirthdays},
+    {WidgetId::Tasks, layouts::WIDGET_KEYS[8], S::WTasks, box::TASKS, 22, 0, 1440, S::HintTasks},
+    {WidgetId::Notes, layouts::WIDGET_KEYS[9], S::WNote, box::NOTE, 22, 0, 1440, S::HintNote},
+    {WidgetId::Birthdays, layouts::WIDGET_KEYS[10], S::WBirthdays, box::BIRTHDAYS, 22, 0, 1440, S::HintBirthdays},
 };
 }  // namespace
 
@@ -81,10 +81,10 @@ static void fillTable(const layouts::Result& r) {
     l.ColWidth = w.colWidth;
     l.Refresh = w.refresh;
     l.Active = true;
-    snprintf(l.Description, sizeof(l.Description), "%s", w.description);
-    // Clock Extra1 left empty: updateClock() then uses the Timezone from the setup page.
+    l.Grid = r.items[i].grid;
+    // Clock Option left empty: updateClock() then uses the Timezone from the setup page.
     if (r.items[i].id == WidgetId::Printer)
-      snprintf(l.Extra1, sizeof(l.Extra1), "%s", printer_name[0] ? printer_name : "Bambu");
+      snprintf(l.Option, sizeof(l.Option), "%s", printer_name[0] ? printer_name : "Bambu");
   }
 }
 

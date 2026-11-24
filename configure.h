@@ -1,4 +1,7 @@
 #pragma once
+// Build options of the firmware (stage 7b, own code): build number, update source, logging, the
+// display, the board's pin preset, the button's timing. Settings people change are in NVS
+// (src/core/ConfigManager.cpp), not here.
 #include "app.h"
 #include <Arduino.h>
 
@@ -9,7 +12,7 @@
 // Firmware build number: an integer that only goes up with each release. The update client only
 // installs a release with a higher build. FW_VERSION (status bar, release name) follows from it.
 #ifndef FW_BUILD
-#define FW_BUILD            78
+#define FW_BUILD            80
 #endif
 #define FW_STR_(x)          #x
 #define FW_STR(x)           FW_STR_(x)
@@ -44,7 +47,7 @@
 
 #define DBG_ERROR(x)         logPrintln(x)
 
-// To configure a different display
+// The display: 0 = the 7.5" black and white Waveshare panel (GxEPD2_750_T7), 1 = its 4-colour sibling.
 #define USE_COLORDISPLAY      0
 
 // Display id, checked by the update client: only a release file for the same display is
@@ -60,92 +63,38 @@
 // install a release whose schema is lower than the device's (it couldn't read the settings).
 #define FW_CONFIG_SCHEMA      3   // 2: layout template, shown widgets, clock format (stage 3); 3: custom layout, device name (stage 5)
 
-#define textSpace 14
-
 // =======================
-// Pins
+// Pins (presets in src/hardware/PinPresets.h)
 // =======================
+#include "src/hardware/PinPresets.h"
 
-inline constexpr int16_t PIN_UNASSIGNED = -1;
-
-struct PinConfig {
-  int16_t epdCs;
-  int16_t epdDc;
-  int16_t epdRst;
-  int16_t epdBusy;
-  int16_t epdSck;
-  int16_t epdMosi;
-  int16_t displayPower;
-  int16_t battery;
-  int16_t demoButton;
-};
-
-enum class PinPreset : uint8_t {
-  Esp32Waveshare,
-  Esp32Default,
-  Esp32C6Default,
-  Esp32C6SuperMini,
-  Custom
-};
-
-inline constexpr PinConfig makePinPreset(PinPreset preset) {
-  switch (preset) {
-    case PinPreset::Esp32Waveshare:
-      return PinConfig{15, 27, 26, 25, 13, 14, 33, 35, PIN_UNASSIGNED};
-    case PinPreset::Esp32C6Default:
-      return PinConfig{1, 8, 14, 7, 23, 22, 4, 0, 2};
-    case PinPreset::Esp32C6SuperMini:
-      return PinConfig{4, 20, 21, 22, 7, 5, 1, PIN_UNASSIGNED, 2};
-    case PinPreset::Esp32Default:
-      return PinConfig{15, 27, 26, 25, 13, 14, 4, 35, 33};
-    case PinPreset::Custom:
-    default:
-      return PinConfig{
-        PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED,
-        PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED,
-        PIN_UNASSIGNED, PIN_UNASSIGNED, PIN_UNASSIGNED
-      };
-  }
-}
-
-// Example override before the display is first touched:
-//   applyPinPreset(PinPreset::Esp32Default);
-//   setCustomPinConfig({15, 27, 26, 25, 13, 14, 4, 35, PIN_UNASSIGNED});
+// The board's preset: set by the sketch.yaml profile (-DDEFAULT_PIN_PRESET_...), else from the
+// board the core was built for.
 #if defined(DEFAULT_PIN_PRESET_ESP32_WAVESHARE)
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32Waveshare;
 #elif defined(DEFAULT_PIN_PRESET_ESP32)
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32Default;
 #elif defined(DEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE)
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32C6Default;
-#elif defined(DEFAULT_PIN_PRESET_ESP32C6_SUPERMINI)
+#elif defined(DEFAULT_PIN_PRESET_ESP32C6_SUPERMINI) || (CONFIG_IDF_TARGET_ESP32C6 && defined(ARDUINO_MAKERGO_C6_SUPERMINI))
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32C6SuperMini;
 #elif CONFIG_IDF_TARGET_ESP32C6
-  #if defined(ARDUINO_DFROBOT_FIREBEETLE_2_ESP32C6)
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32C6Default;
-  #elif defined(ARDUINO_MAKERGO_C6_SUPERMINI)
-inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32C6SuperMini;
-  #else
-inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32C6Default;
-  #endif
 #elif CONFIG_IDF_TARGET_ESP32
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Esp32Default;
 #else
 inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Custom;
 #endif
 
-// Build variant = the sketch.yaml profile. The update client only installs the release file
-// made for the same variant, so an image for another board can never be installed.
+// Build variant = the sketch.yaml profile: the update client installs only the release file made
+// for the same variant (an image for another board can't be installed).
 #if defined(DEFAULT_PIN_PRESET_ESP32_WAVESHARE)
   #define FW_VARIANT "esp32_waveshare"
 #elif defined(DEFAULT_PIN_PRESET_ESP32)
   #define FW_VARIANT "esp32"
-#elif defined(DEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE)
-  #define FW_VARIANT "esp32c6_firebeetle"
-#elif defined(DEFAULT_PIN_PRESET_ESP32C6_SUPERMINI)
+#elif defined(DEFAULT_PIN_PRESET_ESP32C6_SUPERMINI) || (CONFIG_IDF_TARGET_ESP32C6 && defined(ARDUINO_MAKERGO_C6_SUPERMINI))
   #define FW_VARIANT "esp32c6_supermini"
-#elif CONFIG_IDF_TARGET_ESP32C6 && defined(ARDUINO_MAKERGO_C6_SUPERMINI)
-  #define FW_VARIANT "esp32c6_supermini"
-#elif CONFIG_IDF_TARGET_ESP32C6
+#elif defined(DEFAULT_PIN_PRESET_ESP32C6_FIREBEETLE) || CONFIG_IDF_TARGET_ESP32C6
   #define FW_VARIANT "esp32c6_firebeetle"
 #elif CONFIG_IDF_TARGET_ESP32
   #define FW_VARIANT "esp32"
@@ -153,35 +102,12 @@ inline constexpr PinPreset DEFAULT_PIN_PRESET = PinPreset::Custom;
   #define FW_VARIANT "unknown"
 #endif
 
-extern PinConfig activePins;
+extern PinConfig activePins;  // the pins in use (src/hardware/PinMapping.cpp)
 
-inline void applyPinPreset(PinPreset preset) {
-  activePins = makePinPreset(preset);
-}
-
-inline void setCustomPinConfig(const PinConfig& customPins) {
-  activePins = customPins;
-}
-
-inline bool isPinAssigned(int16_t pin) {
-  return pin >= 0;
-}
-
-inline bool hasDisplayPowerPin() {
-  return isPinAssigned(activePins.displayPower);
-}
-
-inline bool hasBatteryPin() {
-  return isPinAssigned(activePins.battery);
-}
-
-inline bool hasDemoButtonPin() {
-  return isPinAssigned(activePins.demoButton);
-}
-
-inline gpio_num_t getDemoWakeGpio() {
-  return static_cast<gpio_num_t>(activePins.demoButton);
-}
+inline bool hasDisplayPowerPin() { return isPinAssigned(activePins.displayPower); }
+inline bool hasBatteryPin() { return isPinAssigned(activePins.battery); }
+inline bool hasDemoButtonPin() { return isPinAssigned(activePins.demoButton); }
+inline gpio_num_t getDemoWakeGpio() { return static_cast<gpio_num_t>(activePins.demoButton); }
 
 // The button input is active-HIGH (TTP223 default, or a push button to 3V3) with the internal
 // pull-down, so a missing or disconnected sensor reads "not pressed".
@@ -202,17 +128,4 @@ inline gpio_num_t getDemoWakeGpio() {
 #define BOOT_SETUP_WINDOW_MS  3000
 #define BOOT_SETUP_HOLD_MS    1000
 
-inline constexpr uint32_t MDI_FAN_COOLING  = 0x000F1797;
-inline constexpr uint32_t MDI_FAN_EXHAUST  = 0x000F0D43;
-inline constexpr uint32_t MDI_FAN_AUX      = 0x000F0210;
-inline constexpr uint32_t MDI_HUMIDITY     = 0x000F058E;
-inline constexpr uint32_t MDI_THERMOMETER  = 0x000F050F;
-inline constexpr uint32_t MDI_CLOCK        = 0x000F1452;
-inline constexpr uint32_t MDI_LAYERS       = 0x000F0328;
-inline constexpr uint32_t MDI_BED          = 0x000F0697;
-inline constexpr uint32_t MDI_NOZZLE       = 0x000F0E5B;
-inline constexpr uint32_t MDI_SPOOL        = 0x000F1294;
-inline constexpr uint32_t MDI_ALERT        = 0x000F0026;
-inline constexpr uint32_t MDI_POWER_ON     = 0x000F06A5;
-inline constexpr uint32_t MDI_POWER_OFF    = 0x000F06A6;
-inline constexpr uint32_t MDI_PRINT_ON     = 0x000F0E5B;
+#include "src/ui/Icons.h"

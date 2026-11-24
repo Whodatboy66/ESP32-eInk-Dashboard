@@ -5,6 +5,7 @@
 #include <time.h>
 
 #include "ServiceState.h"
+#include "../services/SchoolHolidays.h"
 
 extern Preferences preferences;       // NVS, namespace "config" (open only briefly)
 extern bool forceUpdateStatusBar;     // redraw the status bar in this wake
@@ -19,6 +20,7 @@ inline uint32_t textHash(const char* s) {
 }
 extern bool apModeActive;             // setup mode (access point + web server) is running
 extern ServiceState serviceStates[SERVICE_COUNT];  // RTC: per data service (ServiceState.h)
+extern school::SchoolList schoolHolidays;          // RTC: the school holidays (stage 7), read weekly
 extern uint32_t layoutSignature;      // layout drawn last (RTC): a change means a full refresh
 extern bool redrawAll;                // an update screen covered the dashboard: redraw all (RTC)
 extern uint32_t cpuFullMhz;           // the board's default CPU clock, restored for Wi-Fi work

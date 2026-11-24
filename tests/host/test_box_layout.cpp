@@ -60,7 +60,9 @@ static void test_validate_rules() {
   l.boxes[0] = Box{0, 0, 1, 3, (int8_t)WidgetId::Weather};
   l.boxes[1] = Box{1, 0, 3, 3, (int8_t)WidgetId::Agenda};
   CHECK(validateBoxes(l) == BoxError::None);
-  l.boxes[0].widget = (int8_t)WidgetId::Clock;  // needs 2 columns
+  l.boxes[0].widget = (int8_t)WidgetId::Clock;  // stage 7: the 64 px digits fit one column
+  CHECK(validateBoxes(l) == BoxError::None);
+  l.boxes[0].widget = (int8_t)WidgetId::Stocks;  // needs 2 columns
   CHECK(validateBoxes(l) == BoxError::TooSmall);
   l.count = 0;
   CHECK(validateBoxes(l) == BoxError::Empty);

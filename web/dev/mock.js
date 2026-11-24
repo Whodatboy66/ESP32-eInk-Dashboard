@@ -23,6 +23,7 @@
     ota_auto: true, ota_beta: false, clock_24h: true,
     lang: /[?&]lang=en/.test(location.search) ? 'en' : 'de',
     clock_interval: 1, quiet_enabled: true, quiet_from: '23:00', quiet_to: '06:00', battery_mah: 3000,
+    holiday_state: FIRST ? '' : 'BY', holidays_on: !FIRST, school_on: !FIRST, school_url: '', ics_month: [true, false, false], cal_birthdays: true,
     pin_preset: 'esp32c6_default',
     pins: { epd_cs: 1, epd_dc: 8, epd_rst: 14, epd_busy: 7, epd_sck: 23, epd_mosi: 22, display_power: 4, battery: 0, demo_button: 2 }
   };
@@ -118,6 +119,7 @@
       power: powerState(),
       settings: s,
       pinPresets: [{ key: 'esp32c6_default', name: 'ESP32-C6 FireBeetle' }, { key: 'custom', name: L('Eigene Pins', 'Custom pins') }],
+      holidayStates: [{ key: 'BW', name: 'Baden-Württemberg' }, { key: 'BY', name: 'Bayern' }, { key: 'NW', name: 'Nordrhein-Westfalen' }],
       layout: JSON.parse(JSON.stringify(layout)),
       widgets: WIDGETS.map(function (w) {
         var c = configured(w[0]);

@@ -55,6 +55,7 @@ void build() {
   addBday(manual, "Jürgen", 18, 11, 0);
   addBday(feed, "Mia's birthday", 29, 11, 0);
   addBday(feed, "Lukas", 24, 12, 0);
+  addBday(manual, "Oma Erika", 17, 1, 1967);  // the January renders of the month view (stage 7)
   if (renderSample == 2)
     for (int i = 0; i < 10; i++) addBday(feed, "Maximilian-Alexander von Hohenzollern-Sigmaringen", 1 + i, 12, 0);
 }
@@ -64,10 +65,13 @@ const personal::TaskList& userTasks() { build(); return tasks; }
 const char* userNote() { build(); return note; }
 const personal::BirthdayList& userBirthdays() { build(); return manual; }
 const personal::BirthdayList& userFeedBirthdays() { build(); return feed; }
+const personal::BirthdayList& userCalBirthdays() { static personal::BirthdayList none; return none; }
 bool saveUserTasks(const personal::TaskList&) { return true; }
 bool saveUserNote(const char*) { return true; }
 bool saveUserBirthdays(const personal::BirthdayList&) { return true; }
 bool saveUserFeedBirthdays(const personal::BirthdayList&) { return true; }
+bool saveUserCalBirthdays(const personal::BirthdayList&) { return true; }
+bool clearUserCalBirthdays() { return true; }
 size_t readUserFile(const char*, char*, size_t) { return 0; }
 void eraseUserData() {}
 

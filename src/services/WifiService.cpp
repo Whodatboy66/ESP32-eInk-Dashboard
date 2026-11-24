@@ -1,79 +1,64 @@
+// Wi-Fi station connect (stage 7b, own code): straight to the access point of the last connection
+// (channel and BSSID kept in deep sleep: no scan of every channel), else two full attempts.
 #include "WifiService.h"
 
 #include <WiFi.h>
 
 #include "../../configure.h"
 
-// Access point of the last successful connection, kept across deep sleep. Connecting with a known
-// channel and BSSID skips the scan of every channel, which keeps the radio on for seconds.
 RTC_DATA_ATTR uint8_t wifiBssid[6];
-RTC_DATA_ATTR int32_t wifiChannel = 0;  // 0 = unknown, scan
+RTC_DATA_ATTR int32_t wifiChannel = 0;  // 0 = unknown: scan
+RTC_DATA_ATTR int8_t lastRssi = 0;     // the status bar's Wi-Fi bars
 
-static bool waitForWiFi(unsigned long timeoutMs) {
-  unsigned long start = millis();
-  while (WiFi.status() != WL_CONNECTED) {
+namespace {
+
+constexpr unsigned long FAST_TIMEOUT_MS = 5000, FULL_TIMEOUT_MS = 20000;
+
+bool waitConnected(unsigned long timeoutMs) {
+  for (unsigned long start = millis(); WiFi.status() != WL_CONNECTED; delay(20))
     if (millis() - start > timeoutMs) return false;
-    delay(20);
-  }
-  DBGF("WiFi connected in %lu ms", millis() - start);
   return true;
 }
 
-bool startWiFiReliable(const char* ssid, const char* password)
-{
-  DBG(F("startWiFiReliable called"));
-
-  WiFi.persistent(false);
+void stationMode() {
+  WiFi.persistent(false);  // before mode(): the driver picks its storage there; ours is NVS, no flash copy
   WiFi.mode(WIFI_STA);
-  WiFi.setAutoReconnect(false);   // IMPORTANT: disable during manual connect
+  WiFi.setAutoReconnect(false);  // on only after a connection
   WiFi.setSleep(false);
+}
 
-  // Fast path: straight to the access point used last time.
+bool connected(unsigned long t0) {
+  memcpy(wifiBssid, WiFi.BSSID(), sizeof(wifiBssid));
+  wifiChannel = WiFi.channel();
+  lastRssi = (int8_t)WiFi.RSSI();
+  WiFi.setAutoReconnect(true);
+  DBGF("WiFi connected in %lu ms (%d dBm)", millis() - t0, (int)lastRssi);
+  return true;
+}
+
+}  // namespace
+
+bool startWiFiReliable(const char* ssid, const char* password) {
+  const unsigned long t0 = millis();
+  stationMode();
   if (wifiChannel > 0) {
     DBGF("WiFi fast connect, channel %d", (int)wifiChannel);
     WiFi.begin(ssid, password, wifiChannel, wifiBssid);
-    if (waitForWiFi(5000)) {
-      WiFi.setAutoReconnect(true); // enable AFTER connection
-      return true;
-    }
+    if (waitConnected(FAST_TIMEOUT_MS)) return connected(t0);
     DBG(F("Fast connect failed, scanning"));
-    wifiChannel = 0;  // the router moved or changed channel: forget it
+    wifiChannel = 0;  // the router moved or changed its channel
   }
-
-  for (int attempt = 1; attempt <= 2; attempt++)
-  {
-    DBGF("\nWiFi attempt %d", attempt);
-
-    // FULL STOP FIRST
-    WiFi.disconnect(true, true);
+  for (int attempt = 1; attempt <= 2; attempt++) {
+    DBGF("WiFi attempt %d", attempt);
+    WiFi.disconnect(true, true);  // a clean start for each attempt
     WiFi.mode(WIFI_OFF);
     delay(100);
-
-    // THEN re-init cleanly
-    WiFi.mode(WIFI_STA);
-    WiFi.persistent(false);
-    WiFi.setAutoReconnect(false);
-    WiFi.setSleep(false);
-
+    stationMode();
     WiFi.begin(ssid, password);
-
-    if (waitForWiFi(20000))
-    {
-      DBG(WiFi.localIP());
-      memcpy(wifiBssid, WiFi.BSSID(), sizeof(wifiBssid));
-      wifiChannel = WiFi.channel();
-
-      WiFi.setAutoReconnect(true); // enable AFTER connection
-      return true;
-    }
-
-    DBG(F("\nFailed. Retrying..."));
+    if (waitConnected(FULL_TIMEOUT_MS)) return connected(t0);
   }
-
-  // Final cleanup
   WiFi.disconnect(true, true);
   WiFi.mode(WIFI_OFF);
-
+  lastRssi = 0;  // no bars after a failed connection
   return false;
 }
-

@@ -85,6 +85,9 @@ module with 8 MB flash (same chip, same code).
   (e.g. MIT)** before sharing builds more widely. Status: issue posted upstream (2026-11-19), no answer yet.
 - Fonts: Montserrat (OFL 1.1, fine), Material Design Icons (Apache 2.0, fine),
   **HighSpeed font: personal use only**. OK for family devices, not for anything commercial.
+- *Now (build 80):* the upstream code is rebuilt (stage 7b, [plans/STAGE7B_OWN_CODE.md](plans/STAGE7B_OWN_CODE.md)),
+  the HighSpeed font removed (build 79), all fonts built by our own tool. Left for the owner: leave the
+  fork network and choose a licence ([DEVICE_TESTS.md](DEVICE_TESTS.md) block M).
 
 ### A.6 TTP223 touch input (spec §3.4)
 
@@ -159,15 +162,17 @@ handed out. Every stage ends with a `FW_BUILD` bump, a line in [CHANGELOG.md](..
 on the device is decided in [DEVICE_TESTS.md](DEVICE_TESTS.md): each stage names its test block
 ("Confirmed by"), and the results are recorded there, not here.
 
-**Where we are (2026-11-23, build 78):** stages 0-5, stage 6 part 1 (clock interval, night quiet
-hours, battery saver) and German / English ([plans/LOOK_AND_LANGUAGE.md](plans/LOOK_AND_LANGUAGE.md)
-part 1) are implemented. Releases: build 70 (stable), 76 and 78 (beta; 78 automatically on push).
+**Where we are (2026-11-23, build 80):** stages 0-5, stage 6 part 1 (clock interval, night quiet
+hours, battery saver), German / English ([plans/LOOK_AND_LANGUAGE.md](plans/LOOK_AND_LANGUAGE.md)
+part 1), stage 7 (new look, holidays, school holidays, calendar birthdays,
+[plans/STAGE7_NEW_LOOK.md](plans/STAGE7_NEW_LOOK.md)) and stage 7b (own code base, build 80,
+[plans/STAGE7B_OWN_CODE.md](plans/STAGE7B_OWN_CODE.md)) are implemented. Releases: build 70 (stable),
+76 and 78 (beta; 78 automatically on push), 79 and 80 (beta on push).
 Next: **the gift edition** (stages 7-11, planned 2026-11-23 for the Christmas handover, design:
 [plans/GIFT_EDITION.md](plans/GIFT_EDITION.md)): new look, several screens, profiles, gift mode, help,
 extras. The current build is already deliverable; these stages are improvements, each coming to the
 family by update once device-tested.
-Not done on purpose so far (details in the plans' "Result" sections): the old setup page `/basic`
-stays until the app is checked on phones; the exact preview uses the device's own data (no sample
+Not done on purpose so far (details in the plans' "Result" sections): the exact preview uses the device's own data (no sample
 data); agenda times stay 24 h with the 12-hour clock; tasks can't be ticked off on the device; one
 note only.
 
@@ -292,20 +297,37 @@ Stages 7-11 are the **gift edition**, designed in [plans/GIFT_EDITION.md](plans/
 beta to stable.
 
 ### Stage 7: New look (week 1, until 2026-11-30)
-- [ ] [plans/LOOK_AND_LANGUAGE.md](plans/LOOK_AND_LANGUAGE.md) part 2: Montserrat Bold clock in every
+Implementation plan and result: [plans/STAGE7_NEW_LOOK.md](plans/STAGE7_NEW_LOOK.md). Build 79.
+- [x] [plans/LOOK_AND_LANGUAGE.md](plans/LOOK_AND_LANGUAGE.md) part 2: Montserrat Bold clock in every
   layout incl. Classic (HighSpeed font removed), date under the clock, headings with a line, weather
-  labels, the app's sketch follows the device
-- [ ] Month view rework: small rounded square for today, frame for public holidays, line for school
+  labels, Wi-Fi bars, the app's sketch follows the device (build 79)
+- [x] Month view rework: small rounded square for today, frame for public holidays, line for school
   holidays, mark row (appointment dot, birthday cake), bold weekend, KW, footer / side column; a design
-  per box size (full screen to 1 × 1 calendar sheet)
-- [ ] "Im Monat markieren" switch per calendar link (off by default)
-- [ ] Public holidays (calculated) and school holidays (a calendar link to our own ICS per Bundesland,
-  published by a GitHub Action, replaceable) per Bundesland, opt-in; in the
-  status bar, "Heute und morgen", month view
-- [ ] Birthdays from yearly all-day calendar entries (setting, on by default)
+  per box size (full screen to 1 × 1 calendar sheet; clock and month allowed from 1 × 1) (build 79)
+- [x] "Im Monat markieren" switch per calendar link (off by default) (build 79)
+- [x] Public holidays (calculated) and school holidays (a calendar link to our own ICS per Bundesland,
+  published weekly by the "Data feeds" workflow from the OpenHolidays API, replaceable) per Bundesland,
+  opt-in; in the status bar, "Heute und morgen", month view (build 79)
+- [x] Birthdays from yearly all-day calendar entries (setting, on by default) (build 79)
 - [ ] A device-tested beta promoted to stable (the family devices are flashed from stable)
 
 **Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) block 9.
+
+### Stage 7b: Own code base (before the handover, decided 2026-11-23)
+Plan: [plans/STAGE7B_OWN_CODE.md](plans/STAGE7B_OWN_CODE.md). Every part still from the original
+project rebuilt with the same behaviour (problems fixed on the way), then the repository leaves the
+fork network and gets the owner's licence.
+- [x] Old setup page `/basic` removed (build 80)
+- [x] Fonts: own converter and renderer, all fonts regenerated (build 80)
+- [x] Calendar reader as a pure, tested parser (build 80)
+- [x] Data services (weather, stocks, parcels, flights, MakerWorld) with pure, tested answer parsers (build 80)
+- [x] Printer (MQTT) and its widget (build 80)
+- [x] Widgets (stocks, parcels, weather, MakerWorld, flights) and the remnants in status bar, clock, month (build 80)
+- [x] Base (pins, LED, touch, display, battery, Wi-Fi, time, problems, configuration, wake cycle) (build 80)
+- [x] Build files; README credits; `tools/dev/origin_report.py`: about 3 % left, all facts or single calls (build 80)
+- [ ] Leave the fork network, licence (owner, DEVICE_TESTS block M)
+
+**Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) blocks 9b and M.
 
 ### Stage 8: Data store and several screens (week 2, until 2026-12-07)
 - [ ] Data store: each service keeps its last result in RTC memory; screens draw from it; downloads

@@ -13,8 +13,7 @@ struct WidgetInfo {
   layouts::WidgetId id;
   const char* key;           // setup page / NVS ("weather")
   i18n::S name;              // shown in the setup app (tr())
-  int layoutId;              // ID in the layout table (getLayout())
-  const char* description;
+  int layoutId;              // ID in the layout table (getLayout(), box:: in Widgets.h)
   int rowHeight, colWidth;   // text line height / column width the drawing code uses
   int refresh;               // refresh interval in wakes (minutes)
   i18n::S hint;              // what to set up when its settings are missing (box layouts, the app)

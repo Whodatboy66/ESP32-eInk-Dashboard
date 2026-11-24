@@ -17,6 +17,7 @@
 #include "../core/AppState.h"
 #include "../core/ConfigManager.h"
 #include "../core/ConfigValidation.h"
+#include "../services/SchoolHolidays.h"
 #include "../core/LogBuffer.h"
 #include "../core/PowerPlan.h"
 #include "../core/Logger.h"
@@ -257,6 +258,10 @@ void handleState() {
   layouts::Result current = loadLayout();
   if (current.fellBack) dev["layoutFallback"] = tr(S::ApiLayoutFallback);
   else dev["layoutFallback"] = nullptr;
+  // Stage 7: the school holiday link used when school_url is empty (the app shows it as placeholder).
+  char schoolDefault[160];
+  if (school::feedUrl(schoolDefault, sizeof(schoolDefault), OTA_REPO, holiday_state, "")) dev["schoolDefault"] = schoolDefault;
+  else dev["schoolDefault"] = nullptr;
 
   JsonObject s = doc["settings"].to<JsonObject>();
   s["device_name"] = device_name;
@@ -268,6 +273,14 @@ void handleState() {
   JsonArray ics = s["ics"].to<JsonArray>();
   for (int i = 0; i < ICS_MAX_FEEDS; i++) secretLink(ics.add<JsonObject>(), ics_urls[i]);
   secretLink(s["bday_url"].to<JsonObject>(), bday_url);
+  // Stage 7: holidays, school holidays (a public link, not a secret), month marks, calendar birthdays.
+  s["holiday_state"] = holiday_state;
+  s["holidays_on"] = holidays_on;
+  s["school_on"] = school_on;
+  s["school_url"] = school_url;
+  JsonArray icsMonth = s["ics_month"].to<JsonArray>();
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) icsMonth.add((ics_month_mask & (1 << i)) != 0);
+  s["cal_birthdays"] = cal_birthdays;
   secret(s, "pkge_key", pkge_api_key);
   secret(s, "adb_key", aerodatabox_key);
   s["mqtt_ip"] = mqtt_ip;
@@ -307,6 +320,13 @@ void handleState() {
     JsonObject o = presets.add<JsonObject>();
     o["key"] = pinPresetValue(p);
     o["name"] = p == PinPreset::Custom ? tr(S::PinsCustom) : pinPresetLabel(p);
+  }
+
+  JsonArray states = doc["holidayStates"].to<JsonArray>();
+  for (int i = 0; i < holidays::STATE_COUNT; i++) {
+    JsonObject o = states.add<JsonObject>();
+    o["key"] = holidays::stateTable()[i].code;
+    o["name"] = holidays::stateTable()[i].name;
   }
 
   JsonObject lay = doc["layout"].to<JsonObject>();
@@ -494,6 +514,31 @@ void handleSettings() {
   else if (bop == SecretOp::Set && !validateIcsUrl(o["bday_url"].as<const char*>(), bday, sizeof(bday)))
     fail("bday_url", tr(S::ErrLink));
 
+  // Stage 7: holidays and school holidays.
+  char hState[sizeof(holiday_state)], sUrl[CFG_ICS_URL_MAX];
+  copyStr(hState, sizeof(hState), holiday_state);
+  if (!o["holiday_state"].isUnbound()) {
+    const char* v = o["holiday_state"] | "";
+    if (!o["holiday_state"].is<const char*>() || !validStateCode(v)) fail("holiday_state", tr(S::ErrState));
+    else copyStr(hState, sizeof(hState), v);
+  }
+  copyStr(sUrl, sizeof(sUrl), school_url);
+  if (!o["school_url"].isUnbound()) {
+    const char* v = o["school_url"] | "";
+    if (!o["school_url"].is<const char*>()) fail("school_url", tr(S::ErrLink));
+    else if (!v[0]) sUrl[0] = '\0';  // empty: our own feed for the state
+    else if (!validateIcsUrl(v, sUrl, sizeof(sUrl))) fail("school_url", tr(S::ErrLink));
+  }
+  uint8_t monthMask = ics_month_mask;
+  if (o["ics_month"].is<JsonArrayConst>()) {
+    monthMask = 0;
+    int i = 0;
+    for (JsonVariantConst v : o["ics_month"].as<JsonArrayConst>()) {
+      if (i < ICS_MAX_FEEDS && v.is<bool>() && v.as<bool>()) monthMask |= (uint8_t)(1 << i);
+      i++;
+    }
+  }
+
   copyStr(mqttIp, sizeof(mqttIp), mqtt_ip);
   if (!o["mqtt_ip"].isUnbound()) {
     const char* ip = o["mqtt_ip"] | "";
@@ -529,7 +574,7 @@ void handleSettings() {
   PinConfig pins = customPins;
   if (!o["pin_preset"].isUnbound()) {
     const char* key = o["pin_preset"] | "";
-    preset = parsePinPreset(String(key));
+    preset = parsePinPreset(key, DEFAULT_PIN_PRESET);
     if (strcmp(pinPresetValue(preset), key) != 0) fail("pin_preset", tr(S::ErrPinPreset));
   }
   if (o["pins"].is<JsonObjectConst>()) {
@@ -580,6 +625,12 @@ void handleSettings() {
   copyStr(stock_symbols, sizeof(stock_symbols), stocks);
   for (int i = 0; i < ICS_MAX_FEEDS; i++) copyStr(ics_urls[i], sizeof(ics_urls[i]), ics[i]);
   copyStr(bday_url, sizeof(bday_url), bday);
+  copyStr(holiday_state, sizeof(holiday_state), hState);
+  copyStr(school_url, sizeof(school_url), sUrl);
+  ics_month_mask = monthMask;
+  if (o["holidays_on"].is<bool>()) holidays_on = o["holidays_on"];
+  if (o["school_on"].is<bool>()) school_on = o["school_on"];
+  if (o["cal_birthdays"].is<bool>()) cal_birthdays = o["cal_birthdays"];
   copyStr(mqtt_ip, sizeof(mqtt_ip), mqttIp);
   mqtt_port = port;
   for (const SecretField& f : secrets) {
@@ -959,7 +1010,8 @@ void handleGetBirthdays() {
     o["year"] = manual.items[i].year;
   }
   std::unique_ptr<personal::Upcoming[]> up(new (std::nothrow) personal::Upcoming[personal::MAX_BIRTHDAYS]);
-  int n = up ? personal::upcomingBirthdays(manual, userFeedBirthdays(), localToday(), up.get(), personal::MAX_BIRTHDAYS) : 0;
+  int n = up ? personal::upcomingBirthdays(manual, userFeedBirthdays(), localToday(), up.get(), personal::MAX_BIRTHDAYS,
+                                                personal::BDAY_HORIZON_DAYS, &userCalBirthdays()) : 0;
   JsonArray u = doc["upcoming"].to<JsonArray>();
   for (int i = 0; i < n; i++) {
     JsonObject o = u.add<JsonObject>();

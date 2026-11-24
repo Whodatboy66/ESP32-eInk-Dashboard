@@ -1,6 +1,7 @@
 // Host test for src/layout/LayoutEngine.h and src/layout/Templates.h. Run: tests/host/run.sh
 #include "src/layout/LayoutEngine.h"
 #include "src/layout/Templates.h"
+#include "src/widgets/StatusMarks.h"
 #include "tests/host/check.h"
 
 using namespace layouts;
@@ -124,10 +125,10 @@ static void test_invalid_template_falls_back_to_classic() {
   Template bad2{"bad2", "Bad2", outside, 1, nullptr, 0};
   CHECK(buildLayout(bad2, all()).fellBack);
 
-  static const Placement tooSmall[] = {{WidgetId::Month, {0, 0, 1, 1}}, {WidgetId::Clock, {1, 0, 3, 3}},
+  static const Placement tooSmall[] = {{WidgetId::Stocks, {0, 0, 1, 1}}, {WidgetId::Clock, {1, 0, 3, 3}},
                                        {WidgetId::Weather, {0, 1, 1, 2}}};
   Template bad3{"bad3", "Bad3", tooSmall, 3, nullptr, 0};
-  CHECK(buildLayout(bad3, all()).fellBack);  // a month view needs 2 x 2 cells
+  CHECK(buildLayout(bad3, all()).fellBack);  // stocks need 2 cells of width (the month: 1 x 1 since stage 7)
 }
 
 static void test_unknown_template_key() {
@@ -153,7 +154,34 @@ static void test_weather_days_for_width() {
   CHECK_EQ(weatherDaysFor(50, 100), 1);
 }
 
+// Stage 7: list widgets get a heading in the grid layouts, not in Classic (its places stay) and
+// not in boxes too low for a heading and some lines.
+static void test_heading_rule() {
+  CHECK(!layouts::wantsHeading(true, 145));   // Classic's agenda
+  CHECK(layouts::wantsHeading(false, 150));   // a 2 x 1 grid box
+  CHECK(layouts::wantsHeading(false, 100));
+  CHECK(!layouts::wantsHeading(false, 90));
+}
+
+// Stage 7: Wi-Fi bars from the signal of the last connection; the space for a holiday's name.
+static void test_status_marks() {
+  CHECK_EQ(statusbar::signalBars(0), 0);     // unknown: no icon
+  CHECK_EQ(statusbar::signalBars(-50), 4);
+  CHECK_EQ(statusbar::signalBars(-55), 4);
+  CHECK_EQ(statusbar::signalBars(-62), 3);
+  CHECK_EQ(statusbar::signalBars(-72), 2);
+  CHECK_EQ(statusbar::signalBars(-88), 1);
+  CHECK_EQ(statusbar::signalBars(-50, true), 0);  // the last connection failed: no bars next to "! WLAN"
+  CHECK_EQ(statusbar::signalBars(-50, false), 4);
+  // The holiday name gets what is left between the date and the right part, after the power note.
+  CHECK_EQ(statusbar::holidaySpace(100, 0, 600), 492);
+  CHECK_EQ(statusbar::holidaySpace(100, 150, 600), 330);
+  CHECK_EQ(statusbar::holidaySpace(100, 450, 600), 0);  // too little: no name rather than overlap
+}
+
 int main() {
+  test_status_marks();
+  test_heading_rule();
   test_weather_days_for_width();
   test_grid_geometry();
   test_status_bar_always_on_top();

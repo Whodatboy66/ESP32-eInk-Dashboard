@@ -4,26 +4,28 @@
 
 #include "../i18n/Strings.h"
 
-// Problems listed in the top bar. Each flag is set when that source fails, cleared on its
-// next success, and kept across deep sleep.
-enum : uint16_t {
-  PROBLEM_WIFI         = 1 << 0,
-  PROBLEM_TIME         = 1 << 1,
-  PROBLEM_WEATHER      = 1 << 2,
-  PROBLEM_STOCKS       = 1 << 3,
-  PROBLEM_CALENDAR     = 1 << 4,
-  PROBLEM_PRINTER      = 1 << 5,
-  PROBLEM_PRINTER_CODE = 1 << 6,
-  PROBLEM_MAKERWORLD   = 1 << 7,
-  PROBLEM_TRACKING     = 1 << 8,
-  PROBLEM_FLIGHT       = 1 << 9,
-  PROBLEM_BIRTHDAYS    = 1 << 10,
+// One list for the flags and their status-bar names (stage 7b): each is set when its source fails,
+// cleared on its next success, kept in deep sleep. The order gives the bits: append only.
+#define PROBLEM_LIST(X) \
+  X(WIFI, ProbWifi) X(TIME, ProbTime) X(WEATHER, ProbWeather) X(STOCKS, ProbStocks) X(CALENDAR, ProbCalendar) \
+  X(PRINTER, ProbPrinter) X(PRINTER_CODE, ProbPrinterCode) X(MAKERWORLD, ProbMakerWorld) X(TRACKING, ProbTracking) \
+  X(FLIGHT, ProbFlight) X(BIRTHDAYS, ProbBirthdays)
+
+enum ProblemBit : uint8_t {
+#define PROBLEM_BIT(name, label) PROBLEM_BIT_##name,
+  PROBLEM_LIST(PROBLEM_BIT)
+#undef PROBLEM_BIT
+  PROBLEM_COUNT
 };
-// Their names in the status bar (tr(), app.h), in flag order.
-inline const i18n::S PROBLEM_LABELS[] = {
-  i18n::S::ProbWifi, i18n::S::ProbTime, i18n::S::ProbWeather, i18n::S::ProbStocks, i18n::S::ProbCalendar,
-  i18n::S::ProbPrinter, i18n::S::ProbPrinterCode, i18n::S::ProbMakerWorld, i18n::S::ProbTracking,
-  i18n::S::ProbFlight, i18n::S::ProbBirthdays
+enum : uint16_t {
+#define PROBLEM_FLAG(name, label) PROBLEM_##name = 1u << PROBLEM_BIT_##name,
+  PROBLEM_LIST(PROBLEM_FLAG)
+#undef PROBLEM_FLAG
+};
+inline const i18n::S PROBLEM_LABELS[PROBLEM_COUNT] = {
+#define PROBLEM_LABEL(name, label) i18n::S::label,
+  PROBLEM_LIST(PROBLEM_LABEL)
+#undef PROBLEM_LABEL
 };
 extern uint16_t problems;       // RTC memory
 extern uint16_t problemsShown;  // what the status bar shows now (RTC memory)

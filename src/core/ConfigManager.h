@@ -2,9 +2,6 @@
 // Settings (setup page), stored in NVS namespace "config". The buffers are declared in app.h.
 #include "../../app.h"
 
-// NVS keys of the calendar feeds (the first keeps the original single-feed key).
-extern const char* const ICS_PREF_KEYS[ICS_MAX_FEEDS];
-
 // Loads all settings from NVS into the buffers, pin map and update settings; corrects an old
 // timezone name; migrates the settings schema (FW_CONFIG_SCHEMA).
 void configLoad();

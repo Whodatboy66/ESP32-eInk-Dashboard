@@ -408,3 +408,49 @@ for tools and the Action, GitHub Actions.
   result section (app slot %, fonts net, bundle KB, RTC bytes added).
 - [ ] **Step 3:** renders of every ready-made layout and the month sizes in de and en for the owner.
 - [ ] **Step 4:** summary for the owner and the commit command (no Co-Authored-By).
+
+## Result (build 79, 2026-11-23)
+
+Done in code and checked on the PC (host tests incl. the new `test_clock_layout`, `test_holidays`,
+`test_month_model`, `test_school_holidays`; web tests; `tools/feeds` unit tests; renders of every
+case in German and English in [docs/images/layouts/](../images/layouts/)); not yet on the device
+(DEVICE_TESTS block 9).
+
+Decisions taken while building (all in the ledger of the run; the ones that change what you see):
+- **AM/PM goes before digit size** (a 12-hour clock without it is ambiguous); narrow boxes show the
+  short date ("Di 17. Nov").
+- **Clock and month view are allowed from 1 × 1** (the editor's minimum sizes; the month has a design
+  for every size).
+- **School holidays come from the OpenHolidays API** (ODbL 1.0), not ferien-api.de: its real answer
+  lacked Bavaria's Christmas holidays 2026/27 and all of 2027. The feed is read only when the month
+  view is on the screen; a changed state or link replaces the old list.
+- **Symbols are drawn in code:** star, cake and the school bar (9 × 9) and the Wi-Fi bars, so they have
+  the same size everywhere and need no icon font.
+- **Big month cells (full screen, half) use 22 px digits** (two small extra digit fonts, about 1 KB).
+- **Side column entries** are two lines (date, then the text); school holidays read "Weihnachtsferien
+  enden / beginnen" there; the footer says "Weihnachtsferien bis Fr 8. Jan".
+- **The footer follows the last week row** (a month with 5 weeks has no gap above it).
+- **The app's sketch** draws the month like the device (week numbers, small today square, bold weekend,
+  two weeks, sheet) but without holidays or birthdays (the device's preview shows the real data).
+- **Google's contacts birthday calendar:** no answer from Google's help pages; checked in the device test.
+
+Sizes: firmware 90.5 % of the app slot on the classic ESP32 profiles, 90.2 % on the C6 (build 78: about
+88 %), no warnings on any of the four profiles; new fonts about 30 KB of bitmaps (the HighSpeed font,
+13 KB, is gone); app bundle 50.0 KB of the 60 KB limit; RTC memory about 460 bytes more (school
+holidays, Wi-Fi signal, feed state); the 128 KB storage gets one small file (`/bday_cal.json`, written
+only when the calendar's birthdays change).
+
+**Review (a fresh reviewer over the whole stage) and fixes in the same build:**
+- *Critical, fixed:* a failing feed link (school holidays before the "Data feeds" workflow has run,
+  or a broken birthday link, a bug since stage 4) cleared its retry wait on every wake, so Wi-Fi went
+  on every minute. Now `src/core/FeedSchedule.h` keeps the last tried link apart from the last applied
+  one: a failing link waits 6 hours (school) or 1 hour (birthdays); only a changed setting tries at once.
+- *Fixed:* school holidays now disappear when switched off or when the state changes; the agenda shows
+  every day once and in order (entries that began earlier, DST), and no holiday before the clock is
+  set; only all-day entries of a school link count, a one-day school holiday is one footer line; no
+  Wi-Fi bars next to the Wi-Fi problem mark.
+- *Deferred (small):* a captive-portal page counts as a read school feed (next try in a week); an
+  off-by-one between the holiday space and the power note; a 3 × 1 month gets the footer instead of
+  the side column; no appointment dots for next-month days in the two-week view; the school link is
+  stored in plain text (it is meant to be a public link); the app's school-link placeholder updates only
+  after saving.

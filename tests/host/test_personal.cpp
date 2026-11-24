@@ -4,6 +4,7 @@
 #include "src/personal/Birthdays.h"
 #include "src/personal/Notes.h"
 #include "src/personal/Tasks.h"
+#include "src/services/IcsRules.h"
 #include "tests/host/check.h"
 
 using namespace personal;
@@ -284,6 +285,70 @@ static void test_birthdays() {
   CHECK_EQ(again.items[0].year, 1990);
 }
 
+// ---- Stage 7: birthdays from the calendar links ----
+
+static personal::Birthday bd(const char* name, int day, int month, int year = 0) {
+  personal::Birthday b;
+  std::snprintf(b.name, sizeof(b.name), "%s", name);
+  b.day = static_cast<uint8_t>(day);
+  b.month = static_cast<uint8_t>(month);
+  b.year = static_cast<uint16_t>(year);
+  return b;
+}
+
+static void test_counts_as_birthday() {
+  CHECK(ics::countsAsBirthday('Y', true, true));
+  CHECK(!ics::countsAsBirthday('Y', false, true));  // a yearly meeting with a time
+  CHECK(!ics::countsAsBirthday('W', true, true));
+  CHECK(!ics::countsAsBirthday(0, true, true));
+  CHECK(!ics::countsAsBirthday('Y', true, false));  // setting off
+  // School holiday links: only all-day entries are holidays (a school's calendar has timed ones too).
+  CHECK(ics::countsAsSchoolHoliday(true));
+  CHECK(!ics::countsAsSchoolHoliday(false));
+  char name[personal::BDAY_NAME_BYTES];
+  uint16_t year = 0;
+  ics::birthdayName("Anna (1966)", name, sizeof(name), year);
+  CHECK_STR(name, "Anna");
+  CHECK_EQ(year, 1966);
+  ics::birthdayName("Geburtstag Jürgen", name, sizeof(name), year);
+  CHECK_STR(name, "Geburtstag Jürgen");
+  CHECK_EQ(year, 0);
+  ics::birthdayName("Mia (5)", name, sizeof(name), year);  // not a year
+  CHECK_STR(name, "Mia (5)");
+  CHECK_EQ(year, 0);
+}
+
+static void test_upcoming_three_lists() {
+  personal::BirthdayList manual, feed, cal;
+  feed.items[feed.count++] = bd("Anna", 20, 11);
+  cal.items[cal.count++] = bd("Anna", 20, 11);   // also in the feed: once
+  cal.items[cal.count++] = bd("Lukas", 24, 11);  // only in the calendar
+  personal::Upcoming up[8];
+  int n = personal::upcomingBirthdays(manual, feed, personal::Date{2026, 11, 18}, up, 8, 60, &cal);
+  CHECK_EQ(n, 2);
+  CHECK_STR(up[0].who->name, "Anna");
+  CHECK_STR(up[1].who->name, "Lukas");
+  CHECK_EQ(personal::upcomingBirthdays(manual, feed, personal::Date{2026, 11, 18}, up, 8), 1);  // without
+}
+
+// Review Focus 3: the calendar is read every 30-60 minutes; its birthday file is only rewritten
+// when something changed.
+static void test_same_birthdays() {
+  personal::BirthdayList a, b;
+  a.items[a.count++] = bd("Anna", 20, 11, 1966);
+  a.items[a.count++] = bd("Lukas", 24, 11);
+  b.items[b.count++] = bd("Lukas", 24, 11);
+  b.items[b.count++] = bd("Anna", 20, 11, 1966);
+  CHECK(personal::sameBirthdays(a, b));  // other order
+  b.items[0].day = 25;
+  CHECK(!personal::sameBirthdays(a, b));
+  b.items[0].day = 24;
+  b.count = 1;
+  CHECK(!personal::sameBirthdays(a, b));
+  personal::BirthdayList e1, e2;
+  CHECK(personal::sameBirthdays(e1, e2));
+}
+
 int main() {
   test_dates();
   test_utf8_and_filter();
@@ -294,5 +359,8 @@ int main() {
   test_note();
   test_wrap_cases();
   test_birthdays();
+  test_counts_as_birthday();
+  test_upcoming_three_lists();
+  test_same_birthdays();
   return finish("personal");
 }

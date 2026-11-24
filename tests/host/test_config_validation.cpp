@@ -99,7 +99,22 @@ static void test_schema_migration_steps() {
   CHECK(!configNeedsMigration(2, 1));  // newer settings than this firmware: left alone
 }
 
+// Stage 7: the Bundesland for holidays and school holidays (setting holiday_state).
+static void test_state_codes() {
+  const char* codes[] = {"BW", "BY", "BE", "BB", "HB", "HH", "HE", "MV", "NI", "NW", "RP", "SL", "SN", "ST", "SH", "TH"};
+  for (const char* c : codes) CHECK(validStateCode(c));
+  CHECK(validStateCode(""));  // off
+  CHECK(!validStateCode("XX"));
+  CHECK(!validStateCode("by"));
+  CHECK(!validStateCode("BYY"));
+  CHECK(!validStateCode(nullptr));
+  CHECK_STR(holidays::stateName(holidays::parseState("BY")), "Bayern");
+  CHECK_STR(holidays::stateCode(holidays::State::TH), "TH");
+  CHECK(holidays::parseState("") == holidays::State::None);
+}
+
 int main() {
+  test_state_codes();
   test_ics_urls();
   test_ics_url_too_long_for_buffer();
   test_stock_symbols();
