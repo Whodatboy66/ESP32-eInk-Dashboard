@@ -18,13 +18,13 @@ Everything that isn't done on the device itself but by you, in one place. Tick p
 says so; the rest once.
 
 **After every push to main (each new build):**
-- [ ] GitHub → Actions → **Build firmware**: the run of the push is green (host tests, web tests, feed
+- [x] GitHub → Actions → **Build firmware**: the run of the push is green (host tests, web tests, feed
       script tests, all four profiles)
-- [ ] Releases: **firmware-.NN** exists as a pre-release with the "What's new" lines, and the fixed
+- [x] Releases: **firmware-.NN** exists as a pre-release with the "What's new" lines, and the fixed
       **beta** pre-release was refreshed (beta devices update at night or with a double tap)
 
 **Data feeds (school holidays, build 79 on):**
-- [ ] Once after the first push of build 79: Actions → **Data feeds** → Run workflow (branch main)
+- [x] Once after the first push of build 79: Actions → **Data feeds** → Run workflow (branch main)
 - [ ] Releases: the pre-release **feeds** has 16 files `ferien-BW.ics` … `ferien-TH.ics`, and it is
       **not** marked "Latest" (the stable firmware release stays "Latest")
 - [ ] A week later: the Monday run happened by itself (Actions → Data feeds, scheduled), green
@@ -47,20 +47,20 @@ says so; the rest once.
       in the results log
 - [ ] Waste collection: does each family member's town offer a calendar link (ICS) for the pickups?
       (needed for stage 10's waste box) Note per town
-- [ ] Signing key: a backup of `~/ota-signing-key/` exists in a safe place (not in the repository);
+- [x] Signing key: a backup of `~/ota-signing-key/` exists in a safe place (not in the repository);
       copies on the Windows desktop are deleted
 
 **Own repository (stage 7b, before the handover):**
-- [ ] Before detaching: Releases (stable "Latest", "beta", "feeds") and Settings → Secrets → Actions
+- [x] Before detaching: Releases (stable "Latest", "beta", "feeds") and Settings → Secrets → Actions
       `OTA_SIGNING_KEY` are there (screenshot or note)
-- [ ] GitHub → this repository → Settings → General → Danger Zone → **Leave fork network** (permanent;
+- [x] GitHub → this repository → Settings → General → Danger Zone → **Leave fork network** (permanent;
       the name and address stay, so the devices' updates keep working)
-- [ ] After: the repository no longer says "forked from VoIPshare/…"; the releases and the secret are
+- [x] After: the repository no longer says "forked from VoIPshare/…"; the releases and the secret are
       still there; Actions → Build firmware runs green on the next push; a device's update check still
       works (double tap → update screen)
-- [ ] The repository stays **public**: devices download updates and the school holidays without
+- [x] The repository stays **public**: devices download updates and the school holidays without
       logging in (a private repository would stop both)
-- [ ] Licence for your own code chosen (see stage 7b) and the `LICENSE` file is on main
+- [x] Licence for your own code chosen (see stage 7b) and the `LICENSE` file is on main
 
 ## 0. Bring the device to the current build (USB, once)
 
