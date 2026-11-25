@@ -28,7 +28,8 @@ var FIELDS = {
   mqtt_port: 'data', printer_name: 'data', makerworld_uid: 'data', ota_auto: 'device', ota_beta: 'device', clock_24h: 'screen',
   pin_preset: 'device', pins: 'device', clock_interval: 'screen', quiet_enabled: 'screen', quiet_from: 'screen',
   quiet_to: 'screen', battery_mah: 'device', lang: 'device', holiday_state: 'data', holidays_on: 'data', school_on: 'data',
-  school_url: 'data', ics_month: 'data', cal_birthdays: 'data'
+  school_url: 'data', ics_month: 'data', cal_birthdays: 'data', interval_weather: 'data', interval_stocks: 'data',
+  interval_calendar: 'data', interval_tracking: 'data', ics_names: 'data', ics_every: 'data'
 };
 
 // ---------- helpers ----------
@@ -626,6 +627,24 @@ function calendarField(i) {
   var res = resultEl(S.res[key]);
   var check = btn(t('check'), function () { checkCalendar(key, i, res); }, 'sm', { 'data-f': 'chk:' + key });
   return secretField(key, t('calLinkN', { n: i + 1 }), { type: 'url', im: 'url', ph: 'https://calendar.google.com/…/basic.ics', extra: [check], after: res });
+}
+// Stage 8: per link a name (shown instead of "Kalender 1", also on the screen) and how often it's read.
+function calNameField(i) {
+  var names = cur('ics_names') || ['', '', ''];
+  var inp = h('input', { type: 'text', value: names[i] || '', placeholder: t('calLinkN', { n: i + 1 }), maxlength: 20,
+    autocomplete: 'off', autocapitalize: 'words', 'data-f': 'in:ics_names.' + i });
+  inp.addEventListener('input', function () {
+    var a = (cur('ics_names') || ['', '', '']).slice();
+    a[i] = inp.value;
+    setVal('ics_names', a);
+  });
+  return fieldBox('ics_names.' + i, t('calName'), inp, i === 0 ? t('calNameNote') : null);
+}
+function calEverySeg(i) {
+  var e = cur('ics_every') || [0, 0, 0];
+  return [h('p', { class: 'note' }, t('calEvery')), seg(t('calEvery'), [[0, t('calEveryCal')], [1, t('calEvery3h')], [2, t('calEveryMorning')]],
+    e[i] || 0, function (v) { var a = (cur('ics_every') || [0, 0, 0]).slice(); a[i] = v; setVal('ics_every', a); render(); }, 'ev' + i + '-'),
+    errLine('ics_every.' + i)];
 }
 // Stage 7: does calendar link i mark days in the month view (setting ics_month, off by default)?
 function monthSwitch(i) {
@@ -1400,10 +1419,26 @@ function addBirthday() {
   focusF('bdname');
 }
 
+// Stage 8: how often each data type loads; the clock interval caps it (shown when it does).
+var INTERVALS = [15, 30, 60, 120, 180, 360];
+function intervalsCard() {
+  var clk = cur('clock_interval') || 1;
+  var rows = [['interval_calendar', 'calendars'], ['interval_weather', 'weather'], ['interval_stocks', 'stocks'],
+    ['interval_tracking', 'parcelsFlights']].map(function (r) {
+    var v = cur(r[0]) || 60;
+    return [h('p', { class: 'big' }, t(r[1])),
+      seg(t(r[1]), INTERVALS.map(function (n) { return [n, n < 60 ? n + ' min' : n / 60 + ' h']; }), v,
+        function (n) { setVal(r[0], n); if (S.errors[r[0]]) delete S.errors[r[0]]; render(); }, 'iv-' + r[0] + '-'),
+      v < clk ? h('p', { class: 'note' }, t('ivCapped', { n: clk })) : null, errLine(r[0])];
+  });
+  return card(h('p', null, t('ivExpl')), rows);
+}
+
 function dataTab() {
   return [
-    lbl(t('calendars')), card(calendarField(0), monthSwitch(0), calendarField(1), monthSwitch(1), calendarField(2), monthSwitch(2),
-      h('p', { class: 'note' }, t('calNote'))),
+    lbl(t('calendars')), card([0, 1, 2].map(function (i) {
+      return [calNameField(i), calendarField(i), monthSwitch(i), saved('ics_every') !== undefined ? calEverySeg(i) : null];
+    }), h('p', { class: 'note' }, t('calNote'))),
     lbl(t('holidaysLbl')), holidaysCard(),
     lbl(t('weather')), card(placeField()),
     lbl(t('stocks')), card(textField('stocks', t('f_stocks'), { ph: 'AAPL,NVDA,EUNL.DE:MSCI World', note: t('stocksNote') })),
@@ -1417,6 +1452,7 @@ function dataTab() {
       secretField('mqtt_pass', t('accessCode'), { pw: true, note: t('accessNote') }),
       textField('mqtt_port', t('port'), { num: true, im: 'numeric', ph: '8883' }),
       textField('makerworld_uid', t('f_makerworld_uid'), { im: 'numeric', note: t('mwNote') })),
+    saved('interval_weather') !== undefined ? [lbl(t('ivTitle')), intervalsCard()] : null,
     lbl(t('tasks')), tasksCard(),
     lbl(t('note')), noteCard(),
     lbl(t('birthdays')), birthdaysCard()

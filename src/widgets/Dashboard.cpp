@@ -14,7 +14,7 @@
 
 void drawStaleMark(LayoutItem* item, Service service, bool bottom) {
   if (!item) return;
-  time_t interval = item->Refresh > 0 ? (time_t)item->Refresh * 60 : 3600;
+  const time_t interval = (time_t)data_interval[(int)service] * 60;  // stage 8: the data type's own interval
   if (!isStale(serviceStates[(int)service], time(nullptr), interval)) return;
   // Short, in a corner the widget leaves free (also in Classic's small places).
   const char* text = tr(i18n::S::Stale);

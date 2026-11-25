@@ -12,6 +12,9 @@
 #include "../update/OtaFlow.h"
 #include "AppState.h"
 #include "ConfigValidation.h"
+#include "DataStore.h"
+#include "../services/CalendarLinks.h"
+#include "ServiceState.h"
 #include "Timezone.h"
 #include "Logger.h"
 #include "../layout/Templates.h"
@@ -29,6 +32,8 @@ char weather_location[CFG_WEATHER_LOC_MAX];
 char stock_symbols[CFG_STOCKS_MAX];
 char ics_urls[ICS_MAX_FEEDS][CFG_ICS_URL_MAX];
 char bday_url[CFG_ICS_URL_MAX];
+char ics_names[ICS_MAX_FEEDS][CFG_ICS_NAME_MAX];
+uint8_t ics_every[ICS_MAX_FEEDS] = {0, 0, 0};
 char makerworld_uid[CFG_MW_UID_MAX];
 char pkge_api_key[CFG_PKGE_KEY_MAX];
 char aerodatabox_key[CFG_ADB_KEY_MAX];
@@ -37,6 +42,9 @@ char holiday_state[4] = "";
 bool holidays_on = false, school_on = false;
 char school_url[CFG_ICS_URL_MAX] = "";
 uint8_t ics_month_mask = 0;
+uint16_t data_interval[4] = {datastore::DEFAULT_WEATHER_MIN, datastore::DEFAULT_STOCKS_MIN,
+                             datastore::DEFAULT_CALENDAR_MIN, datastore::DEFAULT_TRACKING_MIN};
+static_assert(SERVICE_COUNT == 4, "data_interval: one per Service");
 bool cal_birthdays = true;
 uint8_t user_content = 0;
 // Screen and power
@@ -79,6 +87,9 @@ const TextSetting TEXT_SETTINGS[] = {
     {"adb_key", aerodatabox_key, sizeof(aerodatabox_key)},
     {"hol_state", holiday_state, sizeof(holiday_state)},
     {"school_url", school_url, sizeof(school_url)},
+    {"ics_name0", ics_names[0], sizeof(ics_names[0])},  // stage 8
+    {"ics_name1", ics_names[1], sizeof(ics_names[1])},
+    {"ics_name2", ics_names[2], sizeof(ics_names[2])},
 };
 static_assert(ICS_MAX_FEEDS == 3, "one TEXT_SETTINGS entry per calendar link");
 
@@ -99,6 +110,18 @@ void configLoad() {
   if (!validStateCode(holiday_state)) holiday_state[0] = '\0';
   holidays_on = preferences.getBool("hol_on", false);
   school_on = preferences.getBool("school_on", false);
+  // Stage 8: each data type's interval (absent on older devices: the defaults).
+  static const char* const INTERVAL_KEYS[4] = {"int_wx", "int_stk", "int_cal", "int_trk"};
+  static const uint16_t INTERVAL_DEFAULTS[4] = {datastore::DEFAULT_WEATHER_MIN, datastore::DEFAULT_STOCKS_MIN,
+                                                datastore::DEFAULT_CALENDAR_MIN, datastore::DEFAULT_TRACKING_MIN};
+  const uint8_t every = preferences.getUChar("ics_every", 0);  // 2 bits per link
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) {
+    ics_every[i] = (every >> (2 * i)) & 3;
+    if (ics_every[i] > icslinks::EVERY_MORNING) ics_every[i] = icslinks::EVERY_CALENDAR;
+  }
+  for (int i = 0; i < 4; i++)
+    data_interval[i] = (uint16_t)datastore::intervalOr(preferences.getUShort(INTERVAL_KEYS[i], INTERVAL_DEFAULTS[i]),
+                                                       INTERVAL_DEFAULTS[i]);
   ics_month_mask = preferences.getUChar("ics_mon", 0) & ((1 << ICS_MAX_FEEDS) - 1);
   cal_birthdays = preferences.getBool("cal_bday", true);
   user_content = preferences.getUChar("user_flags", 0);
@@ -188,6 +211,13 @@ void configSave() {
   preferences.putUInt("mqtt_port", mqtt_port);
   preferences.putBool("hol_on", holidays_on);
   preferences.putBool("school_on", school_on);
+  uint8_t every = 0;
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) every |= (ics_every[i] & 3) << (2 * i);
+  preferences.putUChar("ics_every", every);
+  preferences.putUShort("int_wx", data_interval[0]);
+  preferences.putUShort("int_stk", data_interval[1]);
+  preferences.putUShort("int_cal", data_interval[2]);
+  preferences.putUShort("int_trk", data_interval[3]);
   preferences.putUChar("ics_mon", ics_month_mask);
   preferences.putBool("cal_bday", cal_birthdays);
   preferences.putString("pin_preset", pinPresetValue(activePinPreset));

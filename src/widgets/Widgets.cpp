@@ -19,10 +19,7 @@
 // ---- Data ----
 LayoutItem layout[MAXLAYOUTS];
 int layoutCount = 0;
-StockItem stocks[MAX_STOCKS];
-int stockCount = 0;
-WeatherData weather;
-MakerWorld makerworld;
+MakerWorld makerworld;  // NVS: survives a reset too (stocks, weather, printer: src/core/DataStore.cpp)
 // Kept in deep sleep: the agenda and the flight countdown redraw without a download; delivered
 // parcels expire between downloads.
 RTC_DATA_ATTR LiveFlight liveFlight;

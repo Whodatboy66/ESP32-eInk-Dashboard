@@ -247,6 +247,8 @@ enum class Lang : uint8_t { De, En };
   X(PfStocks,          "Prüfe die Aktiensymbole im Tab Daten.", "Check the stock symbols on the Data tab.") \
   X(PtCalendar,        "Ein Kalender kann nicht gelesen werden", "A calendar can't be read") \
   X(PtCalendarN,       "Kalender %d kann nicht gelesen werden", "Calendar %d can't be read") \
+  X(PtCalendarNamed,   "%s kann nicht gelesen werden",     "%s can't be read") \
+  X(CalLinkN,          "Kalender %d",                      "Calendar %d") \
   X(PfCalendar,        "Prüfe die Kalender-Links im Tab Daten.", "Check the calendar links on the Data tab.") \
   X(PtPrinter,         "Der Drucker antwortet nicht",      "The printer doesn't answer") \
   X(PfPrinter,         "Ist er eingeschaltet? Prüfe seine Adresse im Tab Daten.", "Is it switched on? Check its address on the Data tab.") \
@@ -274,8 +276,11 @@ enum class Lang : uint8_t { De, En };
   X(LabelPlace,        "Ort",                              "Place") \
   X(LabelSerial,       "Seriennummer",                     "Serial number") \
   X(LabelPrinterName,  "Druckername",                      "Printer name") \
+  X(LabelCalName,      "Kalendername",                     "Calendar name") \
   X(LabelMakerWorld,   "MakerWorld-Benutzer-ID",           "MakerWorld user ID") \
   X(ErrClockInterval,  "Wähle 1, 2, 5, 10, 15 oder 30 Minuten.", "Choose 1, 2, 5, 10, 15 or 30 minutes.") \
+  X(ErrIcsEvery,       "Wähle: mit dem Kalender, alle 3 Stunden oder nur morgens.", "Choose: with the calendar, every 3 hours or mornings only.") \
+  X(ErrInterval,       "Wähle 15 oder 30 Minuten, 1, 2, 3 oder 6 Stunden.", "Choose 15 or 30 minutes, 1, 2, 3 or 6 hours.") \
   X(ErrQuietFrom,      "Eine Uhrzeit wie 23:00.",          "A time like 23:00.") \
   X(ErrQuietTo,        "Eine Uhrzeit wie 06:00.",          "A time like 06:00.") \
   X(ErrBatteryMah,     "Zwischen 100 und 20000 mAh.",      "Between 100 and 20000 mAh.") \

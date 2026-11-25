@@ -143,6 +143,9 @@ open a serial monitor at 115200 baud, tap **RST** and type `factory-reset` withi
 | **Weather place** | Type a city and pick it from the list, or type a city with a 2-letter country code (`London, GB`), or `latitude,longitude` (`51.51,-0.13`). A city is looked up once with Open-Meteo's geocoding. |
 | **Stock symbols** | Up to 5 Yahoo Finance symbols, separated by commas: `AAPL,NVDA,^IXIC`. Indexes start with `^`; other exchanges have a suffix (`.DE` Xetra, `.L` London, `.AS` Amsterdam), and prices are shown in that exchange's currency. **Own names** (build 78): `SYMBOL:Name`, up to 12 characters, e.g. `EUNL.DE:MSCI World,QYLE.DE:Nasdaq CC,PPFB.DE:Gold`: the screen then shows the name instead of the symbol. Find a symbol with the search on finance.yahoo.com. |
 | **Calendar links** | Up to 3 `.ics` links (`https://`; `webcal://` and `http://` links are turned into `https://`), merged into one calendar. **Check** tries a link (needs internet on the device). See [Getting your Google Calendar link](#getting-your-google-calendar-link). The server's certificate is checked: Google, iCloud, Outlook and servers with a normal certificate work; a self-hosted server with a self-signed certificate, or one that sends an incomplete certificate chain (`cert.pem` instead of `fullchain.pem`), doesn't. |
+| **Calendar name** (build 87) | Optional, up to 20 characters ("Familie", "Arbeit"): shown in the app instead of "Calendar link 1", in the status bar when that link can't be read ("Arbeit kann nicht gelesen werden") and in the log. |
+| **Read** (per calendar link, build 87) | **With the calendar** (default): as often as **Load new data → Calendars** says. **Every 3 h** or **Mornings** (once a day, the first refresh from 06:00): for a large calendar, e.g. a work calendar with years of history, that needn't be read every time. A link that isn't read keeps its entries, its marks in the month and its flight on the screen. |
+| **Load new data** (build 87) | How often each kind of data is loaded: calendars (default 30 min), weather (1 h), stocks (30 min), parcels (2 h); 15 min to 6 h. Never more often than the clock refresh: with the clock every 30 minutes, a 15-minute choice becomes 30. |
 | **Birthday calendar link** | Optional `.ics` link with birthdays (e.g. Google Calendar's birthdays), read once a day. |
 | **Parcels key (PKGE)** | The API key of your PKGE Business account, for package tracking (see [Tracking your packages](#tracking-your-packages)). |
 | **Flights key (AeroDataBox)** | Optional: your RapidAPI key, for live flight status (see [Live flight status](#live-flight-status-optional)). |
@@ -309,7 +312,7 @@ Adding a widget: [ADD_A_WIDGET.md](ADD_A_WIDGET.md).
   interval starts** (every minute by default; with 5 minutes at :00, :05, …). The clock is redrawn
   first, before any network activity. A wake that only redraws the clock keeps the board awake for
   a few seconds. During the night quiet hours it doesn't wake at all (see [Battery and power](#battery-and-power)).
-- Wi-Fi is only turned on when a widget is due for new data (see the table at the top). The time is re-synced over NTP at least once an hour, because the internal clock drifts during deep sleep.
+- Wi-Fi is only turned on when a widget is due for new data. Since build 87 every kind of data has its own interval (**Load new data** on the Data tab) and is kept in the board's sleep memory between wakes: a full redraw (once a day, after an update screen) draws from it without downloading. Data that would be due within the last quarter of its interval comes along when Wi-Fi is on anyway, so the downloads share one connection. After a restart or power loss everything on the screen is loaded once. The time is re-synced over NTP at least once an hour, because the internal clock drifts during deep sleep.
 - To save battery, wakes that only redraw the clock run the CPU at 80 MHz, and Wi-Fi reconnects straight to the access point used last time instead of scanning every channel.
 - If Wi-Fi can't connect, the device waits before trying again: 2, 4, 8, 16, then 30 minutes. A button tap always tries right away.
 - If a download fails, the widget keeps its last data and the device tries again after 2, 4, 8 and
@@ -318,7 +321,7 @@ Adding a widget: [ADD_A_WIDGET.md](ADD_A_WIDGET.md).
   two refresh intervals (at least 30 minutes), the widget shows a small **old** badge in its corner
   ([example](images/layouts/planner-stale.png), [Classic](images/layouts/classic-stale.png)).
   The printer has its own wait (10, 20, 40, then 60 minutes, see the [printer address](#data-and-device-tab-fields)).
-- Widgets are updated with partial refreshes. A full screen refresh, which removes ghosting, happens once a day, after setup, after a button wake, after a layout change, in the morning after the quiet hours, and when the battery is charged again after the "please charge" screen.
+- Widgets are updated with partial refreshes. A full screen refresh, which removes ghosting, happens once a day, after setup, after a button wake, after a layout change, in the morning after the quiet hours, and when the battery is charged again after the "please charge" screen. New data is loaded for all widgets on a button wake, after a layout change, in the morning after the quiet hours and after the "please charge" screen; the daily full refresh draws from the kept data.
 
 ### Status bar and problem indicator
 

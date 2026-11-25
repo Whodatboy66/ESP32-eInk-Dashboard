@@ -52,6 +52,9 @@ char holiday_state[4] = "BY";
 bool holidays_on = true, school_on = true;
 char school_url[CFG_ICS_URL_MAX] = "";
 uint8_t ics_month_mask = 1;
+uint16_t data_interval[4] = {60, 30, 30, 120};
+char ics_names[ICS_MAX_FEEDS][CFG_ICS_NAME_MAX] = {"Familie", "Arbeit", ""};
+uint8_t ics_every[ICS_MAX_FEEDS] = {0, 1, 0};
 bool cal_birthdays = true;
 school::SchoolList schoolHolidays;
 int8_t lastRssi = -60;  // three Wi-Fi bars
@@ -69,7 +72,6 @@ ServiceState serviceStates[SERVICE_COUNT];
 PinConfig activePins = makePinPreset(PinPreset::Esp32C6Default);
 uint16_t bootCount = 0;
 bool isPrinting = false, previousIsPrinting = false, printViewOnScreen = false, bambuAuthRejected = false;
-bambu::PrinterStatus printer;
 uint32_t otaAvailBuild = 0;
 char otaAvailVersion[16] = "";
 bool showPrintView() { return false; }

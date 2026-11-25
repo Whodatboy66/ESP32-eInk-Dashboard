@@ -35,6 +35,7 @@
 #include "AppState.h"
 #include "ConfigManager.h"
 #include "Problems.h"
+#include "DataStore.h"
 #include "WakePlan.h"
 #include "PowerPlan.h"
 #include "../ui/Canvas.h"
@@ -60,17 +61,19 @@ RTC_DATA_ATTR static time_t bambuRetryAfter = 0;  // a changed link is read righ
 // The minute on the clock (changes exactly when HH:MM does).
 static long minuteNow() { return (long)(time(nullptr) / 60); }
 
+// A data type's refresh interval in minutes (stage 8: its own setting; the clock interval caps it
+// in WakePlan / DataStore.h).
+static int intervalOf(Service svc) { return data_interval[(int)svc]; }
+
 // Records a fetch result for the retry backoff and the "old data" mark (ServiceState.h).
-static void recordFetch(Service svc, bool ok, LayoutItem* item) {
-  time_t interval = item && item->Refresh > 0 ? (time_t)item->Refresh * 60 : 3600;
-  recordResult(serviceStates[(int)svc], ok, time(nullptr), interval);
+static void recordFetch(Service svc, bool ok, LayoutItem*) {
+  recordResult(serviceStates[(int)svc], ok, time(nullptr), (time_t)intervalOf(svc) * 60);
 }
 
 // After a failed fetch the widget normally keeps its picture (no redraw). Once its data is old it
 // is redrawn anyway, so the "old data" mark appears (the failed fetch is what makes data old).
-static bool turnedStale(Service svc, LayoutItem* item) {
-  time_t interval = item && item->Refresh > 0 ? (time_t)item->Refresh * 60 : 3600;
-  return isStale(serviceStates[(int)svc], time(nullptr), interval);
+static bool turnedStale(Service svc, LayoutItem*) {
+  return isStale(serviceStates[(int)svc], time(nullptr), (time_t)intervalOf(svc) * 60);
 }
 
 // After a data service's download: its result for the retries and the "old" mark, its problem
@@ -198,9 +201,12 @@ void appSetup() {
 
   // A full refresh once a day (bootCount counts minutes) and after a button wake.
   fullRefresh = bootCount % (60 * 24) == 0;
+  // Stage 8: a full redraw draws from the store; only these download everything (WakeInputs).
+  bool forceFetch = false;
   const bool buttonWoke = wakeCause == ESP_SLEEP_WAKEUP_EXT1;
   if (buttonWoke) {
     fullRefresh = true;
+    forceFetch = true;
     bootCount = 0;
   }
   // Logged after the settings are loaded: the time zone (log times) comes with them.
@@ -317,6 +323,7 @@ void appSetup() {
   if (laySig != layoutSignature) {
     if (layoutSignature != 0 && !fullRefresh) DBG(F("Layout changed: full refresh"));
     fullRefresh = true;
+    forceFetch = true;
     bootCount = 0;
     layoutSignature = laySig;
   }
@@ -367,6 +374,7 @@ void appSetup() {
   if (criticalShown) {  // charged again: everything fresh
     criticalShown = false;
     fullRefresh = true;
+    forceFetch = true;
     bootCount = 0;
   }
   if (powerPlan.mode == power::Mode::Night) {
@@ -387,6 +395,7 @@ void appSetup() {
     DBG(F("[Power] quiet hours over: full refresh"));
     nightShown = false;
     fullRefresh = true;
+    forceFetch = true;
     bootCount = 0;
   }
 
@@ -443,6 +452,14 @@ void appSetup() {
   wake.stocksRetry = retryDue(serviceStates[(int)Service::Stocks], nowTs);
   wake.calendarRetry = retryDue(serviceStates[(int)Service::Calendar], nowTs);
   wake.trackingRetry = retryDue(serviceStates[(int)Service::Tracking], nowTs);
+  wake.forceFetch = forceFetch;
+  // Calendar links with their own interval (stage 8): due ones bring the calendar download.
+  wake.calendarOwnDue = icsLinksDue(false, nowTs, powerPlan.stepMin) != 0;
+  wake.calendarServiceLinks = icsServiceLinks() != 0;
+  for (int s = 0; s < SERVICE_COUNT; s++) {
+    wake.lastOk[s] = serviceStates[s].lastOk;
+    wake.intervalMin[s] = intervalOf(static_cast<Service>(s));
+  }
   wake.flight.nextFlightStart = cal.nextFlight.start;
   wake.flight.calStart = liveFlight.calStart;
   wake.flight.calEnd = liveFlight.calEnd;
@@ -506,7 +523,7 @@ void appSetup() {
   bool makerworldRedraw = false;
   // A parcel delivered more than a day ago is still on screen: remove it without a download
   // (decided on the interval alone, before a Wi-Fi backoff, as before).
-  bool trackingRedraw = infoTracking && !dueByWakes(wake.trackingRefresh, bootCount) && trackingDropExpired();
+  bool trackingRedraw = infoTracking && !trackingIf && trackingDropExpired();
   if (plan.wifiBackoff) DBGF("WiFi backoff: next attempt in %ld s", plan.backoffRemaining);
 
   // The clock first, from the RTC, before the (slow) downloads: it changes within a few seconds of
@@ -559,10 +576,27 @@ void appSetup() {
         stocksIf = afterFetch(Service::Stocks, ok, failed > 0, PROBLEM_STOCKS, infoStocks);
       }
       if ((eventIf || calendarIf) && hasIcsFeeds()) {
-        int failed = 0;
-        const bool ok = fetchCalendarIcs(clockZone(infoClock), &failed);
-        if (!afterFetch(Service::Calendar, ok, failed > 0, PROBLEM_CALENDAR, infoEvent ? infoEvent : infoCalendar))
-          eventIf = calendarIf = false;
+        // Which links (stage 8): those following the calendar's interval when it is due (or forced,
+        // or retried), the others by their own interval (CalendarLinks.h).
+        const int calSvc = (int)Service::Calendar;
+        const bool serviceDue = forceFetch || wake.calendarRetry ||
+                                datastore::dueByAge(serviceStates[calSvc].lastOk, nowTs, intervalOf(Service::Calendar),
+                                                    powerPlan.stepMin, true);
+        const uint8_t serviceLinks = icsServiceLinks();
+        const uint8_t readMask = icsLinksDue(serviceDue, nowTs, powerPlan.stepMin);
+        if (readMask) {
+          int failed = 0;
+          const bool ok = fetchCalendarIcs(clockZone(infoClock), readMask, &failed);
+          // The calendar's own age counts the links that follow its interval (all, when none does).
+          const bool counts = (readMask & serviceLinks) || !serviceLinks;
+          if (counts) {
+            if (!afterFetch(Service::Calendar, ok, failed > 0, PROBLEM_CALENDAR, infoEvent ? infoEvent : infoCalendar))
+              eventIf = calendarIf = false;
+          } else {
+            setProblem(PROBLEM_CALENDAR, failed > 0);
+            if (!ok && !fullRefresh) eventIf = calendarIf = false;
+          }
+        }
       }
       if (bdayFeedDue) {
         const bool ok = fetchBirthdayFeed(device_timezone);
@@ -615,18 +649,15 @@ void appSetup() {
 
 
   DBGF("Minute %d since the last full refresh", bootCount);
+  // Without a status bar the problems are a mark in a corner, drawn over a widget: a change of
+  // them is drawn with a full refresh (rare), not as a partial window.
+  if (!infoBattery && problems != problemsShown && !fullRefresh) fullRefresh = true;
+  // A full refresh clears the whole screen: every box comes back, the ones not fetched in this wake
+  // from the store (stage 8: weather, stocks and the printer are kept in sleep memory too).
+  if (fullRefresh) openMeteoIf = stocksIf = eventIf = calendarIf = trackingIf = makerworldRedraw = true;
   // The printer while printing and 5 minutes after, MakerWorld's counters otherwise.
   const bool printView = showPrintView();
   if (bambuIf || makerworldRedraw) printViewOnScreen = printView;
-
-  // Without a status bar the problems are a mark in a corner, drawn over a widget: a change of
-  // them is drawn with a full refresh (rare), not as a partial window.
-  if (!infoBattery && problems != problemsShown && !fullRefresh) {
-    fullRefresh = true;
-    // Widgets that weren't fetched this wake are drawn from their kept data (a full refresh
-    // clears the whole screen; only the drawn parts come back).
-    openMeteoIf = stocksIf = eventIf = calendarIf = trackingIf = makerworldRedraw = true;
-  }
 
   initDisplay(fullRefresh);  // does nothing if the clock was drawn early
   if (fullRefresh) {

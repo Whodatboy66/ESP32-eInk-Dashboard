@@ -7,7 +7,8 @@
 #include "../core/ConfigValidation.h"
 
 bool fetchStocksDirect(int* failed) {
-  stockCount = 0;
+  StockItem fresh[MAX_STOCKS];  // the kept quotes stay unless at least one new one is read (stage 8)
+  int freshCount = 0;
   int failures = 0;
   if (!stock_symbols[0]) return false;
   JsonDocument filter;  // only the quote, not the chart
@@ -19,7 +20,7 @@ bool fetchStocksDirect(int* failed) {
   opt.filter = &filter;
   StockEntry entries[STOCK_MAX_ENTRIES];
   int n = parseStockEntries(stock_symbols, entries, STOCK_MAX_ENTRIES);
-  for (int i = 0; i < n && stockCount < MAX_STOCKS; i++) {
+  for (int i = 0; i < n && freshCount < MAX_STOCKS; i++) {
     char encoded[48], url[160];
     svc::urlEncode(entries[i].symbol, encoded, sizeof(encoded));
     snprintf(url, sizeof(url), "https://query1.finance.yahoo.com/v8/finance/chart/%s?range=1d&interval=1d", encoded);
@@ -31,9 +32,12 @@ bool fetchStocksDirect(int* failed) {
       continue;
     }
     snprintf(s.name, sizeof(s.name), "%s", entries[i].label);  // own label, or the symbol without ^
-    stocks[stockCount++] = s;
+    fresh[freshCount++] = s;
     DBGF("[Stocks] %s %.2f (prev %.2f)", s.name, s.price, s.prevClose);
   }
   if (failed) *failed = failures;
-  return stockCount > 0;
+  if (freshCount == 0) return false;
+  for (int i = 0; i < freshCount; i++) stocks[i] = fresh[i];
+  stockCount = freshCount;
+  return true;
 }

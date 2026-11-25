@@ -11,6 +11,9 @@
 #include <cstdint>
 #include <ctime>
 
+#include "DataStore.h"
+#include "ServiceState.h"
+
 constexpr time_t NTP_RESYNC_S = 60 * 60;            // re-sync internet time at least hourly
 constexpr int BAMBU_IDLE_REFRESH_MIN = 10;          // printer poll while idle (a divisor of 60, so it
                                                     // shares the Wi-Fi session of the hourly fetches)
@@ -60,6 +63,18 @@ struct WakeInputs {
   bool weatherRetry = false, stocksRetry = false, calendarRetry = false, trackingRetry = false;
   bool otaPendingVerify = false;   // a new firmware must reach Wi-Fi to confirm itself
   FlightState flight;
+  // Stage 8 (data store): weather, stocks, calendar and parcels are due by the age of their data
+  // (serviceStates[].lastOk) against their own interval (minutes, settings), indexed by Service.
+  time_t lastOk[SERVICE_COUNT] = {};
+  int intervalMin[SERVICE_COUNT] = {datastore::DEFAULT_WEATHER_MIN, datastore::DEFAULT_STOCKS_MIN,
+                                    datastore::DEFAULT_CALENDAR_MIN, datastore::DEFAULT_TRACKING_MIN};
+  // Everything fresh now: a tap with one screen, a layout change from the app, the morning after
+  // the quiet hours (before stage 8: bootCount = 0 did this, so every full refresh downloaded).
+  bool forceFetch = false;
+  // Calendar links (stage 8, CalendarLinks.h): a link with its own interval is due; a link follows
+  // the calendar's interval (otherwise the calendar's own age doesn't bring a download).
+  bool calendarOwnDue = false;
+  bool calendarServiceLinks = true;
 };
 
 struct WakePlan {
@@ -86,13 +101,30 @@ inline bool dueByWakes(int refresh, uint16_t bootCount, int step = 1) {
   return refresh > 0 && bootCount % roundedRefresh(refresh, step) == 0;
 }
 
+// A data type with a store (weather, stocks, calendar, parcels) on the layout: due by age, after a
+// failure by its retry, always when forced.
+inline bool serviceDue(const WakeInputs& in, Service s, bool onLayout, bool retry, bool wifiAnyway) {
+  if (!onLayout) return false;
+  if (in.forceFetch || retry) return true;
+  return datastore::dueByAge(in.lastOk[(int)s], in.now, in.intervalMin[(int)s], in.stepMin, wifiAnyway);
+}
+
 inline WakePlan planWake(const WakeInputs& in) {
   WakePlan p;
   const time_t now = in.now;
-  p.event = dueByWakes(in.eventRefresh, in.bootCount, in.stepMin) || (in.eventRefresh > 0 && in.calendarRetry);
-  p.stocks = dueByWakes(in.stocksRefresh, in.bootCount, in.stepMin) || (in.stocksRefresh > 0 && in.stocksRetry);
-  p.weather = dueByWakes(in.weatherRefresh, in.bootCount, in.stepMin) || (in.weatherRefresh > 0 && in.weatherRetry);
-  p.tracking = dueByWakes(in.trackingRefresh, in.bootCount, in.stepMin) || (in.trackingRefresh > 0 && in.trackingRetry);
+  // First without riding along; once Wi-Fi is needed anyway (below), again with it.
+  auto decideServices = [&](bool wifiAnyway) {
+    const bool calendarShown = in.eventRefresh > 0 || in.calendarRefresh > 0;
+    const bool calendarDue =
+        (in.calendarServiceLinks && serviceDue(in, Service::Calendar, calendarShown, in.calendarRetry, wifiAnyway)) ||
+        (calendarShown && in.calendarOwnDue);
+    p.event = in.eventRefresh > 0 && calendarDue;
+    p.calendar = in.calendarRefresh > 0 && calendarDue;
+    p.stocks = serviceDue(in, Service::Stocks, in.stocksRefresh > 0, in.stocksRetry, wifiAnyway);
+    p.weather = serviceDue(in, Service::Weather, in.weatherRefresh > 0, in.weatherRetry, wifiAnyway);
+    p.tracking = serviceDue(in, Service::Tracking, in.trackingRefresh > 0, in.trackingRetry, wifiAnyway);
+  };
+  decideServices(false);
 
   // A flight departs within 24 hours: refresh its countdown every 10 minutes (no download).
   const FlightState& f = in.flight;
@@ -118,7 +150,6 @@ inline WakePlan planWake(const WakeInputs& in) {
   bool eventOnLayout = in.eventRefresh > 0;
   p.eventRedraw = eventOnLayout && (flightSoon || liveWindow) && !p.event && dueByWakes(10, in.bootCount, in.stepMin);
   p.battery = dueByWakes(in.batteryRefresh, in.bootCount, in.stepMin);
-  p.calendar = dueByWakes(in.calendarRefresh, in.bootCount, in.stepMin) || (in.calendarRefresh > 0 && in.calendarRetry);
   bool bambuOnLayout = in.bambuRefresh > 0;
   bool bambuMqtt = bambuOnLayout && in.hasPrinterMqtt;
   p.bambu = bambuMqtt && ((((in.isPrinting || in.previousIsPrinting) && dueByWakes(in.bambuRefresh, in.bootCount, in.stepMin)) ||
@@ -138,17 +169,21 @@ inline WakePlan planWake(const WakeInputs& in) {
   p.ntp = in.lastNtpSync == 0 || now - in.lastNtpSync >= NTP_RESYNC_S;
   p.otaNight = in.otaNightDue;
 
-  p.needWiFi = p.event || p.stocks || p.weather || p.tracking || p.bambu || in.fullRefresh ||
-               p.flightStatus || (p.calendar && in.hasIcsFeeds) || p.makerworld || p.ntp || p.otaNight ||
-               in.otaPendingVerify;  // a new firmware confirms itself only after Wi-Fi worked
+  auto wifiFor = [&] {
+    return p.event || p.stocks || p.weather || p.tracking || p.bambu || in.forceFetch || p.flightStatus ||
+           (p.calendar && in.hasIcsFeeds) || p.makerworld || p.ntp || p.otaNight ||
+           in.otaPendingVerify;  // a new firmware confirms itself only after Wi-Fi worked
+  };
+  p.needWiFi = wifiFor();
+  if (p.needWiFi) decideServices(true);  // the services nearly due come along (one Wi-Fi session)
 
   // Wi-Fi failed recently: keep the previous content until the backoff ends (a button wake always
-  // tries). A full refresh still redraws everything from the kept data.
+  // tries). A full refresh redraws every box from the store (App.cpp), nothing is downloaded.
   if (p.needWiFi && in.wifiFailures && now < in.wifiRetryAfter && !in.otaPendingVerify && !in.buttonWake) {
     p.wifiBackoff = true;
     p.backoffRemaining = static_cast<long>(in.wifiRetryAfter - now);
     p.needWiFi = false;
-    if (!in.fullRefresh) p.weather = p.stocks = p.event = p.calendar = p.tracking = false;
+    p.weather = p.stocks = p.event = p.calendar = p.tracking = false;
     p.bambu = p.makerworld = p.flightStatus = p.otaNight = false;
   }
   return p;

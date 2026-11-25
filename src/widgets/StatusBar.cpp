@@ -31,7 +31,8 @@ static int activeProblems(const char* names[PROBLEM_COUNT]) {
 static void drawProblems(int16_t x, int16_t y, int16_t maxX) {
   problemsShown = problems;
   char line[96];
-  const int n = problemLine(problems, icsFailedMask, ui_lang, line, sizeof(line));
+  const char* const linkNames[ICS_MAX_FEEDS] = {ics_names[0], ics_names[1], ics_names[2]};
+  const int n = problemLine(problems, icsFailedMask, linkNames, ui_lang, line, sizeof(line));
   if (!n) return;
   drawSparseChar(&MDI_22_Sparse, x, y, MDI_ALERT, ALERT_COLOR);
   x += 24;

@@ -49,6 +49,7 @@ struct CalEventItem {
   time_t start;
   time_t end;
   bool allDay;
+  uint8_t link;  // the calendar link it came from (0-2; stage 8: kept per link, CalendarLinks.h)
 };
 
 struct CalEvents {

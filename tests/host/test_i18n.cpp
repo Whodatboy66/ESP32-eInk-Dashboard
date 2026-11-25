@@ -345,13 +345,19 @@ void test_status_holiday_fit() {
 // little"): the first problem's sentence, as in the app; "Kalender 2 …" when one link failed.
 static void test_status_problem_line() {
   char line[96];
-  CHECK_EQ(problemLine(0, 0, Lang::De, line, sizeof(line)), 0);
-  CHECK_EQ(problemLine(PROBLEM_CALENDAR, 0x02, Lang::De, line, sizeof(line)), 1);
+  CHECK_EQ(problemLine(0, 0, nullptr, Lang::De, line, sizeof(line)), 0);
+  CHECK_EQ(problemLine(PROBLEM_CALENDAR, 0x02, nullptr, Lang::De, line, sizeof(line)), 1);
   CHECK_STR(line, "Kalender 2 kann nicht gelesen werden");
-  CHECK_EQ(problemLine(PROBLEM_CALENDAR, 0x03, Lang::De, line, sizeof(line)), 1);  // two links: in general
+  CHECK_EQ(problemLine(PROBLEM_CALENDAR, 0x03, nullptr, Lang::De, line, sizeof(line)), 1);  // two links: in general
   CHECK_STR(line, "Ein Kalender kann nicht gelesen werden");
-  CHECK_EQ(problemLine(PROBLEM_CALENDAR | PROBLEM_WEATHER, 0x01, Lang::En, line, sizeof(line)), 2);
+  CHECK_EQ(problemLine(PROBLEM_CALENDAR | PROBLEM_WEATHER, 0x01, nullptr, Lang::En, line, sizeof(line)), 2);
   CHECK_STR(line, "The weather can't be loaded");  // the first in flag order
+  // Stage 8: a link with a name says so ("Arbeit"); an unnamed one keeps "Kalender 2".
+  const char* const names[3] = {"Familie", "Arbeit", ""};
+  problemLine(PROBLEM_CALENDAR, 0x02, names, Lang::De, line, sizeof(line));
+  CHECK_STR(line, "Arbeit kann nicht gelesen werden");
+  problemLine(PROBLEM_CALENDAR, 0x04, names, Lang::En, line, sizeof(line));
+  CHECK_STR(line, "Calendar 3 can't be read");
   // Every sentence fits a full-width bar after the longest date, with the icon and " +2", before
   // the version, Wi-Fi, battery and percent.
   int dateW = 0;
@@ -364,7 +370,8 @@ static void test_status_problem_line() {
   const int room = (800 - 4 - (width("100 %") + 4) - 22 - 20 - width("v.84") - 8) - (4 + dateW + 10);
   for (Lang lang : {Lang::De, Lang::En})
     for (int bit = 0; bit < PROBLEM_COUNT; bit++) {
-      problemLine(1u << bit, 0x04, lang, line, sizeof(line));
+      const char* const longest[3] = {"", "", "Abcdefghijklmnopqrst"};  // a name of 20 characters
+      problemLine(1u << bit, 0x04, longest, lang, line, sizeof(line));
       const int w = 24 + width(line) + width(" +2");
       if (w > room) std::printf("  too wide for the status bar (%d > %d): %s\n", w, room, line);
       CHECK(w <= room);

@@ -22,7 +22,7 @@
     mqtt_port: 8883, printer_name: FIRST ? '' : 'X1C', makerworld_uid: '',
     ota_auto: true, ota_beta: false, clock_24h: true,
     lang: /[?&]lang=en/.test(location.search) ? 'en' : 'de',
-    clock_interval: 1, quiet_enabled: true, quiet_from: '23:00', quiet_to: '06:00', battery_mah: 3000,
+    clock_interval: 1, interval_weather: 60, interval_stocks: 30, interval_calendar: 30, interval_tracking: 120, ics_names: ['Familie', 'Arbeit', ''], ics_every: [0, 1, 0], quiet_enabled: true, quiet_from: '23:00', quiet_to: '06:00', battery_mah: 3000,
     holiday_state: FIRST ? '' : 'BY', holidays_on: !FIRST, school_on: !FIRST, school_url: '', ics_month: [true, false, false], cal_birthdays: true,
     pin_preset: 'esp32c6_default',
     pins: { epd_cs: 1, epd_dc: 8, epd_rst: 14, epd_busy: 7, epd_sck: 23, epd_mosi: 22, display_power: 4, battery: 0, demo_button: 2 }
@@ -177,6 +177,9 @@
     if ('mqtt_port' in b && !(b.mqtt_port >= 1 && b.mqtt_port <= 65535)) errors.mqtt_port = L('Der Port ist eine Zahl von 1 bis 65535 (meist 8883).', 'The port is a number from 1 to 65535 (usually 8883).');
     if ('device_name' in b && !/^[\w \-äöüÄÖÜß]{1,32}$/.test(b.device_name)) errors.device_name = L('Nutze Buchstaben, Ziffern, Leerzeichen und Bindestriche (bis 32).', 'Use letters, digits, spaces and hyphens (up to 32).');
     if ('stocks' in b && String(b.stocks).split(',').filter(Boolean).length > 5) errors.stocks = L('Bis zu 5 Symbole.', 'Up to 5 symbols.');
+    ['interval_weather', 'interval_stocks', 'interval_calendar', 'interval_tracking'].forEach(function (k) {
+      if (k in b && [15, 30, 60, 120, 180, 360].indexOf(b[k]) < 0) errors[k] = L('Wähle 15 oder 30 Minuten, 1, 2, 3 oder 6 Stunden.', 'Choose 15 or 30 minutes, 1, 2, 3 or 6 hours.');
+    });
     if ('clock_interval' in b && [1, 2, 5, 10, 15, 30].indexOf(b.clock_interval) < 0) errors.clock_interval = L('Wähle 1, 2, 5, 10, 15 oder 30 Minuten.', 'Choose 1, 2, 5, 10, 15 or 30 minutes.');
     ['quiet_from', 'quiet_to'].forEach(function (k) {
       if (k in b && !/^([01]\d|2[0-3]):[0-5]\d$/.test(b[k])) errors[k] = L('Gib eine Uhrzeit wie 23:00 ein.', 'Type a time like 23:00.');

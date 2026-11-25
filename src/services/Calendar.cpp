@@ -9,15 +9,24 @@
 #include <memory>
 #include <new>
 
+#include "CalendarLinks.h"
 #include "HttpBody.h"
 #include "IcsParser.h"
 #include "IcsRules.h"
 #include "SchoolHolidays.h"
 #include "SecureClient.h"
+#include "../core/AppState.h"
 #include "../core/Problems.h"
 #include "../personal/UserStore.h"
 
 static_assert(ics::TITLE_MAX == CFG_CAL_TITLE_MAX, "calendar titles: the parser's and the widgets' size");
+
+// Per calendar link, kept in deep sleep (stage 8): when it was last read, its address's hash (a
+// changed address drops its kept entries), its marked days in the month `icsMonth` (bit d = day d).
+RTC_DATA_ATTR time_t icsLastRead[ICS_MAX_FEEDS];
+RTC_DATA_ATTR uint32_t icsUrlHash[ICS_MAX_FEEDS];
+RTC_DATA_ATTR uint32_t icsMonthDays[ICS_MAX_FEEDS];
+RTC_DATA_ATTR int8_t icsMonth = -1;
 
 namespace {
 
@@ -181,7 +190,7 @@ bool readLines(const char* url, OnLine onLine, int* httpCode = nullptr) {
 
 // Downloads a link and calls onEvent for each event. False without an answer 200.
 template <typename OnEvent>
-bool readEvents(const char* url, OnEvent onEvent) {
+bool readEvents(const char* url, OnEvent onEvent, const char* label = nullptr) {
   parser.reset();
   int events = 0;
   unsigned long t0 = millis();
@@ -194,11 +203,12 @@ bool readEvents(const char* url, OnEvent onEvent) {
   });
   if (ok) {
     if (lastDownload.packed)
-      DBGF("[ICS] %d events parsed in %lu ms (%lu KB, received packed: %lu KB, longest pause %lu ms)", events,
-           millis() - t0, (unsigned long)(lastDownload.bodyBytes / 1024), (unsigned long)(lastDownload.wireBytes / 1024),
+      DBGF("[ICS] %s%s%d events parsed in %lu ms (%lu KB, received packed: %lu KB, longest pause %lu ms)",
+           label ? label : "", label ? ": " : "", events, millis() - t0, (unsigned long)(lastDownload.bodyBytes / 1024), (unsigned long)(lastDownload.wireBytes / 1024),
            (unsigned long)lastDownload.longestPauseMs);
     else
-      DBGF("[ICS] %d events parsed in %lu ms (%lu KB, longest pause %lu ms)", events, millis() - t0,
+      DBGF("[ICS] %s%s%d events parsed in %lu ms (%lu KB, longest pause %lu ms)", label ? label : "",
+           label ? ": " : "", events, millis() - t0,
            (unsigned long)(lastDownload.bodyBytes / 1024), (unsigned long)lastDownload.longestPauseMs);
   }
   return ok;
@@ -226,6 +236,8 @@ void collectBirthday(personal::BirthdayList& l, const ics::Event& ev, time_t s, 
   b.year = born;
 }
 
+uint8_t readingLink = 0;  // the link being read (its entries carry it: CalEventItem::link)
+
 // "Heute und morgen": sorted by start, at most as many as fit.
 void addUpcoming(const ics::Event& ev, time_t s, time_t e) {
   const int cap = sizeof(cal.next24hEvents) / sizeof(cal.next24hEvents[0]);
@@ -238,14 +250,15 @@ void addUpcoming(const ics::Event& ev, time_t s, time_t e) {
   item.start = s;
   item.end = e;
   item.allDay = ev.allDay;
+  item.link = readingLink;
   if (cal.eventCount < cap) cal.eventCount++;
 }
 
 // The month view: the days of this month an occurrence covers, from today on.
 struct MonthMarks {
   time_t from, monthEnd;
-  int month;  // tm_mon
-  bool days[32];
+  int month;     // tm_mon
+  uint32_t days;  // bit d = day d (the link being read)
 };
 
 void markDays(MonthMarks& m, time_t s, time_t e) {
@@ -253,20 +266,23 @@ void markDays(MonthMarks& m, time_t s, time_t e) {
   for (int guard = 0; guard < 32 && cur < m.monthEnd && cur < e; guard++) {
     struct tm lt;
     localtime_r(&cur, &lt);
-    if (lt.tm_mon == m.month) m.days[lt.tm_mday] = true;
+    if (lt.tm_mon == m.month) m.days |= 1u << lt.tm_mday;
     cur = ics::localTime(lt.tm_year + 1900, lt.tm_mon + 1, lt.tm_mday + 1, 0, 0, 0);
   }
 }
 
 // The earliest flight not over yet within a week: still to depart (pinned with a countdown) or
 // departed but before its calendar end, so a delayed flight keeps its live status.
+CalEventItem flightCandidate;  // the earliest flight of the link being read (start 0: none)
+
 void notePossibleFlight(const ics::Event& ev, time_t s, time_t e, time_t now) {
   if (e <= now || s >= now + FLIGHT_LOOKAHEAD_S || !isFlightTitle(ev.summary)) return;
-  if (cal.nextFlight.start && s >= cal.nextFlight.start) return;
-  snprintf(cal.nextFlight.title, sizeof(cal.nextFlight.title), "%s", ev.summary);
-  cal.nextFlight.start = s;
-  cal.nextFlight.end = e;
-  cal.nextFlight.allDay = ev.allDay;
+  if (flightCandidate.start && s >= flightCandidate.start) return;
+  snprintf(flightCandidate.title, sizeof(flightCandidate.title), "%s", ev.summary);
+  flightCandidate.start = s;
+  flightCandidate.end = e;
+  flightCandidate.allDay = ev.allDay;
+  flightCandidate.link = readingLink;
 }
 
 bool setLocalZone(const char* tz, struct tm& now) {
@@ -275,23 +291,67 @@ bool setLocalZone(const char* tz, struct tm& now) {
   return getLocalTime(&now, 10000);
 }
 
+// A link's name for the log: its own, else "Kalender 2".
+void linkLabel(int i, char* out, size_t cap) {
+  if (ics_names[i][0]) snprintf(out, cap, "%s", ics_names[i]);
+  else snprintf(out, cap, tr(i18n::S::CalLinkN), i + 1);
+}
+
 }  // namespace
 
-bool fetchCalendarIcs(const char* tz, int* failed) {
-  // Keep the previous data if every link fails (cal lives in RTC memory and stays on screen).
+uint8_t icsLinksDue(bool calendarDue, time_t now, int stepMin) {
+  uint8_t mask = 0;
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) {
+    if (!ics_urls[i][0]) continue;
+    // A new or changed address is read at once (its kept entries belong to the old one).
+    const bool changed = textHash(ics_urls[i]) != icsUrlHash[i];
+    if (changed || icslinks::linkDue(ics_every[i], icsLastRead[i], now, calendarDue, stepMin)) mask |= 1u << i;
+  }
+  return mask;
+}
+
+uint8_t icsServiceLinks() {
+  uint8_t mask = 0;
+  for (int i = 0; i < ICS_MAX_FEEDS; i++)
+    if (ics_urls[i][0] && ics_every[i] == icslinks::EVERY_CALENDAR) mask |= 1u << i;
+  return mask;
+}
+
+bool fetchCalendarIcs(const char* tz, uint8_t readMask, int* failed) {
+  // Stage 8: only the links in readMask are read; the others keep their entries, days and flight
+  // (cal lives in RTC memory). A link that fails keeps its previous entries too.
   static CalEvents previous;
   previous = cal;
-  cal.eventCount = 0;
-  cal.daysCount = 0;
-  cal.nextFlight = {};
-  if (!hasIcsFeeds()) return false;
+  if (!hasIcsFeeds()) {
+    cal = CalEvents();
+    return false;
+  }
   struct tm nowTm;
   if (!setLocalZone(tz, nowTm)) {
     DBG("[ICS] Time not synced");
-    cal = previous;
     return false;
   }
   const time_t now = time(nullptr);
+  // Removed or changed addresses: their kept data goes.
+  uint8_t dropped = 0, configured = 0;
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) {
+    const uint32_t h = ics_urls[i][0] ? textHash(ics_urls[i]) : 0;
+    if (ics_urls[i][0]) configured |= 1u << i;
+    if (h != icsUrlHash[i]) {
+      dropped |= 1u << i;
+      icsUrlHash[i] = h;
+      icsLastRead[i] = 0;
+      icsMonthDays[i] = 0;
+    }
+  }
+  if (icsMonth != nowTm.tm_mon) {  // a new month: the kept marks were for the old one
+    for (uint32_t& d : icsMonthDays) d = 0;
+    icsMonth = (int8_t)nowTm.tm_mon;
+  }
+  readMask &= configured;
+  cal.eventCount = 0;
+  cal.daysCount = 0;
+  cal.nextFlight = {};
   const time_t from = localDay(nowTm, 0);
   const time_t upcomingTo = localDay(nowTm, 2);  // the agenda: today and tomorrow
   MonthMarks marks = {};
@@ -299,15 +359,24 @@ bool fetchCalendarIcs(const char* tz, int* failed) {
   marks.monthEnd = ics::localTime(nowTm.tm_year + 1900, nowTm.tm_mon + 2, 1, 0, 0, 0);
   marks.month = nowTm.tm_mon;
   const time_t to = now + FLIGHT_LOOKAHEAD_S > marks.monthEnd ? now + FLIGHT_LOOKAHEAD_S : marks.monthEnd;
-  // Birthdays in the links (stage 7): collected on the heap, saved only if every link worked.
-  personal::BirthdayList* bdays = cal_birthdays ? new (std::nothrow) personal::BirthdayList() : nullptr;
+  // Birthdays in the links (stage 7): collected on the heap, saved only when every link was read now.
+  const bool allLinks = readMask == configured;
+  personal::BirthdayList* bdays = cal_birthdays && allLinks ? new (std::nothrow) personal::BirthdayList() : nullptr;
   const time_t bdayTo = localDay(nowTm, personal::BDAY_HORIZON_DAYS + 1);
 
-  bool anyOk = false;
-  uint8_t failedMask = 0;
-  int failures = 0;
+  uint8_t okMask = 0, failedMask = 0;
+  CalEventItem freshFlight{};
   for (int i = 0; i < ICS_MAX_FEEDS; i++) {
-    if (!ics_urls[i][0]) continue;
+    if (!(configured & (1u << i))) continue;
+    char label[CFG_ICS_NAME_MAX + 12];
+    linkLabel(i, label, sizeof(label));
+    if (!(readMask & (1u << i))) {
+      DBGF("[ICS] %s: not due (%s)", label, ics_every[i] == icslinks::EVERY_3H ? "every 3 h" : "mornings only");
+      continue;
+    }
+    readingLink = (uint8_t)i;
+    flightCandidate = {};
+    marks.days = 0;
     const bool markMonth = (ics_month_mask & (1 << i)) != 0;
     bool ok = readEvents(ics_urls[i], [&](const ics::Event& ev) {
       const bool birthday = ics::countsAsBirthday(ev.freq, ev.allDay, cal_birthdays);
@@ -324,29 +393,44 @@ bool fetchCalendarIcs(const char* tz, int* failed) {
         notePossibleFlight(ev, s, e, now);
         return true;
       });
-    });
-    if (ok) anyOk = true;
-    else failures++;
-    if (ok) failedMask &= ~(1u << i);
-    else failedMask |= 1u << i;
+    }, label);
+    if (ok) {
+      okMask |= 1u << i;
+      icsLastRead[i] = now;
+      icsMonthDays[i] = marks.days;
+      if (flightCandidate.start && (!freshFlight.start || flightCandidate.start < freshFlight.start))
+        freshFlight = flightCandidate;
+    } else {
+      failedMask |= 1u << i;
+    }
   }
-  if (failed) *failed = failures;
-  icsFailedMask = failedMask;  // the status bar names the link ("Kalender 2 …")
-  if (anyOk && !failures) {
+  // The links tried now carry their new result; the others keep theirs.
+  icsFailedMask = (uint8_t)(((icsFailedMask & ~readMask) | failedMask) & configured);
+  if (failed) *failed = __builtin_popcount(icsFailedMask);
+  if (allLinks && okMask == configured) {
     if (bdays) saveUserCalBirthdays(*bdays);
     else if (!cal_birthdays) clearUserCalBirthdays();  // the setting was turned off
     // (no memory for the list: the stored one stays)
   }
   delete bdays;
-  if (!anyOk) {
+  const uint8_t replaced = okMask | dropped;
+  if (!replaced) {  // nothing read, nothing dropped: the screen keeps what it had
     cal = previous;
     return false;
   }
+  CalEventItem merged[sizeof(cal.next24hEvents) / sizeof(cal.next24hEvents[0])];
+  const int cap = sizeof(merged) / sizeof(merged[0]);
+  const int n = icslinks::mergeAgenda(previous.next24hEvents, previous.eventCount, replaced, cal.next24hEvents,
+                                      cal.eventCount, now, merged, cap);
+  for (int k = 0; k < n; k++) cal.next24hEvents[k] = merged[k];
+  cal.eventCount = n;
+  cal.nextFlight = icslinks::chooseFlight(previous.nextFlight, replaced, freshFlight, now);
+  const uint32_t days = icslinks::mergedMonthDays(icsMonthDays, ics_month_mask);
   for (int d = 1; d <= 31 && cal.daysCount < 31; d++)
-    if (marks.days[d]) cal.daysWithEvents[cal.daysCount++] = d;
+    if (days & (1u << d)) cal.daysWithEvents[cal.daysCount++] = d;
   if (cal.nextFlight.start) DBGF("[ICS] Next flight: %s", cal.nextFlight.title);
   DBGF("[ICS] %d upcoming, %d days marked", cal.eventCount, cal.daysCount);
-  return true;
+  return okMask != 0;
 }
 
 // Birthdays from the birthday calendar link (stage 4): every occurrence in the next 60 days.

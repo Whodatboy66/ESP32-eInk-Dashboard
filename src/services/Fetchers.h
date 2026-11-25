@@ -19,9 +19,15 @@ bool fetchFlightStatus(const char* tz);
 // MakerWorld counters of `makerworld_uid`, stored with saveMakerWorld().
 bool fetchMakerWorldDirect();
 
-// The calendar links `ics_urls` (merged): agenda, month marks, next flight, calendar birthdays.
-// True if any link was read; `failed` gets the number that failed. tz: the dashboard's zone.
-bool fetchCalendarIcs(const char* tz, int* failed = nullptr);
+// The calendar links `ics_urls` in readMask (bit i = link i): agenda, month marks, next flight,
+// calendar birthdays, merged with what the other links kept (stage 8, CalendarLinks.h). True if
+// a link was read; `failed` gets the number of links failing now. tz: the dashboard's zone.
+bool fetchCalendarIcs(const char* tz, uint8_t readMask, int* failed = nullptr);
+// The links to read now: with the calendar's interval when calendarDue, the others by their own; a
+// new or changed address at once (stage 8).
+uint8_t icsLinksDue(bool calendarDue, time_t now, int stepMin);
+// The links read with the calendar's interval (ics_every 0).
+uint8_t icsServiceLinks();
 // The birthday link `bday_url` into /bday_feed.json (stage 4).
 bool fetchBirthdayFeed(const char* tz);
 // The school holidays of a calendar link (stage 7).

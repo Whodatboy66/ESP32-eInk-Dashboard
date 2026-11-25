@@ -39,7 +39,6 @@ static bool resolveLocation(float& lat, float& lon) {
 }
 
 bool fetchWeatherDirect(LayoutItem* item) {
-  weather.count = 0;
   float lat, lon;
   if (!resolveLocation(lat, lon)) return false;
   // As many days as the widget shows (the drawing's rule, src/layout/LayoutEngine.h).
@@ -52,9 +51,12 @@ bool fetchWeatherDirect(LayoutItem* item) {
            lat, lon, days);
   JsonDocument doc;
   if (!httpGetJson(url, doc)) return false;
-  weather.count = svc::readForecast(doc, weather.day, days);
-  DBGF("[Weather] %d days", weather.count);
-  return weather.count > 0;
+  WeatherData fresh{};  // the kept forecast stays until a new one is read (stage 8 data store)
+  fresh.count = svc::readForecast(doc, fresh.day, days);
+  DBGF("[Weather] %d days", fresh.count);
+  if (fresh.count <= 0) return false;
+  weather = fresh;
+  return true;
 }
 
 int searchPlaces(const char* query, PlaceResult* out, int max) {

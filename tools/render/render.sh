@@ -21,7 +21,7 @@ mkdir -p "$OUT"
   src/ui/SparseFont.cpp src/ui/Fonts.cpp src/widgets/Widgets.cpp src/widgets/MonthView.cpp \
   src/widgets/Clock.cpp src/widgets/StatusBar.cpp src/widgets/Printer.cpp src/widgets/Registry.cpp \
   src/widgets/Dashboard.cpp src/widgets/Personal.cpp tools/render/UserStoreSample.cpp \
-  src/ui/Canvas.cpp src/core/Problems.cpp src/update/UpdateScreens.cpp src/web/SetupScreen.cpp \
+  src/ui/Canvas.cpp src/core/Problems.cpp src/core/DataStore.cpp src/update/UpdateScreens.cpp src/web/SetupScreen.cpp \
   -x c src/ui/qr/qrcodegen.c -x none \
   -Wl,--wrap=time -o "$BUILD/render"
 # name template hidden-widgets

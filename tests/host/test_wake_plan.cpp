@@ -24,8 +24,13 @@ static WakeInputs base() {
   in.hasMakerworldUid = true;
   in.makerworldLastFetch = NOW - 100;
   in.lastNtpSync = NOW - 100;
+  // Stage 8: weather, stocks, calendar and parcels are due by the age of their data (kept in sleep
+  // memory); all just fetched here.
+  for (time_t& t : in.lastOk) t = NOW - 100;
   return in;
 }
+
+static void setAge(WakeInputs& in, Service s, int minutes) { in.lastOk[(int)s] = NOW - minutes * 60; }
 
 static void test_quiet_wake_needs_no_wifi() {
   WakePlan p = planWake(base());
@@ -34,16 +39,73 @@ static void test_quiet_wake_needs_no_wifi() {
   CHECK(!p.makerworld && !p.ntp && !p.flightStatus && !p.eventRedraw && !p.battery);
 }
 
-static void test_refresh_intervals_count_wakes() {
+// Stage 8: each data type is due when its data is as old as its own interval (defaults: calendar
+// 30, weather 60, stocks 30, parcels 120 minutes), not by the wake counter.
+static void test_services_due_by_age() {
   WakeInputs in = base();
-  in.bootCount = 120;  // multiple of 60 and 120 (and 4, 10), not of 360
+  setAge(in, Service::Calendar, 31);
+  setAge(in, Service::Stocks, 10);
+  setAge(in, Service::Weather, 30);
+  setAge(in, Service::Tracking, 121);
   WakePlan p = planWake(in);
-  CHECK(p.event && p.stocks && p.tracking && p.battery && p.calendar);
-  CHECK(!p.weather);
-  CHECK(p.bambu);      // 120 % 10 == 0: idle printer poll
+  CHECK(p.event && p.calendar && p.tracking);  // agenda and month: one calendar download
+  CHECK(!p.stocks && !p.weather);
   CHECK(p.needWiFi);
-  in.bootCount = 360;
+  // In the last quarter of its interval, weather rides along with the Wi-Fi that is on anyway.
+  setAge(in, Service::Weather, 46);
   CHECK(planWake(in).weather);
+  // Alone (nothing else due) it waits for its own time.
+  in = base();
+  setAge(in, Service::Weather, 46);
+  CHECK(!planWake(in).weather && !planWake(in).needWiFi);
+}
+
+// After a reset the store is empty: everything on the layout once, in one Wi-Fi session.
+static void test_due_after_reset() {
+  WakeInputs in = base();
+  for (time_t& t : in.lastOk) t = 0;
+  WakePlan p = planWake(in);
+  CHECK(p.event && p.calendar && p.stocks && p.weather && p.tracking && p.needWiFi);
+}
+
+// A tap (one screen), a layout change from the app, the morning after the quiet hours: everything
+// fresh ("forceFetch", what bootCount = 0 meant before). The daily full redraw alone draws from the
+// store and downloads nothing.
+static void test_force_fetch_and_daily_full_redraw() {
+  WakeInputs in = base();
+  in.forceFetch = true;
+  WakePlan p = planWake(in);
+  CHECK(p.event && p.calendar && p.stocks && p.weather && p.tracking && p.needWiFi);
+  in = base();
+  in.fullRefresh = true;
+  in.bootCount = 1440;
+  in.bambuRefresh = 0;  // the printer has its own 10-minute poll (1440 is one of them)
+  p = planWake(in);
+  CHECK(!p.event && !p.calendar && !p.stocks && !p.weather && !p.tracking);
+  CHECK(!p.needWiFi);
+}
+
+// Stage 8: calendar links with their own interval ("every 3 hours", "mornings only") bring the
+// calendar download by themselves; the calendar's interval counts only with a link that follows it.
+static void test_calendar_links_own_interval() {
+  WakeInputs in = base();
+  in.calendarOwnDue = true;  // e.g. the work calendar's morning read
+  WakePlan p = planWake(in);
+  CHECK(p.event && p.calendar && p.needWiFi);
+  in = base();
+  setAge(in, Service::Calendar, 31);
+  in.calendarServiceLinks = false;  // every link has its own interval, none due
+  p = planWake(in);
+  CHECK(!p.event && !p.calendar);
+}
+
+// Without a real clock yet everything counts as due.
+static void test_due_without_clock() {
+  WakeInputs in = base();
+  in.now = 1000;
+  in.lastNtpSync = 0;
+  WakePlan p = planWake(in);
+  CHECK(p.weather && p.stocks && p.calendar && p.needWiFi);
 }
 
 static void test_widget_not_on_layout_is_never_fetched() {
@@ -59,7 +121,7 @@ static void test_widget_not_on_layout_is_never_fetched() {
 
 static void test_calendar_needs_feeds_for_wifi() {
   WakeInputs in = base();
-  in.bootCount = 60;
+  setAge(in, Service::Calendar, 60);
   in.eventRefresh = 0;     // only the month view
   in.stocksRefresh = in.trackingRefresh = in.bambuRefresh = 0;
   in.hasIcsFeeds = false;
@@ -70,9 +132,9 @@ static void test_calendar_needs_feeds_for_wifi() {
   CHECK(planWake(in).needWiFi);
 }
 
-static void test_full_refresh_always_brings_wifi() {
+static void test_forced_fetch_brings_wifi() {
   WakeInputs in = base();
-  in.fullRefresh = true;
+  in.forceFetch = true;
   CHECK(planWake(in).needWiFi);
 }
 
@@ -146,19 +208,31 @@ static void test_slower_clock_keeps_hourly_fetches() {
   CHECK_EQ(roundedRefresh(60, 15), 60);
   CHECK_EQ(roundedRefresh(10, 15), 15);
   CHECK_EQ(roundedRefresh(7, 1), 7);
-  for (int step : {5, 15}) {
+  // By age: an hourly calendar stays hourly with a 5- and a 15-minute clock (the download recorded
+  // 20 s into its wake); a 15-minute interval with a 30-minute clock comes every 30 minutes.
+  const struct { int step, interval, perDay; } cases[] = {{5, 60, 24}, {15, 60, 24}, {30, 15, 48}, {1, 30, 48}};
+  for (const auto& c : cases) {
     WakeInputs in = base();
-    in.stepMin = step;
-    in.calendarRefresh = 60;
+    in.stepMin = c.step;
+    in.intervalMin[(int)Service::Calendar] = c.interval;
+    in.lastOk[(int)Service::Calendar] = NOW + 20;
     int calendarFetches = 0, wakes = 0;
-    for (int minute = step; minute <= 24 * 60; minute += step) {
-      in.bootCount = (uint16_t)minute;
+    for (int minute = c.step; minute <= 24 * 60; minute += c.step) {
+      in.now = NOW + minute * 60;
+      in.lastNtpSync = in.now;
+      in.makerworldLastFetch = in.now;
+      for (int s = 0; s < SERVICE_COUNT; s++)
+        if (s != (int)Service::Calendar) in.lastOk[s] = in.now;
       WakePlan p = planWake(in);
-      if (p.calendar) calendarFetches++;
+      if (p.calendar) {
+        calendarFetches++;
+        in.lastOk[(int)Service::Calendar] = in.now + 20;
+      }
       wakes++;
     }
-    CHECK_EQ(wakes, 24 * 60 / step);
-    CHECK_EQ(calendarFetches, 24);  // hourly, also with the slower clock
+    CHECK_EQ(wakes, 24 * 60 / c.step);
+    if (calendarFetches != c.perDay) std::printf("  step %d, interval %d: %d fetches\n", c.step, c.interval, calendarFetches);
+    CHECK_EQ(calendarFetches, c.perDay);
   }
   WakeInputs in = base();
   in.stepMin = 5;
@@ -180,6 +254,7 @@ static void test_bambu_redraw_when_print_view_ends() {
 static void test_wifi_backoff() {
   WakeInputs in = base();
   in.bootCount = 120;
+  for (time_t& t : in.lastOk) t = NOW - 7200;
   in.wifiFailures = 2;
   in.wifiRetryAfter = NOW + 100;
   WakePlan p = planWake(in);
@@ -199,16 +274,18 @@ static void test_wifi_backoff() {
   CHECK(planWake(in).needWiFi);
 }
 
-static void test_backoff_keeps_full_refresh_widgets() {
+static void test_backoff_fetches_nothing() {
   WakeInputs in = base();
   in.bootCount = 0;
   in.fullRefresh = true;
+  in.forceFetch = true;
   in.wifiFailures = 1;
   in.wifiRetryAfter = NOW + 50;
+  in.buttonWake = false;
   WakePlan p = planWake(in);
   CHECK(!p.needWiFi);
-  // A full refresh redraws everything from the kept data, so the flags stay.
-  CHECK(p.event && p.weather && p.stocks && p.calendar && p.tracking);
+  // The flags say what to download; the full redraw draws every box from the store (App.cpp).
+  CHECK(!p.event && !p.weather && !p.stocks && !p.calendar && !p.tracking);
   CHECK(!p.bambu && !p.makerworld && !p.flightStatus);
 }
 
@@ -270,7 +347,8 @@ static void test_flight_countdown_redraw_every_10_wakes() {
   CHECK(planWake(in).eventRedraw);
   in.bootCount = 31;
   CHECK(!planWake(in).eventRedraw);
-  in.bootCount = 60;  // the calendar is fetched anyway: no extra redraw
+  in.bootCount = 60;
+  setAge(in, Service::Calendar, 31);  // the calendar is fetched anyway: no extra redraw
   CHECK(!planWake(in).eventRedraw);
 }
 
@@ -336,10 +414,14 @@ static void test_flight_stops() {
 
 int main() {
   test_quiet_wake_needs_no_wifi();
-  test_refresh_intervals_count_wakes();
+  test_services_due_by_age();
+  test_due_after_reset();
+  test_force_fetch_and_daily_full_redraw();
+  test_due_without_clock();
+  test_calendar_links_own_interval();
   test_widget_not_on_layout_is_never_fetched();
   test_calendar_needs_feeds_for_wifi();
-  test_full_refresh_always_brings_wifi();
+  test_forced_fetch_brings_wifi();
   test_ntp_resync_hourly();
   test_makerworld_hourly_only_in_idle_view();
   test_bambu_polling();
@@ -347,7 +429,7 @@ int main() {
   test_bambu_needs_mqtt_settings_and_backs_off();
   test_slower_clock_keeps_hourly_fetches();
   test_wifi_backoff();
-  test_backoff_keeps_full_refresh_widgets();
+  test_backoff_fetches_nothing();
   test_retry_after_a_failed_fetch();
   test_wifi_backoff_sequence();
   test_night_update_check_brings_wifi();

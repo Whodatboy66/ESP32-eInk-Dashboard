@@ -14,6 +14,8 @@
 #include <new>
 
 #include "../../app.h"
+#include "../core/DataStore.h"
+#include "../services/CalendarLinks.h"
 #include "../core/AppState.h"
 #include "../core/ConfigManager.h"
 #include "../core/ConfigValidation.h"
@@ -280,6 +282,13 @@ void handleState() {
   s["school_url"] = school_url;
   JsonArray icsMonth = s["ics_month"].to<JsonArray>();
   for (int i = 0; i < ICS_MAX_FEEDS; i++) icsMonth.add((ics_month_mask & (1 << i)) != 0);
+  // Stage 8: per link its name (not a secret: shown in the app and on the screen) and how often it is read.
+  JsonArray icsNames = s["ics_names"].to<JsonArray>();
+  JsonArray icsEvery = s["ics_every"].to<JsonArray>();
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) {
+    icsNames.add(ics_names[i]);
+    icsEvery.add(ics_every[i]);
+  }
   s["cal_birthdays"] = cal_birthdays;
   secret(s, "pkge_key", pkge_api_key);
   secret(s, "adb_key", aerodatabox_key);
@@ -293,6 +302,11 @@ void handleState() {
   s["ota_beta"] = otaBeta;
   s["clock_24h"] = clock_24h;
   s["clock_interval"] = clock_interval;
+  // Stage 8: how often each data type loads (minutes; the clock interval caps it).
+  s["interval_weather"] = data_interval[0];
+  s["interval_stocks"] = data_interval[1];
+  s["interval_calendar"] = data_interval[2];
+  s["interval_tracking"] = data_interval[3];
   s["quiet_enabled"] = quiet_on;
   char hm[8];
   power::formatHm(quiet_from, hm, sizeof(hm));
@@ -480,6 +494,16 @@ void handleSettings() {
     clockInt = o["clock_interval"] | 0;
     if (!power::validClockInterval(clockInt)) fail("clock_interval", tr(S::ErrClockInterval));
   }
+  static const char* const INTERVAL_FIELDS[4] = {"interval_weather", "interval_stocks", "interval_calendar",
+                                                 "interval_tracking"};
+  uint16_t intervals[4];
+  for (int i = 0; i < 4; i++) {
+    intervals[i] = data_interval[i];
+    if (o[INTERVAL_FIELDS[i]].isUnbound()) continue;
+    const int v = o[INTERVAL_FIELDS[i]] | 0;
+    if (datastore::validInterval(v)) intervals[i] = (uint16_t)v;
+    else fail(INTERVAL_FIELDS[i], tr(S::ErrInterval));
+  }
   if (!o["quiet_from"].isUnbound() && !power::parseHm(o["quiet_from"] | "", qFrom))
     fail("quiet_from", tr(S::ErrQuietFrom));
   if (!o["quiet_to"].isUnbound() && !power::parseHm(o["quiet_to"] | "", qTo))
@@ -528,6 +552,33 @@ void handleSettings() {
     if (!o["school_url"].is<const char*>()) fail("school_url", tr(S::ErrLink));
     else if (!v[0]) sUrl[0] = '\0';  // empty: our own feed for the state
     else if (!validateIcsUrl(v, sUrl, sizeof(sUrl))) fail("school_url", tr(S::ErrLink));
+  }
+  char icsNames[ICS_MAX_FEEDS][CFG_ICS_NAME_MAX];
+  uint8_t icsEvery[ICS_MAX_FEEDS];
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) {
+    copyStr(icsNames[i], sizeof(icsNames[i]), ics_names[i]);
+    icsEvery[i] = ics_every[i];
+  }
+  static const char* const NAME_FIELDS[ICS_MAX_FEEDS] = {"ics_names.0", "ics_names.1", "ics_names.2"};
+  if (o["ics_names"].is<JsonArrayConst>()) {
+    JsonArrayConst arr = o["ics_names"].as<JsonArrayConst>();
+    for (int i = 0; i < ICS_MAX_FEEDS && i < (int)arr.size(); i++) {
+      if (!arr[i].is<const char*>() || !fits(arr[i].as<const char*>(), CFG_ICS_NAME_MAX)) {
+        char msg[80];
+        snprintf(msg, sizeof(msg), tr(S::FieldMaxChars), tr(S::LabelCalName), (unsigned)(CFG_ICS_NAME_MAX - 1));
+        fail(NAME_FIELDS[i], msg);
+      } else {
+        copyStr(icsNames[i], sizeof(icsNames[i]), arr[i].as<const char*>());
+      }
+    }
+  }
+  if (o["ics_every"].is<JsonArrayConst>()) {
+    JsonArrayConst arr = o["ics_every"].as<JsonArrayConst>();
+    for (int i = 0; i < ICS_MAX_FEEDS && i < (int)arr.size(); i++) {
+      const int v = arr[i] | -1;
+      if (v >= icslinks::EVERY_CALENDAR && v <= icslinks::EVERY_MORNING) icsEvery[i] = (uint8_t)v;
+      else fail(i == 0 ? "ics_every.0" : i == 1 ? "ics_every.1" : "ics_every.2", tr(S::ErrIcsEvery));
+    }
   }
   uint8_t monthMask = ics_month_mask;
   if (o["ics_month"].is<JsonArrayConst>()) {
@@ -628,6 +679,10 @@ void handleSettings() {
   copyStr(holiday_state, sizeof(holiday_state), hState);
   copyStr(school_url, sizeof(school_url), sUrl);
   ics_month_mask = monthMask;
+  for (int i = 0; i < ICS_MAX_FEEDS; i++) {
+    copyStr(ics_names[i], sizeof(ics_names[i]), icsNames[i]);
+    ics_every[i] = icsEvery[i];
+  }
   if (o["holidays_on"].is<bool>()) holidays_on = o["holidays_on"];
   if (o["school_on"].is<bool>()) school_on = o["school_on"];
   if (o["cal_birthdays"].is<bool>()) cal_birthdays = o["cal_birthdays"];
@@ -642,6 +697,7 @@ void handleSettings() {
   if (o["ota_beta"].is<bool>()) otaBeta = o["ota_beta"];
   if (o["clock_24h"].is<bool>()) clock_24h = o["clock_24h"];
   clock_interval = (uint8_t)clockInt;
+  for (int i = 0; i < 4; i++) data_interval[i] = intervals[i];
   if (o["quiet_enabled"].is<bool>()) quiet_on = o["quiet_enabled"];
   quiet_from = (uint16_t)qFrom;
   quiet_to = (uint16_t)qTo;

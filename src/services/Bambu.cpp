@@ -7,7 +7,6 @@
 
 #include "LanAddress.h"
 
-bambu::PrinterStatus printer;
 RTC_DATA_ATTR bool isPrinting = false;
 RTC_DATA_ATTR bool previousIsPrinting = false;
 RTC_DATA_ATTR bool printViewOnScreen = false;

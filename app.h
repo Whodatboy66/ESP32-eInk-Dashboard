@@ -40,6 +40,11 @@ extern char weather_location[CFG_WEATHER_LOC_MAX];
 extern char stock_symbols[CFG_STOCKS_MAX];
 extern char ics_urls[ICS_MAX_FEEDS][CFG_ICS_URL_MAX];
 extern char bday_url[CFG_ICS_URL_MAX];  // the birthday calendar link (stage 4)
+// Stage 8, per calendar link: a name ("Familie", "Arbeit"; "" = "Kalender 1") and how often it is
+// read (icslinks::EVERY_CALENDAR / EVERY_3H / EVERY_MORNING, src/services/CalendarLinks.h).
+constexpr unsigned CFG_ICS_NAME_MAX = 21;  // 20 characters
+extern char ics_names[ICS_MAX_FEEDS][CFG_ICS_NAME_MAX];
+extern uint8_t ics_every[ICS_MAX_FEEDS];
 extern char makerworld_uid[CFG_MW_UID_MAX];
 extern char pkge_api_key[CFG_PKGE_KEY_MAX];
 extern char aerodatabox_key[CFG_ADB_KEY_MAX];
@@ -50,6 +55,9 @@ extern bool holidays_on, school_on;
 extern char school_url[CFG_ICS_URL_MAX];
 extern uint8_t ics_month_mask;
 extern bool cal_birthdays;
+// Stage 8: each data type's refresh interval in minutes (datastore::INTERVAL_CHOICES), in the order
+// of `Service` (src/core/ServiceState.h): weather, stocks, calendar, parcels. The clock interval caps it.
+extern uint16_t data_interval[4];
 
 inline bool hasIcsFeeds() {
   for (const auto& url : ics_urls)

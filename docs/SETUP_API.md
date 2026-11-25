@@ -108,6 +108,10 @@ its own password).
   the screen in the new language); another value than `"de"` / `"en"` is a field error under `lang`.
   The answer of that save is still in the old language. `lastUpdate` stays in the language it was
   written in. Place names from `/api/places` come in that language too ("Berlin, Deutschland").
+- **Data intervals (build 87, stage 8):** settings `interval_weather`, `interval_stocks`, `interval_calendar`,
+  `interval_tracking`: minutes, one of 15, 30, 60, 120, 180, 360 (defaults 60, 30, 30, 120); another value is a
+  field error under its key. Each data type loads when its kept data is that old; never more often than
+  `clock_interval` (rounded up to a multiple of it).
 - **Power (build 75, stage 6):** settings `clock_interval` (minutes: 1, 2, 5, 10, 15 or 30),
   `quiet_enabled` (bool), `quiet_from` / `quiet_to` ("HH:MM", default "23:00" / "06:00"; equal = no
   window), `battery_mah` (100-20000, default 3000, only for the estimate). `power` in the state:

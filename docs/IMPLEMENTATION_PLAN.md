@@ -329,6 +329,8 @@ fork network and gets the owner's licence.
 **Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) blocks 9b and M.
 
 ### Stage 8: Data store and several screens (week 2, until 2026-12-07)
+Implementation plan: [plans/STAGE8_DATA_AND_SCREENS.md](plans/STAGE8_DATA_AND_SCREENS.md) (four parts, builds 87-90).
+
 - [ ] Data store: each service keeps its last result in RTC memory; screens draw from it; downloads
   only when due
 - [ ] Refresh interval per data type (moved from stage 6)

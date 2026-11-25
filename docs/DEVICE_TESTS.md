@@ -485,10 +485,28 @@ Build 85's log: "inflate error" after ~7 KB, then the safety net loaded both cal
 - [ ] The same after a restart (setup mode and back): still packed
 - [ ] The app's "Check" of both links shows their number of entries
 
-## 10. Stage 8: data store and several screens *(not built yet)*
+## 10. Stage 8: data store and several screens
 
 **Confirms stage 8:** several screens switch by time and by tap, quickly and without extra battery
-use; sleep screen and picture of the day work.
+use; sleep screen and picture of the day work. Plan: [plans/STAGE8_DATA_AND_SCREENS.md](plans/STAGE8_DATA_AND_SCREENS.md).
+
+### Part A, build 87: data store, intervals, calendar names
+
+- [ ] After the update (a restart): every box loads once (log: one Wi-Fi session, all services)
+- [ ] Data tab → **Load new data**: the four choices are there; e.g. weather 2 h: the log shows
+      `[Weather]` only every 2 hours; with the clock every 30 min a 15-min choice comes every 30 min
+- [ ] Downloads share Wi-Fi: no extra short Wi-Fi sessions a few minutes apart (log over an hour)
+- [ ] The daily full refresh (and the redraw after an update screen) shows all boxes **without** a
+      download (log: no Wi-Fi in that wake unless something was due); weather / stocks keep their values
+- [ ] A tap still loads everything fresh (one screen)
+- [ ] Calendar names: set "Familie" and "Arbeit" in the app; the log says `[ICS] Arbeit: … events`
+- [ ] Work calendar on **Every 3 h**: between its reads the log says `[ICS] Arbeit: not due (every 3 h)`,
+      its entries and marks stay on the screen; on **Mornings**: read once, at the first refresh from 06:00
+- [ ] A broken link (e.g. one letter changed): the status bar says "Arbeit kann nicht gelesen werden";
+      the other calendar's entries still update; fixing the link brings its entries back
+- [ ] Wi-Fi off for a while: weather and stocks keep their values (the "old" badge after 2 intervals)
+
+### Later parts (C, D)
 
 - [ ] One screen (default): a tap refreshes like before
 - [ ] Two screens: a tap shows the next one within a few seconds (no Wi-Fi in the log unless data is

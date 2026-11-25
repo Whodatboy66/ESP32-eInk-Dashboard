@@ -9,3 +9,4 @@
 84: Kalender wieder zuverlässig (Fehler am Dateiende behoben) | Statusleiste nennt den Fehler; schärfere, saubere Schrift | Ohne Akku am USB: „USB“ statt 100 %; MakerWorld nur mit ID
 85: Kalender: eigener, getesteter Entpacker statt dem alten im Chip | Falls Laden gepackt scheitert: automatisch ungepackt wie früher | Log nennt die Ursache, wenn ein Kalender nicht lädt
 86: Kalender lädt wieder gepackt: Arbeitskalender in Sekunden statt 15 s | Fehler im Download behoben (Daten wurden doppelt gelesen)
+87: Daten bleiben im Schlafspeicher: weniger Downloads, schnelleres Bild | Wie oft laden: je Datenart einstellbar (Daten-Tab) | Kalender mit Namen; Arbeitskalender z. B. nur alle 3 Std. oder morgens
