@@ -2,12 +2,10 @@
 // Host test for src/services/HttpBody.h: a calendar download's body with "Transfer-Encoding: chunked"
 // and "Content-Encoding: gzip", as Google sends it (build 83: a 1,098-entry work calendar took 15 s
 // uncompressed; Google packs iCal about 10 x). Run: tests/host/run.sh
-#include <miniz.h>
-
 #include <string>
 #include <vector>
 
-#include "src/services/HttpBody.h"
+#include "src/services/HttpBody.h"  // first: miniz under the firmware's names (MinizNames.h)
 #include "tests/host/check.h"
 
 namespace {
@@ -155,11 +153,23 @@ void test_gunzip_damaged() {
       CHECK(out == text);
     }
   }
+  {  // a few packed bytes that unpack to more than the 32 KB window, and nothing after them: the
+     // output the decompressor still holds must come out without more input
+    const std::string same = std::string(300000, 'A') + "END";
+    Bytes tight = gzip(same);
+    tight.resize(tight.size() - 8);  // no trailer at all
+    httpbody::Gunzip g;
+    CHECK(g.begin());
+    std::string out;
+    CHECK(feed(g, tight, 0, out) && g.done());
+    CHECK(out == same);
+  }
   {  // not gzip at all
     httpbody::Gunzip g;
     CHECK(g.begin());
     std::string out;
     CHECK(!feed(g, bytes("BEGIN:VCALENDAR\r\n"), 0, out));
+    CHECK_STR(g.failure(), "not gzip");
   }
   {  // the size in the trailer doesn't match
     Bytes wrong = gz;

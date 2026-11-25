@@ -457,6 +457,14 @@ The names are cleaned at the next calendar update (within the hour, or double ta
       full, the percentage as before
 - [ ] No MakerWorld id: the printer box shows the printer (temperatures, AMS, spools), not old numbers
 
+### Build 85: calendar downloads with the firmware's own decompressor (2026-11-25)
+
+- [ ] Both calendar links load: `[ICS] 268 events parsed in … ms (… KB, received packed: … KB, …)` and
+      the same for the work calendar (1,100 entries); its time: ____ ms (was ~16,000 ms unpacked)
+- [ ] The app's "Check" of both links shows their number of entries (was "No connection")
+- [ ] No "packed downloads off" line in the log (if there is one: the line before it names the reason;
+      the calendars then still load, unpacked as before)
+
 ## 10. Stage 8: data store and several screens *(not built yet)*
 
 **Confirms stage 8:** several screens switch by time and by tap, quickly and without extra battery

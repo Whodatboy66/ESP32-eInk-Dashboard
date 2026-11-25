@@ -99,7 +99,7 @@ This project: [MIT License](LICENSE) (c) 2026 Whodatboy66. The third-party parts
 - Montserrat: [Google Fonts](https://fonts.google.com/specimen/Montserrat), SIL Open Font License 1.1 (text,
   headings, clock and month digits).
 - School holidays: [OpenHolidays API](https://www.openholidaysapi.org), ODbL 1.0 (the published calendar files).
-- miniz 3.0.2 (MIT License, [github.com/richgel999/miniz](https://github.com/richgel999/miniz)): only in the PC tests
-  (`tests/host/third_party/miniz`); the firmware uses the same decompressor from the chip's ROM.
+- miniz 3.0.2 (MIT License, [github.com/richgel999/miniz](https://github.com/richgel999/miniz)), in `third_party/miniz`:
+  its decompressor unpacks the calendar downloads; the PC tests use the whole library.
 - QR Code generator library: [Project Nayuki](https://www.nayuki.io/page/qr-code-generator-library), MIT License
   (`src/ui/qr/`, setup screens).

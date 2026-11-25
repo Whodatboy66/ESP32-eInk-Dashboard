@@ -291,6 +291,16 @@ The builder may adjust these after the PC renders; the owner reviews the renders
   (owner: acceptable).
 - On beta first; to stable when it works reliably on the owner's device, otherwise it moves to Later.
 
+### Look of the widgets (owner, 2026-11-25: "love the functionality, hate the looks")
+
+- The **printer box** gets designs per box size like the clock and the month (stage 7): today it
+  draws one fixed small layout (3 rows at fixed x positions) even in a half-screen box. Bigger boxes:
+  larger state and progress, the AMS spools as a row of filled bars with type and fill level,
+  temperatures with icons; the idle view (no MakerWorld id) uses the same space.
+- A look pass over the other data widgets (stocks, parcels, weather, MakerWorld) with the same rule:
+  use the box, no fixed pixel columns, the hinted fonts (build 84). Mockups (PC renders) first, for
+  the owner to pick, then the build.
+
 ### Printer box when idle (owner, 2026-11-25)
 
 - Without a MakerWorld id the idle printer already shows its own view (temperatures, AMS humidity and

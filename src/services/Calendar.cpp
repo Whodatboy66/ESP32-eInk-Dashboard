@@ -51,8 +51,12 @@ struct Download {
 };
 Download lastDownload;
 
+// After a packed download failed, every link is read unpacked in the old way (HTTP/1.0, as up to
+// build 80) until the next restart: at worst one refresh fails, never all of them (build 85).
+RTC_DATA_ATTR bool plainOnly = false;
+
 // A packed answer is asked for only when the unpacking memory (HttpBody.h, ~43 KB) leaves TLS its
-// room; otherwise the link is read unpacked, as before build 83.
+// room; otherwise the link is read unpacked.
 bool unpackMemory() {
   return ESP.getMaxAllocHeap() > TINFL_LZ_DICT_SIZE + 1024 &&
          ESP.getFreeHeap() > httpbody::Gunzip::HEAP_BYTES + 60 * 1024;
@@ -71,10 +75,11 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
   SecureClient client;  // certificate checked with the CA bundle
   HTTPClient http;
   http.setReuse(false);  // "Connection: close": the server ends the connection after the answer
+  if (plainOnly) http.useHTTP10(true);  // no packing, no chunks: the way that worked up to build 80
   http.setTimeout(ANSWER_TIMEOUT_MS);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   std::unique_ptr<httpbody::Gunzip> gz;
-  if (unpackMemory()) {
+  if (!plainOnly && unpackMemory()) {
     gz.reset(new (std::nothrow) httpbody::Gunzip());
     if (gz && !gz->begin()) gz.reset();
   }
@@ -123,7 +128,7 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
     if (!gz) lines(p, n);
     else if (!gz->push(p, n, lines)) {
       broken = true;
-      why = "packed data damaged";
+      why = gz->failure() ? gz->failure() : "packed data damaged";
     }
   };
   uint8_t buf[1024];
@@ -161,6 +166,10 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
     if (!whole) {
       DBGF("[ICS] answer incomplete or damaged after %lu bytes, %lu ms (%s%s)", (unsigned long)lastDownload.wireBytes,
            millis() - startMs, why ? why : "ended early", lastDownload.packed ? ", packed" : "");
+      if (lastDownload.packed && !plainOnly) {
+        plainOnly = true;
+        DBG(F("[ICS] packed downloads off until the next restart: links are read unpacked"));
+      }
       http.end();
       return false;
     }

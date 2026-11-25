@@ -3,9 +3,10 @@
 // "Content-Encoding: gzip" unpacked. Google sends iCal files about 10 x smaller packed; the device's
 // TCP window (5,760 bytes in the ESP32 core) limits the speed, so fewer bytes are the only real
 // gain: a 1,098-entry work calendar took 15 s unpacked. Plain C++, tested on the PC
-// (tests/host/test_http_body.cpp); the decompressor is miniz's tinfl, in the chip's ROM
-// (esp_rom/include/miniz.h) and a pinned copy for the tests.
-#include <miniz.h>
+// (tests/host/test_http_body.cpp); the decompressor is miniz 3.0.2's tinfl (third_party/miniz),
+// the same code on the device (src/services/Inflate.c) and in the tests.
+#include "MinizNames.h"  // own names: the ROM's older tinfl would win otherwise
+#include "../../third_party/miniz/miniz.h"  // compiled by Inflate.c
 
 #include <cstddef>
 #include <cstdint>
@@ -134,6 +135,8 @@ class Gunzip {
     }
     tinfl_init(inflater);
     state = State::Header;
+    pending = false;
+    why = nullptr;
     have = windowPos = 0;
     flags = 0;
     extraLeft = 0;
@@ -152,6 +155,7 @@ class Gunzip {
   bool done() const { return state == State::Trailer || state == State::Done; }
   uint32_t packedBytes() const { return packed; }
   uint32_t unpackedBytes() const { return unpacked; }
+  const char* failure() const { return why; }  // after push() returned false: which check, for the log
 
   // Packed bytes in, the unpacked ones out through out(const uint8_t*, size_t). False when the
   // data isn't gzip or is damaged.
@@ -159,12 +163,12 @@ class Gunzip {
   bool push(const uint8_t* p, size_t n, Out out) {
     if (!inflater) return false;
     packed += static_cast<uint32_t>(n);
-    while (n) {
+    while (n || pending) {  // pending: output the decompressor still holds (its window was full)
       switch (state) {
         case State::Header:  // ID1 ID2 CM FLG MTIME(4) XFL OS
           head[have++] = *p++, n--;
           if (have == 10) {
-            if (head[0] != 0x1f || head[1] != 0x8b || head[2] != 8 || (head[3] & 0xE0)) return fail();
+            if (head[0] != 0x1f || head[1] != 0x8b || head[2] != 8 || (head[3] & 0xE0)) return fail("not gzip");
             flags = head[3];
             have = 0;
             nextOptional();
@@ -205,11 +209,12 @@ class Gunzip {
             unpacked += static_cast<uint32_t>(outSize);
             windowPos = (windowPos + outSize) & (TINFL_LZ_DICT_SIZE - 1);
           }
+          pending = st == TINFL_STATUS_HAS_MORE_OUTPUT;
           if (st == TINFL_STATUS_DONE) {
             state = State::Trailer;
             have = 0;
           } else if (st < 0) {
-            return fail();
+            return fail("inflate error");
           } else if (st == TINFL_STATUS_NEEDS_MORE_INPUT && !inSize && !outSize) {
             return true;  // waits for the next bytes
           }
@@ -219,7 +224,7 @@ class Gunzip {
           head[have++] = *p++, n--;
           if (have == 8) {
             const uint32_t size = head[4] | (head[5] << 8) | (head[6] << 16) | (static_cast<uint32_t>(head[7]) << 24);
-            if (size != unpacked) return fail();
+            if (size != unpacked) return fail("size mismatch");
             state = State::Done;
           }
           break;
@@ -234,6 +239,8 @@ class Gunzip {
 
  private:
   enum class State : uint8_t { Header, ExtraLen, Extra, Name, Comment, HeaderCrc, Deflate, Trailer, Done, Failed };
+  bool pending = false;
+  const char* why = nullptr;
   uint8_t* window = nullptr;
   tinfl_decompressor* inflater = nullptr;
   State state = State::Header;
@@ -243,8 +250,9 @@ class Gunzip {
   uint16_t extraLeft = 0;
   uint32_t unpacked = 0, packed = 0;
 
-  bool fail() {
+  bool fail(const char* reason) {
     state = State::Failed;
+    why = reason;
     return false;
   }
   // The optional header parts in their order (FEXTRA, FNAME, FCOMMENT, FHCRC), then the data.
