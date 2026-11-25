@@ -150,6 +150,18 @@ static void armButtonWake() {
 }
 
 // Below 5 % battery: one full-screen message, then only the button wakes the board.
+// The sleep after a wake in the quiet hours, from the time it ends (PowerPlan.h: a tap's refresh can
+// cross a minute or the end of the night).
+static uint64_t nightSleepNow(int stepMin) {
+  struct timeval tv;
+  gettimeofday(&tv, nullptr);
+  time_t t = tv.tv_sec;
+  struct tm lt;
+  int minuteOfDay = (t > 1700000000 && localtime_r(&t, &lt)) ? lt.tm_hour * 60 + lt.tm_min : -1;
+  return (uint64_t)power::sleepAfterNightWake(tv.tv_sec, tv.tv_usec, minuteOfDay, quiet_from, quiet_to, stepMin,
+                                              WAKE_AFTER_MINUTE_MS);
+}
+
 static void drawCriticalScreen(float volts) {
   initDisplay(true);
   display.setFullWindow();
@@ -369,10 +381,7 @@ void appSetup() {
       }
       nightShown = true;
     }
-    struct timeval ntv;
-    gettimeofday(&ntv, nullptr);
-    sleepNow((uint64_t)power::nightSleepMicros(ntv.tv_sec, ntv.tv_usec, powerPlan.nightMinutesLeft, WAKE_AFTER_MINUTE_MS),
-             drew, false, drew);
+    sleepNow(nightSleepNow(powerPlan.stepMin), drew, false, drew);
   }
   if (nightShown && !powerPlan.night) {  // morning: everything fresh
     DBG(F("[Power] quiet hours over: full refresh"));
@@ -695,7 +704,7 @@ void appSetup() {
   gettimeofday(&tv, nullptr);
   if (tv.tv_sec <= 1700000000) DBG(F("Time not set, sleeping 60s"));
   uint64_t sleep_us = powerPlan.night
-                          ? (uint64_t)power::nightSleepMicros(tv.tv_sec, tv.tv_usec, powerPlan.nightMinutesLeft, WAKE_AFTER_MINUTE_MS)
+                          ? nightSleepNow(powerPlan.stepMin)
                           : (uint64_t)power::alignedSleepMicros(tv.tv_sec, tv.tv_usec, powerPlan.stepMin, WAKE_AFTER_MINUTE_MS);
   if (redrawAll) sleep_us = 1000000ULL;  // redraw the dashboard right away
   DBGF("Done after %lu ms, next wake in %llu s", millis(), sleep_us / 1000000ULL);

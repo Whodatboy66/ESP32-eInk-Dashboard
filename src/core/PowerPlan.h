@@ -104,6 +104,16 @@ inline int64_t nightSleepMicros(time_t sec, long usec, int minutesLeft, uint32_t
   return (int64_t)minutesLeft * 60 * 1000000LL - intoMinuteUs + (int64_t)wakeAfterMs * 1000LL;
 }
 
+// The sleep at the end of a wake inside the quiet hours, counted from the minute the wake ends in
+// (minuteOfDayNow): a tap's refresh takes 20-30 s and can cross a minute or the end of the window.
+// Still inside: until its end; already past it: the normal clock rhythm.
+inline int64_t sleepAfterNightWake(time_t sec, long usec, int minuteOfDayNow, int quietFrom, int quietTo, int stepMin,
+                                   uint32_t wakeAfterMs) {
+  if (minuteOfDayNow >= 0 && inQuietWindow(minuteOfDayNow, quietFrom, quietTo))
+    return nightSleepMicros(sec, usec, minutesUntil(minuteOfDayNow, quietTo), wakeAfterMs);
+  return alignedSleepMicros(sec, usec, stepMin, wakeAfterMs);
+}
+
 // "23:00" <-> minutes of the day.
 inline void formatHm(int minutes, char* out, size_t cap) {
   std::snprintf(out, cap, "%02d:%02d", (minutes / 60) % 24, minutes % 60);

@@ -30,3 +30,15 @@ constexpr float BATTERY_MIN_RUNNING_V = 3.0f;
 constexpr float BATTERY_MAX_V = 4.4f;
 inline bool batteryReadingPlausible(float v) { return v >= BATTERY_MIN_RUNNING_V && v <= BATTERY_MAX_V; }
 
+// The voltage the screen shows. With the radio on (Wi-Fi, hotspot) it sags about 0.05 V, which is
+// over 15 % on the flat part of the curve: then the last reading with the radio off is shown, and
+// only readings with the radio off are kept as that "quiet" reading (BatteryMonitor.cpp).
+struct BatteryShown {
+  float volts;
+  bool keepAsQuiet;
+};
+inline BatteryShown batteryForScreen(bool radioOn, bool haveQuiet, float quietVolts, float liveVolts) {
+  if (!radioOn) return {liveVolts, true};
+  return {haveQuiet ? quietVolts : liveVolts, false};
+}
+

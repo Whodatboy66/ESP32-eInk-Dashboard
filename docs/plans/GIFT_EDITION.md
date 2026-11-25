@@ -163,6 +163,11 @@ The builder may adjust these after the PC renders; the owner reviews the renders
   for everything** (as today): with a 30-minute clock interval nothing refreshes more often than every
   30 minutes, whatever a data type's own interval says; intervals are rounded up to a multiple of it.
 - Old-data badges keep working from the store's timestamps.
+- **Per calendar link** (owner, 2026-11-25): a **name** ("Familie", "Arbeit") shown in the app instead
+  of "Calendar link 1", in the Check result and the log, and in an export (the link itself never);
+  and its **own interval** ("every hour" / "every 3 hours" / "mornings only"), so a large work calendar
+  isn't read at every refresh. Needs the store: a link not read this time keeps its last entries,
+  marks and birthdays (today all links are combined into one result at each refresh).
 
 ### Several screens
 

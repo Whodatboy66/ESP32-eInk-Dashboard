@@ -103,6 +103,21 @@ static void test_aligned_sleep() {
   CHECK_EQ(nightSleepMicros(t, 0, 420, 500), (int64_t)(420 * 60 - t % 60) * 1000000LL + 500000);
 }
 
+// The sleep at the end of a night wake is counted from the minute the wake ends in: a tap's refresh
+// takes 20-30 s and often crosses a minute (device test 2026-11-25: night until 10:20, a tap at
+// 10:12:51 finished at 10:13:17 and slept until 10:21:00).
+static void test_sleep_after_night_wake() {
+  const time_t t = 1795000000 - 1795000000 % 60 + 17;  // hh:mm:17
+  const int from = 10 * 60 + 10, to = 10 * 60 + 20;
+  // Finished at 10:13:17: until 10:20:00.5 (6 min 43 s), not 10:21.
+  CHECK_EQ(sleepAfterNightWake(t, 0, 10 * 60 + 13, from, to, 1, 500), (int64_t)(7 * 60 - 17) * 1000000LL + 500000);
+  // Finished after the window ended (10:20:17): the normal clock rhythm, not "a whole day".
+  CHECK_EQ(sleepAfterNightWake(t, 0, to, from, to, 1, 500), alignedSleepMicros(t, 0, 1, 500));
+  CHECK_EQ(sleepAfterNightWake(t, 0, to, from, to, 5, 500), alignedSleepMicros(t, 0, 5, 500));
+  // Past midnight (23:00-06:00), finished at 05:59:17: 43 s.
+  CHECK_EQ(sleepAfterNightWake(t, 0, 5 * 60 + 59, 23 * 60, 6 * 60, 1, 500), (int64_t)43 * 1000000LL + 500000);
+}
+
 static void test_hm_and_notes() {
   int m;
   CHECK(parseHm("23:00", m) && m == 1380);
@@ -162,6 +177,7 @@ int main() {
   test_saver_hysteresis();
   test_critical();
   test_aligned_sleep();
+  test_sleep_after_night_wake();
   test_hm_and_notes();
   test_estimate();
   return finish("power plan");

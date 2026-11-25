@@ -37,6 +37,14 @@ for test in tests/host/test_*.cpp; do
     fi
     EXTRA+=(-lmbedcrypto)
   fi
+  # Tests marked "// needs: miniz" link the pinned miniz copy (third_party/miniz: the firmware uses
+  # the same decompressor from the chip's ROM). Third-party code: built without our warning flags.
+  if grep -q '^// needs: miniz' "$test"; then
+    if [[ ! -f "$OUT/miniz.o" ]]; then
+      "$CXX" -x c -w -O1 -DMINIZ_NO_STDIO -DMINIZ_NO_ARCHIVE_APIS -c tests/host/third_party/miniz/miniz.c -o "$OUT/miniz.o"
+    fi
+    EXTRA+=(-isystem tests/host/third_party/miniz -x none "$OUT/miniz.o")
+  fi
   if ! "$CXX" -std=c++17 -Wall -Wextra -Werror "${INCLUDES[@]}" "$test" "${EXTRA[@]}" -o "$OUT/$name"; then
     echo "!! $name: build failed"
     status=1

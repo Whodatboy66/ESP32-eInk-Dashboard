@@ -426,6 +426,24 @@ The names are cleaned at the next calendar update (within the hour, or double ta
 - [ ] Full-screen month, side column: school holidays read "Fr 8. Jan · Ende" above the holiday's
       name (the name is no longer cut off)
 
+### Build 82: quiet hours and battery (log of 2026-11-25)
+
+- [ ] Quiet hours: after a tap at night the screen wakes **at** the end of the night (log: "quiet hours
+      over" at e.g. 10:20:00, not a minute later; before, a tap's 25 s refresh pushed it to 10:21)
+- [ ] Edit mode: the exact preview's battery percent matches the dashboard's (it showed 25 % while the
+      dashboard showed 41 %: the reading with Wi-Fi on), and the app's battery stays the same after
+      opening the preview
+
+### Build 83: calendar downloads packed (log of 2026-11-25: 15 s for the work calendar)
+
+- [ ] Log after a refresh: `[ICS] … events parsed in … ms (… KB, received packed: … KB)` for each
+      calendar link; the work calendar's time well below the 15 s before (note the new number here: ____ ms)
+- [ ] Agenda, month marks and calendar birthdays show the same entries as before
+- [ ] The app's "Check" of a calendar link still counts its events
+- [ ] School holidays and the birthday link still load (their lines in the log, no problem shown)
+- [ ] Without Wi-Fi in the middle of a download (e.g. router off for a moment): the previous calendar
+      stays on screen, the log says "answer incomplete or damaged"
+
 ## 10. Stage 8: data store and several screens *(not built yet)*
 
 **Confirms stage 8:** several screens switch by time and by tap, quickly and without extra battery

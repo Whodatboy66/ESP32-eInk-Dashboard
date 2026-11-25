@@ -1,6 +1,7 @@
 #include "BatteryMonitor.h"
 
 #include <Arduino.h>
+#include <WiFi.h>
 #include <esp_attr.h>
 #include <time.h>
 #if SOC_USB_SERIAL_JTAG_SUPPORTED
@@ -68,3 +69,13 @@ bool batteryQuiet(float& volts, time_t& at, time_t maxAgeS) {
   return true;
 }
 
+float batteryForDisplay() {
+  const float live = readBattery();
+  float qv = 0.0f;
+  time_t qat;
+  const bool radioOn = WiFi.getMode() != WIFI_OFF;
+  const bool haveQuiet = radioOn && batteryQuiet(qv, qat, 3 * 3600);
+  const BatteryShown s = batteryForScreen(radioOn, haveQuiet, qv, live);
+  if (s.keepAsQuiet) batteryNoteQuiet(s.volts);
+  return s.volts;
+}

@@ -16,5 +16,8 @@ bool usbPowered();
 // hundredths of a volt, which is up to ~10 % on the flat part of the LiPo curve, so the setup app
 // shows this one. Kept in RTC memory across deep sleep and restarts.
 void batteryNoteQuiet(float volts);
+// The voltage for the status bar: live with the radio off (and kept as the quiet reading), the last
+// quiet reading while Wi-Fi or the hotspot is on (BatteryCurve.h, batteryForScreen).
+float batteryForDisplay();
 // The quiet reading and its time; false if there is none (or it's older than maxAgeS).
 bool batteryQuiet(float& volts, time_t& at, time_t maxAgeS);

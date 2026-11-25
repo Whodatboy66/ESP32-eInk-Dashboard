@@ -6,8 +6,10 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <time.h>
+#include <memory>
 #include <new>
 
+#include "HttpBody.h"
 #include "IcsParser.h"
 #include "IcsRules.h"
 #include "SchoolHolidays.h"
@@ -36,15 +38,42 @@ void logHttpError(const char* url, int code) {
   DBGF("[ICS] HTTP %d for %.*s", code, (int)strcspn(host, "/"), host);
 }
 
+// What the last readLines() received, for the log: bytes over the air and unpacked.
+struct Download {
+  uint32_t wireBytes = 0, bodyBytes = 0;
+  bool packed = false;
+};
+Download lastDownload;
+
+// A packed answer is asked for only when the unpacking memory (HttpBody.h, ~43 KB) leaves TLS its
+// room; otherwise the link is read unpacked, as before build 83.
+bool unpackMemory() {
+  return ESP.getMaxAllocHeap() > TINFL_LZ_DICT_SIZE + 1024 &&
+         ESP.getFreeHeap() > httpbody::Gunzip::HEAP_BYTES + 60 * 1024;
+}
+
 // Downloads a link and calls onLine for each logical line (onLine returns false to stop). False
-// without an answer 200.
-template <typename OnLine>
-bool readLines(const char* url, OnLine onLine, int* httpCode = nullptr) {
+// without an answer 200, or when the answer ended early (its length, last chunk or gzip end not
+// reached: the previous data stays). HTTP/1.1, because only then does HTTPClient ask for a packed
+// answer; chunks and gzip are undone in HttpBody.h.
+using LineFn = bool (*)(void* ctx, const char* line);
+
+bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
+  auto onLine = [&](const char* line) { return lineFn(ctx, line); };
+  lastDownload = Download();
   SecureClient client;  // certificate checked with the CA bundle
   HTTPClient http;
-  http.useHTTP10(true);  // no chunked encoding: the stream is the file
+  http.setReuse(false);  // "Connection: close": the server ends the connection after the answer
   http.setTimeout(15000);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  std::unique_ptr<httpbody::Gunzip> gz;
+  if (unpackMemory()) {
+    gz.reset(new (std::nothrow) httpbody::Gunzip());
+    if (gz && !gz->begin()) gz.reset();
+  }
+  http.setAcceptEncoding(gz ? "gzip" : "identity");
+  static const char* HEADERS[] = {"Content-Encoding", "Transfer-Encoding"};
+  http.collectHeaders(HEADERS, 2);
   if (!http.begin(client, url)) {
     if (httpCode) *httpCode = 0;
     return false;
@@ -56,24 +85,47 @@ bool readLines(const char* url, OnLine onLine, int* httpCode = nullptr) {
     http.end();
     return false;
   }
+  const bool chunked = http.header("Transfer-Encoding").equalsIgnoreCase("chunked");
+  const String encoding = http.header("Content-Encoding");
+  const bool packed = encoding.equalsIgnoreCase("gzip");
+  if ((packed && !gz) || (!packed && encoding.length() && !encoding.equalsIgnoreCase("identity"))) {
+    DBGF("[ICS] answer packed as \"%s\": not readable", encoding.c_str());
+    http.end();
+    return false;
+  }
+  if (!packed) gz.reset();  // the memory back right away
+  lastDownload.packed = packed;
+  const int size = http.getSize();  // -1: unknown (chunks, or until the connection ends)
   unfolder.reset();
   WiFiClient* stream = http.getStreamPtr();
   if (!stream) {  // the connection ended right after the headers
     http.end();
     return false;
   }
-  uint8_t buf[256];
+  httpbody::Dechunker dechunk;
+  bool more = true, broken = false;
+  auto lines = [&](const uint8_t* p, size_t n) {
+    lastDownload.bodyBytes += n;
+    for (size_t i = 0; i < n && more; i++) {
+      unfolder.push((char)p[i]);
+      if (unfolder.next(lineBuf, sizeof(lineBuf))) more = onLine(lineBuf);
+    }
+  };
+  auto body = [&](const uint8_t* p, size_t n) {
+    if (!gz) lines(p, n);
+    else if (!gz->push(p, n, lines)) broken = true;
+  };
+  uint8_t buf[1024];
   unsigned long lastData = millis();
-  bool more = true;
-  while (more) {
+  while (more && !broken) {
+    if (chunked ? dechunk.done() : (size >= 0 && lastDownload.wireBytes >= (uint32_t)size)) break;
     int avail = stream->available();
     if (avail > 0) {
       int n = stream->read(buf, avail < (int)sizeof(buf) ? avail : (int)sizeof(buf));
       if (n < 0) break;  // a TLS read error
-      for (int i = 0; i < n && more; i++) {
-        unfolder.push((char)buf[i]);
-        if (unfolder.next(lineBuf, sizeof(lineBuf))) more = onLine(lineBuf);
-      }
+      lastDownload.wireBytes += n;
+      if (chunked) broken = !dechunk.push(buf, n, body) || broken;
+      else body(buf, n);
       lastData = millis();
     } else if (!stream->connected() || millis() - lastData > IDLE_TIMEOUT_MS) {
       break;
@@ -81,12 +133,26 @@ bool readLines(const char* url, OnLine onLine, int* httpCode = nullptr) {
       delay(2);
     }
   }
-  if (more) {
+  if (more) {  // read to the end (not stopped by onLine): was it all there?
+    const bool whole = !broken && (chunked ? dechunk.done() : size < 0 || lastDownload.wireBytes >= (uint32_t)size) &&
+                       (!gz || gz->done());
+    if (!whole) {
+      DBGF("[ICS] answer incomplete or damaged after %lu bytes", (unsigned long)lastDownload.wireBytes);
+      http.end();
+      return false;
+    }
     unfolder.finish();
     while (more && unfolder.next(lineBuf, sizeof(lineBuf))) more = onLine(lineBuf);  // the end can finish two
   }
   http.end();
   return true;
+}
+
+// One copy of the download code for all its users (a template would be compiled once per caller).
+template <typename OnLine>
+bool readLines(const char* url, OnLine onLine, int* httpCode = nullptr) {
+  return readLinesOnce(url, [](void* ctx, const char* line) { return (*static_cast<OnLine*>(ctx))(line); }, &onLine,
+                       httpCode);
 }
 
 // Downloads a link and calls onEvent for each event. False without an answer 200.
@@ -102,7 +168,13 @@ bool readEvents(const char* url, OnEvent onEvent) {
     }
     return true;
   });
-  if (ok) DBGF("[ICS] %d events parsed in %lu ms", events, millis() - t0);
+  if (ok) {
+    if (lastDownload.packed)
+      DBGF("[ICS] %d events parsed in %lu ms (%lu KB, received packed: %lu KB)", events, millis() - t0,
+           (unsigned long)(lastDownload.bodyBytes / 1024), (unsigned long)(lastDownload.wireBytes / 1024));
+    else
+      DBGF("[ICS] %d events parsed in %lu ms (%lu KB)", events, millis() - t0, (unsigned long)(lastDownload.bodyBytes / 1024));
+  }
   return ok;
 }
 
@@ -311,6 +383,7 @@ int checkIcsLink(const char* url, char* err, size_t cap) {
   }, &code);
   if (!ok) {
     if (code == 0) snprintf(err, cap, "%s", tr(S::CalBadAddress));
+    else if (code == 200) snprintf(err, cap, "%s", tr(S::CalNoConnection));  // the answer ended early
     else if (code == 401 || code == 403) snprintf(err, cap, tr(S::CalRefused), code);
     else if (code == 404) snprintf(err, cap, "%s", tr(S::CalNotFound));
     else if (code < 0) snprintf(err, cap, "%s", tr(S::CalNoConnection));

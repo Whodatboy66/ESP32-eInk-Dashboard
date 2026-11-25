@@ -70,8 +70,7 @@ void drawStatus(LayoutItem* item) {
   // and Diagnostics); without a measured battery "USB" (the board runs on USB power).
   char pct[12] = "";
   if (hasBatteryPin()) {
-    voltage = readBattery();
-    batteryNoteQuiet(voltage);  // drawn with Wi-Fi off: the reading the setup app shows
+    voltage = batteryForDisplay();  // with Wi-Fi on (edit mode preview): the last reading without it
     if (batteryReadingPlausible(voltage)) snprintf(pct, sizeof(pct), "%d %%", batteryPercent(voltage));
     else snprintf(pct, sizeof(pct), "USB");
   }

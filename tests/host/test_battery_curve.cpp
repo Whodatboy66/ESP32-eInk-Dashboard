@@ -26,5 +26,14 @@ int main() {
   CHECK(batteryReadingPlausible(3.0f));
   CHECK(batteryReadingPlausible(3.7f));
   CHECK(batteryReadingPlausible(4.25f));   // charging
+  // The screen's reading: with the radio on the voltage sags ~0.05 V (device test 2026-11-25: the
+  // exact preview in edit mode showed 25 %, the dashboard a minute later 41 %), so the last reading
+  // with the radio off is used and the sagged one isn't kept as "quiet".
+  BatteryShown s = batteryForScreen(false, false, 0.0f, 3.80f);
+  CHECK(s.volts == 3.80f && s.keepAsQuiet);   // radio off: live, and kept
+  s = batteryForScreen(true, true, 3.80f, 3.75f);
+  CHECK(s.volts == 3.80f && !s.keepAsQuiet);  // radio on: the quiet one
+  s = batteryForScreen(true, false, 0.0f, 3.75f);
+  CHECK(s.volts == 3.75f && !s.keepAsQuiet);  // radio on, no quiet reading yet: live, not kept
   return finish("battery curve");
 }

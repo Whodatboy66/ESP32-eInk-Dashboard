@@ -5,3 +5,4 @@
 78: Deutsch und Englisch (Deutsch voreingestellt) | Eigene Namen für Aktien, z. B. EUNL.DE:MSCI World | Betas kommen nach jedem neuen Build automatisch
 79: Neue Uhr mit Datum, Überschriften, WLAN-Anzeige | Monatskalender neu: Feiertage, Schulferien, KW | Geburtstage aus dem Kalender, Monat und Uhr in jeder Größe
 80: Eigener Code: Projekt neu aufgebaut, gleiches Verhalten | Termine aus Outlook und mit Erinnerung werden richtig gelesen | Kein Hänger mehr bei kaputten Zeichen in Kalendertiteln
+83: Geburtstage: nur der Name, das Alter bleibt immer sichtbar | Kalender lädt gepackt: bis zu 10-mal schneller, schont den Akku | Nachtruhe: nach Tippen pünktlich wach; Akku-Anzeige im Bearbeiten

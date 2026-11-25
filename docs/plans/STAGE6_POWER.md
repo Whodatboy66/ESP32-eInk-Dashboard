@@ -110,3 +110,9 @@ mock device), not yet on the device ([DEVICE_TESTS.md](../DEVICE_TESTS.md), bloc
   "now" so the app can show the note.
 - Not done in this part (see "Out of scope"): profiles, per-data intervals in the app, always-on on
   USB, measurements.
+
+**Device test fixes (build 82, 2026-11-25):** after a tap at night the sleep until the end of the
+window is counted from the minute the wake ends in (`power::sleepAfterNightWake`; a 25 s refresh used
+to cross a minute and wake one minute late), and past the end it follows the normal clock rhythm. The
+status bar shows the last battery reading with the radio off while Wi-Fi or the hotspot is on
+(`batteryForScreen`): the edit mode preview showed 25 % instead of 41 % and stored that reading.

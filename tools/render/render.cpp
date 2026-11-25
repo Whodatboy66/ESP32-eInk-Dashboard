@@ -82,6 +82,7 @@ DashboardDisplay& getDisplay() {
 
 float readBattery() { return 3.95f; }
 void batteryNoteQuiet(float) {}
+float batteryForDisplay() { return 3.95f; }
 void logPrint(const char* s) { fputs(s, stderr); }
 void logPrint(const String& s) { fputs(s.c_str(), stderr); }
 void logPrintln(const char* s) { fprintf(stderr, "%s\n", s); }
