@@ -343,7 +343,9 @@ void trackingWidget(LayoutItem* item) {
 void makerWorldWidget(LayoutItem* item) {
   if (!item) return;
   loadMakerWorld();
-  if (!makerworld.available) {  // no counters yet (no user id, or never fetched): the idle printer view
+  // No user id (the stored counters stay in NVS after it is removed: device test 2026-11-25), or no
+  // counters yet: the printer's own view (temperatures, AMS, spools, state).
+  if (!makerworld_uid[0] || !makerworld.available) {
     bambuWidget(item);
     return;
   }

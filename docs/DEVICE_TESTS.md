@@ -444,6 +444,19 @@ The names are cleaned at the next calendar update (within the hour, or double ta
 - [ ] Without Wi-Fi in the middle of a download (e.g. router off for a moment): the previous calendar
       stays on screen, the log says "answer incomplete or damaged"
 
+### Build 84: fixes from the device test of build 83 (2026-11-25)
+
+- [ ] Both calendar links load again: `[ICS] … events parsed in … ms (… KB, received packed: … KB,
+      longest pause … ms)`; the work calendar's time and longest pause: ____ ms / ____ ms
+- [ ] If a calendar still fails: the log line names the reason (send it), e.g. "no data for 30 s"
+- [ ] Status bar with a problem: "⚠" and the sentence of the first problem (e.g. "Kalender 2 kann
+      nicht gelesen werden"), "+1" when there are more; on a holiday the problem replaces its name
+- [ ] Fonts: the text looks clean and even (no dot inside the "e", letters don't run into each other);
+      everything still fits as before (agenda, widgets, status bar)
+- [ ] USB power without a battery: the status bar shows "USB" (not "100 %"); with a battery that isn't
+      full, the percentage as before
+- [ ] No MakerWorld id: the printer box shows the printer (temperatures, AMS, spools), not old numbers
+
 ## 10. Stage 8: data store and several screens *(not built yet)*
 
 **Confirms stage 8:** several screens switch by time and by tap, quickly and without extra battery

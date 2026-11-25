@@ -291,6 +291,15 @@ The builder may adjust these after the PC renders; the owner reviews the renders
   (owner: acceptable).
 - On beta first; to stable when it works reliably on the owner's device, otherwise it moves to Later.
 
+### Printer box when idle (owner, 2026-11-25)
+
+- Without a MakerWorld id the idle printer already shows its own view (temperatures, AMS humidity and
+  temperature, spools; build 84). Wanted on top: the printer's **messages** (HMS warnings such as
+  "AMS humidity high", a filament runout, a failed print) in plain words, and the idle view also when a
+  MakerWorld id is set (a setting: "Wenn der Drucker ruht: MakerWorld / Drucker"). The builder checks
+  which HMS codes the report carries and keeps a short table of the common ones (code + "see the
+  printer" for the rest), within the space limits below.
+
 ### Polish before the handover
 
 - The open robustness points (stage 6 and earlier), the stage-6 cost model from the block 8

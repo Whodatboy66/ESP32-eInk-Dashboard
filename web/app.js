@@ -1537,13 +1537,13 @@ function batteryNow(b) {
 function batteryLines(b, now) {
   if (!b.sensor || !(b.quietMv > 0)) return [batteryNow(b)];
   var q = volts(b.quietMv);
-  if (b.quietMv < 3000 || b.quietMv > 4400) q += t('noBattery');
+  if (b.quietMv < 3000 || b.quietMv >= 4165) q += t('noBattery');  // as BatteryCurve.h
   else if (b.quietPercent >= 0) q += ', ' + b.quietPercent + ' %';
   q += t('wifiOff', { t: b.quietAt ? ', ' + clockAt(b.quietAt, now) : '' });
   return [q, t('nowWifi', { v: volts(b.mv) }) + (b.plausible === false ? t('noBattery') : t('sag'))];
 }
 
-// Line chart of the battery history: x = last 7 days, y = 0-4.5 V, 3.0-4.2 V band hatched.
+// Line chart of the battery history: x = last 7 days, y = 0-4.5 V, 3.0-4.16 V band hatched.
 function batteryChart(hist, now) {
   var W = 340, H = 196, x0 = 34, x1 = 332, y0 = 8, y1 = 168, VMAX = 4500, DAY = 86400;
   var end = now || hist[hist.length - 1][0], start = end - 7 * DAY;
@@ -1551,8 +1551,8 @@ function batteryChart(hist, now) {
   function Y(mv) { return (y1 - Math.max(0, Math.min(VMAX, mv)) / VMAX * (y1 - y0)).toFixed(1); }
   var s = '<defs><pattern id="hatch" width="6" height="6" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">' +
     '<line x1="0" y1="0" x2="0" y2="6" stroke="#000" stroke-width="1" opacity=".35"/></pattern></defs>';
-  s += '<rect x="' + x0 + '" y="' + Y(4200) + '" width="' + (x1 - x0) + '" height="' + (Y(3000) - Y(4200)).toFixed(1) + '" fill="url(#hatch)"/>';
-  s += '<text x="' + (x0 + 4) + '" y="' + (+Y(4200) + 12) + '" font-size="10">' + esc(t('workingBat')) + '</text>';
+  s += '<rect x="' + x0 + '" y="' + Y(4160) + '" width="' + (x1 - x0) + '" height="' + (Y(3000) - Y(4160)).toFixed(1) + '" fill="url(#hatch)"/>';
+  s += '<text x="' + (x0 + 4) + '" y="' + (+Y(4160) + 12) + '" font-size="10">' + esc(t('workingBat')) + '</text>';
   for (var v = 0; v <= 4; v++) {
     s += '<line x1="' + x0 + '" y1="' + Y(v * 1000) + '" x2="' + x1 + '" y2="' + Y(v * 1000) + '" stroke="#000" stroke-width="' + (v ? .5 : 1.5) + '"' + (v ? ' stroke-dasharray="2 3"' : '') + '/>' +
       '<text x="' + (x0 - 4) + '" y="' + (+Y(v * 1000) + 4) + '" font-size="11" text-anchor="end">' + v + ' V</text>';

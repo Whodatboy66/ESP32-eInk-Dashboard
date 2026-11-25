@@ -25,7 +25,12 @@ int main() {
   CHECK(!batteryReadingPlausible(6.6f));   // floating input, x2 divider
   CHECK(batteryReadingPlausible(3.0f));
   CHECK(batteryReadingPlausible(3.7f));
-  CHECK(batteryReadingPlausible(4.25f));   // charging
+  CHECK(batteryReadingPlausible(4.16f));   // a full battery at rest
+  // From 4.17 V only a charger holds the pin there: on USB power with no battery (the charger's
+  // output, device test 2026-11-25: "4.22 V, 100%" without a battery), or a full one charging. The
+  // screen shows "USB" then; updates are allowed, no battery saver.
+  CHECK(!batteryReadingPlausible(4.17f));
+  CHECK(!batteryReadingPlausible(4.22f));
   // The screen's reading: with the radio on the voltage sags ~0.05 V (device test 2026-11-25: the
   // exact preview in edit mode showed 25 %, the dashboard a minute later 41 %), so the last reading
   // with the radio off is used and the sagged one isn't kept as "quiet".

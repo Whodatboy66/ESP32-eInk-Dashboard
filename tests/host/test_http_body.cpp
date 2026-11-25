@@ -142,6 +142,19 @@ void test_gunzip_damaged() {
     Bytes half(gz.begin(), gz.begin() + gz.size() / 2);
     CHECK(feed(g, half, 512, out) && !g.done());
   }
+  {  // the chip's ROM decompressor (an older miniz) keeps up to 4 bytes after the data in its bit
+     // buffer, so the 8-byte trailer can arrive incomplete: the data is whole when the decompressor
+     // says so (device test of build 83: every calendar failed at its very end)
+    for (size_t cut : {1, 4, 8}) {
+      Bytes shortTrailer(gz.begin(), gz.end() - cut);
+      httpbody::Gunzip g;
+      CHECK(g.begin());
+      std::string out;
+      CHECK(feed(g, shortTrailer, 777, out));
+      CHECK(g.done());
+      CHECK(out == text);
+    }
+  }
   {  // not gzip at all
     httpbody::Gunzip g;
     CHECK(g.begin());

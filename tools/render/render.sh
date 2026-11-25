@@ -40,6 +40,7 @@ planner-no-weather planner weather
 minimal-clock-only minimal weather,agenda
 technical-no-stocks-tracking technical stocks,tracking
 planner-stale planner - stale
+planner-problems planner - problems
 minimal-12h minimal - 12h
 classic-stale classic - stale
 personal personal

@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <string>
 
+#include "src/core/Problems.h"
 #include "src/i18n/Dates.h"
 #include "src/i18n/Strings.h"
 #include "src/widgets/StatusMarks.h"
@@ -340,9 +341,40 @@ void test_status_holiday_fit() {
   CHECK(dateEnd + space + 12 + saver <= right - 8 || space == 0);
 }
 
+// The status bar's problem line (build 84, owner: "the attention mark with what is failing helps
+// little"): the first problem's sentence, as in the app; "Kalender 2 …" when one link failed.
+static void test_status_problem_line() {
+  char line[96];
+  CHECK_EQ(problemLine(0, 0, Lang::De, line, sizeof(line)), 0);
+  CHECK_EQ(problemLine(PROBLEM_CALENDAR, 0x02, Lang::De, line, sizeof(line)), 1);
+  CHECK_STR(line, "Kalender 2 kann nicht gelesen werden");
+  CHECK_EQ(problemLine(PROBLEM_CALENDAR, 0x03, Lang::De, line, sizeof(line)), 1);  // two links: in general
+  CHECK_STR(line, "Ein Kalender kann nicht gelesen werden");
+  CHECK_EQ(problemLine(PROBLEM_CALENDAR | PROBLEM_WEATHER, 0x01, Lang::En, line, sizeof(line)), 2);
+  CHECK_STR(line, "The weather can't be loaded");  // the first in flag order
+  // Every sentence fits a full-width bar after the longest date, with the icon and " +2", before
+  // the version, Wi-Fi, battery and percent.
+  int dateW = 0;
+  for (int m = 1; m <= 12; m++)
+    for (int d = 1; d <= 7; d++) {
+      char b[32];
+      i18n::formatStatusDate(day(2027, m, d), Lang::De, b, sizeof(b));
+      if (width(b) > dateW) dateW = width(b);
+    }
+  const int room = (800 - 4 - (width("100 %") + 4) - 22 - 20 - width("v.84") - 8) - (4 + dateW + 10);
+  for (Lang lang : {Lang::De, Lang::En})
+    for (int bit = 0; bit < PROBLEM_COUNT; bit++) {
+      problemLine(1u << bit, 0x04, lang, line, sizeof(line));
+      const int w = 24 + width(line) + width(" +2");
+      if (w > room) std::printf("  too wide for the status bar (%d > %d): %s\n", w, room, line);
+      CHECK(w <= room);
+    }
+}
+
 int main() {
   test_every_text();
   test_status_holiday_fit();
+  test_status_problem_line();
   test_heading_font_covers();
   test_dates();
   test_fits_on_screen();

@@ -23,12 +23,15 @@ inline int batteryPercent(float v) {
   return 0;
 }
 
-// A LiPo that runs the board reads 3.0-4.3 V. Anything else means no battery is connected (or the
-// pin can't measure it: wiring, a different board), so the board runs on USB power. Below 3.0 V
-// the board couldn't be running from the battery at all.
+// A LiPo that runs the board reads 3.0-4.16 V at rest. Below 3.0 V the board couldn't be running
+// from it (no battery, or the pin can't measure one). From 4.17 V only the charger holds the pin
+// there: USB power with no battery connected (its output, ~4.2 V: the device showed "100 %" without
+// a battery, 2026-11-25) or a full battery still on the charger. Both mean "on USB power": the
+// screen shows "USB", updates are allowed, no battery saver. Right after unplugging a freshly
+// charged battery this can last a few minutes, until it settles below 4.17 V.
 constexpr float BATTERY_MIN_RUNNING_V = 3.0f;
-constexpr float BATTERY_MAX_V = 4.4f;
-inline bool batteryReadingPlausible(float v) { return v >= BATTERY_MIN_RUNNING_V && v <= BATTERY_MAX_V; }
+constexpr float BATTERY_MAX_V = 4.165f;
+inline bool batteryReadingPlausible(float v) { return v >= BATTERY_MIN_RUNNING_V && v < BATTERY_MAX_V; }
 
 // The voltage the screen shows. With the radio on (Wi-Fi, hotspot) it sags about 0.05 V, which is
 // over 15 % on the flat part of the curve: then the last reading with the radio off is shown, and

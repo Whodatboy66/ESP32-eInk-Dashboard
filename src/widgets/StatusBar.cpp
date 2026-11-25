@@ -25,20 +25,30 @@ static int activeProblems(const char* names[PROBLEM_COUNT]) {
   return n;
 }
 
-// "⚠ WLAN Wetter +2": the alert icon, then the names that fit before maxX; the rest as "+N" (room
-// for it is kept unless the name is the last one).
+// "⚠ Kalender 2 kann nicht gelesen werden +1": the first problem's sentence (as in the app) and how
+// many more there are (build 84). Where the sentence doesn't fit, the short names as before
+// ("⚠ WLAN Wetter +2": those that fit before maxX, the rest as "+N").
 static void drawProblems(int16_t x, int16_t y, int16_t maxX) {
   problemsShown = problems;
-  const char* names[PROBLEM_COUNT];
-  const int n = activeProblems(names);
+  char line[96];
+  const int n = problemLine(problems, icsFailedMask, ui_lang, line, sizeof(line));
   if (!n) return;
   drawSparseChar(&MDI_22_Sparse, x, y, MDI_ALERT, ALERT_COLOR);
   x += 24;
-  for (int i = 0; i < n; i++) {
+  char more[8] = "";
+  if (n > 1) snprintf(more, sizeof(more), " +%d", n - 1);
+  if (x + getSparseStringWidth(&epaperFont, line) + getSparseStringWidth(&epaperFont, more) <= maxX) {
+    drawSparseString(&epaperFont, x, y, line, ALERT_COLOR);
+    if (more[0]) drawSparseString(&epaperFont, x + getSparseStringWidth(&epaperFont, line), y, more, ALERT_COLOR);
+    return;
+  }
+  const char* names[PROBLEM_COUNT];
+  const int count = activeProblems(names);
+  for (int i = 0; i < count; i++) {
     char rest[8];
-    snprintf(rest, sizeof(rest), "+%d", n - i);
+    snprintf(rest, sizeof(rest), "+%d", count - i);
     const int16_t w = getSparseStringWidth(&epaperFont, names[i]);
-    const int16_t keep = i + 1 < n ? getSparseStringWidth(&epaperFont, rest) + 6 : 0;
+    const int16_t keep = i + 1 < count ? getSparseStringWidth(&epaperFont, rest) + 6 : 0;
     if (x + w + keep > maxX) {
       drawSparseString(&epaperFont, x, y, rest, ALERT_COLOR);
       return;
@@ -108,7 +118,7 @@ void drawStatus(LayoutItem* item) {
   if (versionX < minVersionX) versionX = minVersionX;
   drawSparseString(&epaperFont, versionX, item->PosY + 16, versionBuf, GxEPD_BLACK);
 
-  if (isHoliday) {
+  if (isHoliday && !problems) {  // a problem's sentence has priority over the holiday's name
     int powerW = powerNote[0] ? getSparseStringWidth(&epaperFont, powerNote) : 0;
     int space = statusbar::holidaySpace(leftX, powerW, versionX);
     if (space) {
@@ -139,7 +149,7 @@ void drawStatus(LayoutItem* item) {
   if (hasBatteryPin()) {
     int percentage = batteryPercent(voltage);
     if (batteryReadingPlausible(voltage)) DBGF("[Battery] %.2f V, %d%%", voltage, percentage);
-    else DBGF("[Battery] %.2f V: no battery measured (USB power)", voltage);
+    else DBGF("[Battery] %.2f V: USB power (no battery, or a full one on the charger)", voltage);
     // battery-10 .. battery-90 follow each other (Icons.h), then the full one.
     int tenths = constrain((percentage + 5) / 10, 1, 10);
     uint32_t charCode = tenths == 10 ? MDI_BATTERY_FULL : MDI_BATTERY_10 + (tenths - 1);

@@ -256,6 +256,7 @@ int main(int argc, char** argv) {
   if (argc > 4 && std::string(argv[4]) == "problems") {  // weather place missing, calendar failing
     weather_location[0] = '\0';
     problems = PROBLEM_CALENDAR | PROBLEM_WEATHER;
+    icsFailedMask = 0x02;  // calendar link 2
   }
   if (argc > 4 && std::string(argv[4]) == "long") renderSample = 2;
   if (argc > 4 && std::string(argv[4]) == "12h1258") RENDER_TIME += 3 * 3600 + 17 * 60;  // 12:58, widest 12 h

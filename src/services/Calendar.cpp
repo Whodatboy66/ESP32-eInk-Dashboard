@@ -14,6 +14,7 @@
 #include "IcsRules.h"
 #include "SchoolHolidays.h"
 #include "SecureClient.h"
+#include "../core/Problems.h"
 #include "../personal/UserStore.h"
 
 static_assert(ics::TITLE_MAX == CFG_CAL_TITLE_MAX, "calendar titles: the parser's and the widgets' size");
@@ -21,7 +22,11 @@ static_assert(ics::TITLE_MAX == CFG_CAL_TITLE_MAX, "calendar titles: the parser'
 namespace {
 
 constexpr time_t FLIGHT_LOOKAHEAD_S = 7 * 86400;  // flights pinned up to a week ahead
-constexpr unsigned long IDLE_TIMEOUT_MS = 10000;   // no byte for this long: the download ends
+// No byte for this long: the download ends. Google builds a large calendar while it answers: packed,
+// the headers and the first bytes come at once and then nothing until it is built (a 1,098-entry
+// work calendar: over 10 s, build 83 gave up there; device test 2026-11-25).
+constexpr unsigned long IDLE_TIMEOUT_MS = 30000;
+constexpr uint16_t ANSWER_TIMEOUT_MS = 30000;  // for the answer's headers (unpacked: the same wait is here)
 
 // One reading state for all links (about 3 KB, static RAM once: the readers below are templates,
 // and a static inside them would exist once per use).
@@ -41,6 +46,7 @@ void logHttpError(const char* url, int code) {
 // What the last readLines() received, for the log: bytes over the air and unpacked.
 struct Download {
   uint32_t wireBytes = 0, bodyBytes = 0;
+  uint32_t longestPauseMs = 0;  // between two pieces of data (Google building the file)
   bool packed = false;
 };
 Download lastDownload;
@@ -61,10 +67,11 @@ using LineFn = bool (*)(void* ctx, const char* line);
 bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
   auto onLine = [&](const char* line) { return lineFn(ctx, line); };
   lastDownload = Download();
+  const unsigned long startMs = millis();
   SecureClient client;  // certificate checked with the CA bundle
   HTTPClient http;
   http.setReuse(false);  // "Connection: close": the server ends the connection after the answer
-  http.setTimeout(15000);
+  http.setTimeout(ANSWER_TIMEOUT_MS);
   http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
   std::unique_ptr<httpbody::Gunzip> gz;
   if (unpackMemory()) {
@@ -104,6 +111,7 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
   }
   httpbody::Dechunker dechunk;
   bool more = true, broken = false;
+  const char* why = nullptr;  // why the answer is incomplete, for the log
   auto lines = [&](const uint8_t* p, size_t n) {
     lastDownload.bodyBytes += n;
     for (size_t i = 0; i < n && more; i++) {
@@ -113,7 +121,10 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
   };
   auto body = [&](const uint8_t* p, size_t n) {
     if (!gz) lines(p, n);
-    else if (!gz->push(p, n, lines)) broken = true;
+    else if (!gz->push(p, n, lines)) {
+      broken = true;
+      why = "packed data damaged";
+    }
   };
   uint8_t buf[1024];
   unsigned long lastData = millis();
@@ -122,12 +133,23 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
     int avail = stream->available();
     if (avail > 0) {
       int n = stream->read(buf, avail < (int)sizeof(buf) ? avail : (int)sizeof(buf));
-      if (n < 0) break;  // a TLS read error
+      if (n < 0) {
+        why = "TLS read error";
+        break;
+      }
+      if (millis() - lastData > lastDownload.longestPauseMs) lastDownload.longestPauseMs = millis() - lastData;
       lastDownload.wireBytes += n;
-      if (chunked) broken = !dechunk.push(buf, n, body) || broken;
+      if (chunked && !dechunk.push(buf, n, body)) {
+        broken = true;
+        if (!why) why = "chunk error";
+      }
       else body(buf, n);
       lastData = millis();
-    } else if (!stream->connected() || millis() - lastData > IDLE_TIMEOUT_MS) {
+    } else if (!stream->connected()) {
+      why = "connection ended";
+      break;
+    } else if (millis() - lastData > IDLE_TIMEOUT_MS) {
+      why = "no data for 30 s";
       break;
     } else {
       delay(2);
@@ -137,7 +159,8 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
     const bool whole = !broken && (chunked ? dechunk.done() : size < 0 || lastDownload.wireBytes >= (uint32_t)size) &&
                        (!gz || gz->done());
     if (!whole) {
-      DBGF("[ICS] answer incomplete or damaged after %lu bytes", (unsigned long)lastDownload.wireBytes);
+      DBGF("[ICS] answer incomplete or damaged after %lu bytes, %lu ms (%s%s)", (unsigned long)lastDownload.wireBytes,
+           millis() - startMs, why ? why : "ended early", lastDownload.packed ? ", packed" : "");
       http.end();
       return false;
     }
@@ -170,10 +193,12 @@ bool readEvents(const char* url, OnEvent onEvent) {
   });
   if (ok) {
     if (lastDownload.packed)
-      DBGF("[ICS] %d events parsed in %lu ms (%lu KB, received packed: %lu KB)", events, millis() - t0,
-           (unsigned long)(lastDownload.bodyBytes / 1024), (unsigned long)(lastDownload.wireBytes / 1024));
+      DBGF("[ICS] %d events parsed in %lu ms (%lu KB, received packed: %lu KB, longest pause %lu ms)", events,
+           millis() - t0, (unsigned long)(lastDownload.bodyBytes / 1024), (unsigned long)(lastDownload.wireBytes / 1024),
+           (unsigned long)lastDownload.longestPauseMs);
     else
-      DBGF("[ICS] %d events parsed in %lu ms (%lu KB)", events, millis() - t0, (unsigned long)(lastDownload.bodyBytes / 1024));
+      DBGF("[ICS] %d events parsed in %lu ms (%lu KB, longest pause %lu ms)", events, millis() - t0,
+           (unsigned long)(lastDownload.bodyBytes / 1024), (unsigned long)lastDownload.longestPauseMs);
   }
   return ok;
 }
@@ -278,6 +303,7 @@ bool fetchCalendarIcs(const char* tz, int* failed) {
   const time_t bdayTo = localDay(nowTm, personal::BDAY_HORIZON_DAYS + 1);
 
   bool anyOk = false;
+  uint8_t failedMask = 0;
   int failures = 0;
   for (int i = 0; i < ICS_MAX_FEEDS; i++) {
     if (!ics_urls[i][0]) continue;
@@ -300,8 +326,11 @@ bool fetchCalendarIcs(const char* tz, int* failed) {
     });
     if (ok) anyOk = true;
     else failures++;
+    if (ok) failedMask &= ~(1u << i);
+    else failedMask |= 1u << i;
   }
   if (failed) *failed = failures;
+  icsFailedMask = failedMask;  // the status bar names the link ("Kalender 2 …")
   if (anyOk && !failures) {
     if (bdays) saveUserCalBirthdays(*bdays);
     else if (!cal_birthdays) clearUserCalBirthdays();  // the setting was turned off

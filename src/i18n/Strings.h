@@ -246,6 +246,7 @@ enum class Lang : uint8_t { De, En };
   X(PtStocks,          "Einige Aktienkurse können nicht geladen werden", "Some stock prices can't be loaded") \
   X(PfStocks,          "Prüfe die Aktiensymbole im Tab Daten.", "Check the stock symbols on the Data tab.") \
   X(PtCalendar,        "Ein Kalender kann nicht gelesen werden", "A calendar can't be read") \
+  X(PtCalendarN,       "Kalender %d kann nicht gelesen werden", "Calendar %d can't be read") \
   X(PfCalendar,        "Prüfe die Kalender-Links im Tab Daten.", "Check the calendar links on the Data tab.") \
   X(PtPrinter,         "Der Drucker antwortet nicht",      "The printer doesn't answer") \
   X(PfPrinter,         "Ist er eingeschaltet? Prüfe seine Adresse im Tab Daten.", "Is it switched on? Check its address on the Data tab.") \

@@ -113,7 +113,7 @@ class Dechunker {
 };
 
 // gzip (RFC 1952): the header, the deflate data (tinfl with a 32 KB window: about 43 KB of heap
-// between begin() and the destructor), the trailer's size checked.
+// between begin() and the destructor), the trailer's size checked when it arrives whole.
 class Gunzip {
  public:
   Gunzip() = default;
@@ -146,7 +146,10 @@ class Gunzip {
     window = nullptr;
     inflater = nullptr;
   }
-  bool done() const { return state == State::Done; }
+  // The data is whole once the decompressor has reached its end: the 8-byte trailer may arrive
+  // short, because the chip's ROM tinfl (an older miniz) keeps up to 4 bytes after the data in its
+  // bit buffer (newer versions give them back). Its size is checked when it arrives whole.
+  bool done() const { return state == State::Trailer || state == State::Done; }
   uint32_t packedBytes() const { return packed; }
   uint32_t unpackedBytes() const { return unpacked; }
 
