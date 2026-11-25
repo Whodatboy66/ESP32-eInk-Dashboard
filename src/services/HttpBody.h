@@ -275,4 +275,52 @@ class Gunzip {
   }
 };
 
+// The whole body path of a download (Calendar.cpp): the chunks taken off when chunked, then the
+// data unpacked when packed (gz), each byte exactly once. Build 84 fed chunked data to the unpacker
+// twice (once still framed) in the device code, where no test saw it: every packed download failed.
+class BodyDecoder {
+ public:
+  void begin(bool isChunked, Gunzip* unpacker) {
+    chunked = isChunked;
+    gz = unpacker;
+    dechunk.reset();
+    failed = false;
+    why = nullptr;
+  }
+
+  // Received bytes in, the body's (unpacked) bytes out through out(const uint8_t*, size_t). False
+  // once the data is damaged (failure() says where).
+  template <typename Out>
+  bool push(const uint8_t* p, size_t n, Out out) {
+    if (failed) return false;
+    auto unpack = [&](const uint8_t* q, size_t m) {
+      if (failed) return;
+      if (!gz) {
+        out(q, m);
+      } else if (!gz->push(q, m, out)) {
+        failed = true;
+        why = gz->failure() ? gz->failure() : "packed data damaged";
+      }
+    };
+    if (!chunked) {
+      unpack(p, n);
+    } else if (!dechunk.push(p, n, unpack) && !failed) {
+      failed = true;
+      why = "chunk error";
+    }
+    return !failed;
+  }
+
+  bool ended() const { return chunked && dechunk.done(); }  // the last chunk arrived: nothing more comes
+  // Everything there: no damage, the last chunk (when chunked), the unpacker's end (when packed).
+  bool whole() const { return !failed && (!chunked || dechunk.done()) && (!gz || gz->done()); }
+  const char* failure() const { return why; }
+
+ private:
+  bool chunked = false, failed = false;
+  Gunzip* gz = nullptr;
+  Dechunker dechunk;
+  const char* why = nullptr;
+};
+
 }  // namespace httpbody

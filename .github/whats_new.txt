@@ -8,3 +8,4 @@
 83: Geburtstage: nur der Name, das Alter bleibt immer sichtbar | Kalender lädt gepackt: bis zu 10-mal schneller, schont den Akku | Nachtruhe: nach Tippen pünktlich wach; Akku-Anzeige im Bearbeiten
 84: Kalender wieder zuverlässig (Fehler am Dateiende behoben) | Statusleiste nennt den Fehler; schärfere, saubere Schrift | Ohne Akku am USB: „USB“ statt 100 %; MakerWorld nur mit ID
 85: Kalender: eigener, getesteter Entpacker statt dem alten im Chip | Falls Laden gepackt scheitert: automatisch ungepackt wie früher | Log nennt die Ursache, wenn ein Kalender nicht lädt
+86: Kalender lädt wieder gepackt: Arbeitskalender in Sekunden statt 15 s | Fehler im Download behoben (Daten wurden doppelt gelesen)

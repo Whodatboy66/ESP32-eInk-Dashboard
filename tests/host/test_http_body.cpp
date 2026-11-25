@@ -2,6 +2,7 @@
 // Host test for src/services/HttpBody.h: a calendar download's body with "Transfer-Encoding: chunked"
 // and "Content-Encoding: gzip", as Google sends it (build 83: a 1,098-entry work calendar took 15 s
 // uncompressed; Google packs iCal about 10 x). Run: tests/host/run.sh
+#include <cstring>
 #include <string>
 #include <vector>
 
@@ -202,6 +203,47 @@ void test_chunked_gzip() {
   }
 }
 
+// The whole path a download takes on the device (Calendar.cpp): chunks off if chunked, then unpacked
+// if packed, each byte exactly once (build 84 fed chunked data to the unpacker twice, once still
+// framed: every packed calendar failed after a few KB, device test 2026-11-25).
+void test_body_decoder() {
+  const std::string text = sampleCalendar(300);
+  const Bytes packed = gzip(text);
+  const struct {
+    bool chunked, gz;
+    Bytes wire;
+  } cases[] = {{true, true, chunked(packed)}, {false, true, packed}, {true, false, chunked(bytes(text))},
+               {false, false, bytes(text)}};
+  for (const auto& c : cases)
+    for (size_t step : {1, 700, 1024}) {
+      httpbody::Gunzip g;
+      if (c.gz) CHECK(g.begin());
+      httpbody::BodyDecoder body;
+      body.begin(c.chunked, c.gz ? &g : nullptr);
+      std::string out;
+      bool ok = true;
+      for (size_t i = 0; i < c.wire.size() && ok; i += step) {
+        size_t n = c.wire.size() - i < step ? c.wire.size() - i : step;
+        ok = body.push(c.wire.data() + i, n, [&](const uint8_t* p, size_t m) { out.append((const char*)p, m); });
+      }
+      CHECK(ok && body.whole());
+      CHECK(out == text);
+      CHECK(body.ended() == c.chunked);
+    }
+  // Damaged packed data inside chunks: the unpacker's reason, not a chunk error.
+  Bytes bad = packed;
+  for (size_t i = 200; i < 260; i++) bad[i] ^= 0x5A;
+  httpbody::Gunzip g;
+  CHECK(g.begin());
+  httpbody::BodyDecoder body;
+  body.begin(true, &g);
+  std::string out;
+  const Bytes wire = chunked(bad);
+  bool ok = body.push(wire.data(), wire.size(), [&](const uint8_t* p, size_t m) { out.append((const char*)p, m); });
+  CHECK(!ok && !body.whole());
+  CHECK(body.failure() && std::strcmp(body.failure(), "chunk error"));
+}
+
 }  // namespace
 
 int main() {
@@ -210,5 +252,6 @@ int main() {
   test_gunzip_header_fields();
   test_gunzip_damaged();
   test_chunked_gzip();
+  test_body_decoder();
   return finish("http body");
 }

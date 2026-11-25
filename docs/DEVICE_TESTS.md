@@ -341,15 +341,20 @@ described in the app.
 
 ## 8. Power measurements (separate session, needs a USB power meter)
 
-**Confirms stage 6 and the estimates of stage 10:** measured values and the resulting battery life are documented (`docs/POWER.md`,
-written from these numbers).
+**Confirms stage 6 and the estimates of stage 10:** real numbers instead of the one estimate so far
+(about 3 % in 13 hours); `docs/POWER.md` and the app's battery estimate are written from them.
 
-- [ ] Deep sleep current (between wakes): ____ mA, with the touch sensor and the display HAT connected
-- [ ] One clock wake (partial refresh): ____ mA × ____ s
-- [ ] The hourly Wi-Fi wake (calendar, weather): ____ mA × ____ s
-- [ ] A full refresh: ____ mA × ____ s
-- [ ] With these: the battery life per clock interval and with / without quiet hours (into
-      `docs/POWER.md` and the estimate in the app)
+**Setup:** a USB power meter between the charger and the board that shows **0.1 mA or finer** and
+counts **mAh** (e.g. the FNIRSI FNB48 / FNB58 kind; a simple "USB doctor" that shows 0.00 A can't
+measure the sleep). **Battery disconnected** (otherwise the meter counts the charging current), the
+display and touch sensor connected as always.
+
+- [ ] Clock every **1 minute**: reset the meter's mAh counter, leave the device alone for exactly
+      1 hour: ____ mAh (the hourly Wi-Fi wake and the full refresh are included)
+- [ ] The same with the clock every **5 minutes**: ____ mAh in 1 hour
+- [ ] The lowest steady reading between two wakes (deep sleep): ____ mA
+- [ ] Send the numbers: battery life = capacity ÷ mAh per hour; from the two runs the cost of a clock
+      wake and of a Wi-Fi wake follow (into `docs/POWER.md` and the estimate in the app)
 
 ## 9. Stage 7: new look (build 79)
 
@@ -464,6 +469,17 @@ The names are cleaned at the next calendar update (within the hour, or double ta
 - [ ] The app's "Check" of both links shows their number of entries (was "No connection")
 - [ ] No "packed downloads off" line in the log (if there is one: the line before it names the reason;
       the calendars then still load, unpacked as before)
+
+### Build 86: the packed download itself fixed (2026-11-25)
+
+Build 85's log: "inflate error" after ~7 KB, then the safety net loaded both calendars unpacked
+(15 s). The cause was in the download loop since build 84: chunked data reached the unpacker twice.
+
+- [ ] After the update: `[ICS] 268 events parsed … (87 KB, received packed: 18 KB …)` and
+      `[ICS] 1101 events parsed in ____ ms (2816 KB, received packed: ~440 KB …)`, no "inflate error",
+      no "packed downloads off"
+- [ ] The same after a restart (setup mode and back): still packed
+- [ ] The app's "Check" of both links shows their number of entries
 
 ## 10. Stage 8: data store and several screens *(not built yet)*
 

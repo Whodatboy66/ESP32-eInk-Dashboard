@@ -114,8 +114,9 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
     http.end();
     return false;
   }
-  httpbody::Dechunker dechunk;
-  bool more = true, broken = false;
+  httpbody::BodyDecoder decoder;  // chunks off, then unpacked: each byte once (tested on the PC)
+  decoder.begin(chunked, gz.get());
+  bool more = true;
   const char* why = nullptr;  // why the answer is incomplete, for the log
   auto lines = [&](const uint8_t* p, size_t n) {
     lastDownload.bodyBytes += n;
@@ -124,17 +125,10 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
       if (unfolder.next(lineBuf, sizeof(lineBuf))) more = onLine(lineBuf);
     }
   };
-  auto body = [&](const uint8_t* p, size_t n) {
-    if (!gz) lines(p, n);
-    else if (!gz->push(p, n, lines)) {
-      broken = true;
-      why = gz->failure() ? gz->failure() : "packed data damaged";
-    }
-  };
   uint8_t buf[1024];
   unsigned long lastData = millis();
-  while (more && !broken) {
-    if (chunked ? dechunk.done() : (size >= 0 && lastDownload.wireBytes >= (uint32_t)size)) break;
+  while (more) {
+    if (chunked ? decoder.ended() : (size >= 0 && lastDownload.wireBytes >= (uint32_t)size)) break;
     int avail = stream->available();
     if (avail > 0) {
       int n = stream->read(buf, avail < (int)sizeof(buf) ? avail : (int)sizeof(buf));
@@ -144,12 +138,11 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
       }
       if (millis() - lastData > lastDownload.longestPauseMs) lastDownload.longestPauseMs = millis() - lastData;
       lastDownload.wireBytes += n;
-      if (chunked && !dechunk.push(buf, n, body)) {
-        broken = true;
-        if (!why) why = "chunk error";
-      }
-      else body(buf, n);
       lastData = millis();
+      if (!decoder.push(buf, n, lines)) {
+        why = decoder.failure();
+        break;
+      }
     } else if (!stream->connected()) {
       why = "connection ended";
       break;
@@ -161,8 +154,7 @@ bool readLinesOnce(const char* url, LineFn lineFn, void* ctx, int* httpCode) {
     }
   }
   if (more) {  // read to the end (not stopped by onLine): was it all there?
-    const bool whole = !broken && (chunked ? dechunk.done() : size < 0 || lastDownload.wireBytes >= (uint32_t)size) &&
-                       (!gz || gz->done());
+    const bool whole = decoder.whole() && (chunked || size < 0 || lastDownload.wireBytes >= (uint32_t)size);
     if (!whole) {
       DBGF("[ICS] answer incomplete or damaged after %lu bytes, %lu ms (%s%s)", (unsigned long)lastDownload.wireBytes,
            millis() - startMs, why ? why : "ended early", lastDownload.packed ? ", packed" : "");
