@@ -53,7 +53,7 @@ void build() {
   addBday(manual, "Anna", 17, 11, 1990);
   addBday(manual, "Grandpa Joe", 21, 11, 1941);
   addBday(manual, "Jürgen", 18, 11, 0);
-  addBday(feed, "Mia's birthday", 29, 11, 0);
+  addBday(feed, "Mia", 29, 11, 0);
   addBday(feed, "Lukas", 24, 12, 0);
   addBday(manual, "Oma Erika", 17, 1, 1967);  // the January renders of the month view (stage 7)
   if (renderSample == 2)
@@ -65,7 +65,18 @@ const personal::TaskList& userTasks() { build(); return tasks; }
 const char* userNote() { build(); return note; }
 const personal::BirthdayList& userBirthdays() { build(); return manual; }
 const personal::BirthdayList& userFeedBirthdays() { build(); return feed; }
-const personal::BirthdayList& userCalBirthdays() { static personal::BirthdayList none; return none; }
+// Birthdays from the calendar links (stage 7), as Calendar.cpp stores them: the word "Geburtstag"
+// already dropped. Long names with an age: the line is shortened, the age stays (build 81).
+const personal::BirthdayList& userCalBirthdays() {
+  static personal::BirthdayList cal;
+  static bool once = false;
+  if (!once && renderSample != 1) {
+    once = true;
+    addBday(cal, "Konstantin Weißenberger", 2, 12, 1996);
+    addBday(cal, "Elisabeth Hohenstein", 5, 1, 2016);  // the January renders: footer, side column, sheet
+  }
+  return cal;
+}
 bool saveUserTasks(const personal::TaskList&) { return true; }
 bool saveUserNote(const char*) { return true; }
 bool saveUserBirthdays(const personal::BirthdayList&) { return true; }

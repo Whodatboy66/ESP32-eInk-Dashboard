@@ -1,4 +1,5 @@
 // Host test for src/personal/ (tasks, note, birthdays). Run: tests/host/run.sh
+#include <cstring>
 #include <string>
 
 #include "src/personal/Birthdays.h"
@@ -310,9 +311,25 @@ static void test_counts_as_birthday() {
   ics::birthdayName("Anna (1966)", name, sizeof(name), year);
   CHECK_STR(name, "Anna");
   CHECK_EQ(year, 1966);
+  // The cake symbol already says "birthday": the word is dropped from the name (device test, build 80).
   ics::birthdayName("Geburtstag Jürgen", name, sizeof(name), year);
-  CHECK_STR(name, "Geburtstag Jürgen");
+  CHECK_STR(name, "Jürgen");
   CHECK_EQ(year, 0);
+  ics::birthdayName("Geburtstag Lennart Kempf (1990)", name, sizeof(name), year);
+  CHECK_STR(name, "Lennart Kempf");
+  CHECK_EQ(year, 1990);
+  const char* const SAME[][2] = {
+      {"Geburtstag von Anna", "Anna"},   {"Lukas hat Geburtstag", "Lukas"}, {"Mia's birthday", "Mia"},
+      {"Mia\xE2\x80\x99s Birthday", "Mia"}, {"Birthday: Tom", "Tom"},      {"Anna Geburtstag", "Anna"},
+      {"Geb. Oma Erika", "Oma Erika"},   {"geburtstag - Ben", "Ben"},
+      {"Geburtstagsfeier Anna", "Geburtstagsfeier Anna"},  // a party, not the word on its own
+      {"Geburtstag", "Geburtstag"},                        // nothing left: kept
+  };
+  for (const auto& c : SAME) {
+    ics::birthdayName(c[0], name, sizeof(name), year);
+    if (std::strcmp(name, c[1])) std::printf("  birthdayName(\"%s\") = \"%s\"\n", c[0], name);
+    CHECK_STR(name, c[1]);
+  }
   ics::birthdayName("Mia (5)", name, sizeof(name), year);  // not a year
   CHECK_STR(name, "Mia (5)");
   CHECK_EQ(year, 0);

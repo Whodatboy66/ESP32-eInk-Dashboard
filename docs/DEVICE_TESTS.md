@@ -25,23 +25,23 @@ says so; the rest once.
 
 **Data feeds (school holidays, build 79 on):**
 - [x] Once after the first push of build 79: Actions → **Data feeds** → Run workflow (branch main)
-- [ ] Releases: the pre-release **feeds** has 16 files `ferien-BW.ics` … `ferien-TH.ics`, and it is
+- [x] Releases: the pre-release **feeds** has 16 files `ferien-BW.ics` … `ferien-TH.ics`, and it is
       **not** marked "Latest" (the stable firmware release stays "Latest")
 - [ ] A week later: the Monday run happened by itself (Actions → Data feeds, scheduled), green
 - [ ] If a run fails: the old files stay online (devices keep their holidays); look at the log of the
       failed state, run again by hand later
 
 **Promote a tested beta to stable (the family devices get only these):**
-- [ ] Only a build whose device-test block is complete. Its `FW_BUILD` must still be the one on main:
+- [x] Only a build whose device-test block is complete. Its `FW_BUILD` must still be the one on main:
       promote **before** pushing the next build
-- [ ] Actions → **Build firmware** → Run workflow: branch **main**, "Publish" **on**, channel
+- [x] Actions → **Build firmware** → Run workflow: branch **main**, "Publish" **on**, channel
       **stable**, "What's new" empty (the beta's lines stay), oldest build **0**, "Allow a changed
       signing public key" **off**
-- [ ] Releases: **firmware-.NN** is now "Latest" (not a pre-release); a stable device updates at night
+- [x] Releases: **firmware-.NN** is now "Latest" (not a pre-release); a stable device updates at night
       (or double tap → update screen shows it)
 
 **Accounts and calendars (once):**
-- [ ] Google Calendar → Settings → "Geburtstage" (contacts' birthdays) → "Kalender integrieren": is there
+- [x] Google Calendar → Settings → "Geburtstage" (contacts' birthdays) → "Kalender integrieren": is there
       a "Privatadresse im iCal-Format"? Yes: it can go into the birthday link. No: birthdays as yearly
       events in a normal calendar (found automatically, build 79) or typed into the app. Note the answer
       in the results log
@@ -164,7 +164,7 @@ Done earlier (results log, 2026-11-16/17):
 
 Open (set channel **Beta**, auto install **off** first: setup app, Device tab):
 
-- [ ] **Release build 75 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
+- [x] **Release build 75 to beta**: GitHub → Actions → Build firmware → Run workflow: release ✔,
       channel beta, "What's new" text. Then double tap: "Up to date: .75" (the device already has it)
 - [ ] **Hang test with the fix (build 69+):** OTA test release → `hang`; double tap, confirm tap:
       "Updated to .90005", then hangs. **Hold the button 2 s** during the hang: it must restart and come
@@ -190,19 +190,19 @@ and updates.
 - [x] In the app (Data tab): add 5 tasks (one overdue, one today, one high priority, one without date,
       one done), a note with umlauts and line breaks ("Müll: Donnerstag!"), 3 birthdays (one today with
       year, one in 3 days, one in February)
-- [ ] Layout **Personal** (Screen tab, "Ready-made layouts" from build 76; before: at the far right
+- [x] Layout **Personal** (Screen tab, "Ready-made layouts" from build 76; before: at the far right
       end of the structure strip): tasks in the right order (overdue first, date in a black box; high priority
       = filled box; the done one not shown), the note wrapped, birthdays with "Today" in a black box and
       the age
 - [x] Umlauts, ß, €, `! ( ) & ' "` look right; an emoji typed into a task is removed when saving (the app says so)
 - [x] Limits: the app allows at most 30 tasks (adding is greyed out at 30) and 400 characters for the note
-- [ ] **Birthday calendar link** (e.g. Google's birthday calendar as iCal): "Check" finds events; after
+- [x] **Birthday calendar link** (e.g. Google's birthday calendar as iCal): "Check" finds events; after
       the next wake its birthdays appear (marked as from the calendar in the app)
-- [ ] **Survives a restart** (hold 2 s): everything still there
-- [ ] **Survives an update:** release a build to beta and install it (block 4): everything still there
-- [ ] Next day (or change the device clock by waiting past midnight): "in 3 d" became "in 2 d", "today"
+- [x] **Survives a restart** (hold 2 s): everything still there
+- [x] **Survives an update:** release a build to beta and install it (block 4): everything still there
+- [x] Next day (or change the device clock by waiting past midnight): "in 3 d" became "in 2 d", "today"
       labels moved (redrawn right after midnight)
-- [ ] A task ticked off shows "done 20.11." in the app; 30 days later it's gone (log: `[User] 1 done
+- [x] A task ticked off shows "done 20.11." in the app; 30 days later it's gone (log: `[User] 1 done
       task(s) older than 30 days removed`)
 
 ## 6. Stage 5: the setup app
@@ -250,12 +250,12 @@ phone (try it once with someone else at the end of this block).
 
 ### Edit mode on the home network
 
-- [ ] With working Wi-Fi, **hold 5 s**: the screen shows **"Edit mode"**, the address
+- [x] With working Wi-Fi, **hold 5 s**: the screen shows **"Edit mode"**, the address
       (`http://<name>.local` and the IP), a QR code and a **6-digit code**
-- [ ] Phone in the home Wi-Fi: scan the code or open the address → the app asks for the code; the right
+- [x] Phone in the home Wi-Fi: scan the code or open the address → the app asks for the code; the right
       code opens it; 5 wrong codes → a new code appears on the screen
-- [ ] `http://<name>.local` works (iPhone; on Android the IP may be needed)
-- [ ] A second phone without the code can't change anything (asks for the code)
+- [x] `http://<name>.local` works (iPhone; on Android the IP may be needed)
+- [x] A second phone without the code can't change anything (asks for the code)
 - [ ] Device tab: **Change Wi-Fi** → the device restarts into the hotspot
 - [ ] 10 minutes without use: back to the dashboard
 
@@ -265,7 +265,7 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
 
 - [x] After a few hours on the wall: Device → Diagnostics shows log lines of the Wi-Fi wakes (with
       times and a date line) and one battery value per hour
-- [ ] A broken calendar link (or Wi-Fi off for a while): it shows in the service table (failures,
+- [x] A broken calendar link (or Wi-Fi off for a while): it shows in the service table (failures,
       next retry) and in the log
 - [x] **Download log** opens / saves a text file (iPhone captive browser and a normal browser)
 - [x] **Clear log**: the list is empty; new lines appear after the next Wi-Fi wake
@@ -275,9 +275,9 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
 
 ### Fixes of build 73 (found in the device test, 2026-11-19)
 
-- [ ] Hotspot: save a setting → "Saved, restarting" → the device comes back in setup mode (hotspot
+- [x] Hotspot: save a setting → "Saved, restarting" → the device comes back in setup mode (hotspot
       again, same password), the phone reconnects, the app reloads by itself; **Done** shows the dashboard
-- [ ] Edit mode: save a setting → back in edit mode with the **same code**, the app goes on without
+- [x] Edit mode: save a setting → back in edit mode with the **same code**, the app goes on without
       asking for the code again
 - [ ] First start: the guide's last step ends with the dashboard (no waiting)
 - [ ] Printer switched off (or MakerWorld ID only, no printer address): the log shows `[Bambu] next try
@@ -294,35 +294,35 @@ Seen on the device on 2026-11-19: the diagnostics view works, the firmware line 
 
 ### Fixes of build 76 (device test, 2026-11-20)
 
-- [ ] Top bar: the battery in percent ("53 %") instead of volts, right of the battery icon (build 77);
+- [x] Top bar: the battery in percent ("53 %") instead of volts, right of the battery icon (build 77);
       in full-width layouts the date on the left ("Fri 20 Nov")
-- [ ] Weather in a grid layout: the weekday above each icon ("Fri", "Sat", ...) (build 77)
-- [ ] Agenda: today's and tomorrow's events (in the evening too: tomorrow's appear under their own date)
+- [x] Weather in a grid layout: the weekday above each icon ("Fri", "Sat", ...) (build 77)
+- [x] Agenda: today's and tomorrow's events (in the evening too: tomorrow's appear under their own date)
       (build 77)
-- [ ] Exact preview after switching to 12 h (not saved yet): shows AM/PM where it fits
+- [x] Exact preview after switching to 12 h (not saved yet): shows AM/PM where it fits
 
 ### Build 78: German / English, stock names, automatic beta
 
-- [ ] After the update the screen is German (dates "Di 17. Nov", "Dienstag, 17. November", weekdays,
+- [x] After the update the screen is German (dates "Di 17. Nov", "Dienstag, 17. November", weekdays,
       "Heute / Morgen", status notes, update screens); the app is German (tabs Start / Bildschirm /
       Daten / Gerät)
-- [ ] Gerät → Sprache: English → the device restarts, screen and app in English; back to Deutsch
-- [ ] Device messages in the app (problems, field errors, check results) in the chosen language
+- [x] Gerät → Sprache: English → the device restarts, screen and app in English; back to Deutsch
+- [x] Device messages in the app (problems, field errors, check results) in the chosen language
 - [ ] Factory reset → first start begins in German with the language as step 1
-- [ ] Stocks `EUNL.DE:MSCI World,QYLE.DE:Nasdaq CC,PPFB.DE:Gold`: the screen shows the names, German
+- [x] Stocks `EUNL.DE:MSCI World,QYLE.DE:Nasdaq CC,PPFB.DE:Gold`: the screen shows the names, German
       prices with a decimal comma; a name over 12 characters is refused with a message
-- [ ] The push of build 78 published `firmware-.78` as a beta pre-release by itself (GitHub
+- [x] The push of build 78 published `firmware-.78` as a beta pre-release by itself (GitHub
       Releases); the update screen shows the German "What's new" lines with "(", ")" and "ü"
-- [ ] Later: Run workflow with release + channel stable promotes it (it becomes "Latest")
+- [x] Later: Run workflow with release + channel stable promotes it (it becomes "Latest")
 
 ## 6b. Stage 6 part 1: power (build 75)
 
 **Confirms stage 6 part 1:** clock interval, quiet hours and battery saver behave as set and as
 described in the app.
 
-- [ ] Clock refresh "every 5 minutes": the display updates at :00, :05, :10 ...; the status bar says
+- [x] Clock refresh "every 5 minutes": the display updates at :00, :05, :10 ...; the status bar says
       "Clock every 5 min"; the log shows wakes 5 minutes apart; calendar still once an hour
-- [ ] The app shows days per charge for each choice; the numbers change with the quiet hours on / off
+- [x] The app shows days per charge for each choice; the numbers change with the quiet hours on / off
 - [ ] Quiet hours set to start in 2 minutes and end 10 minutes later: at the start the status bar says
       "Night until …", no wakes in the log during the window, a full refresh with fresh data at its end
 - [ ] A tap during the quiet hours shows the current dashboard (with the note), then it sleeps again
@@ -362,56 +362,69 @@ PC renders of every case (German): [docs/images/layouts/](images/layouts/) (`mon
 **Before the device test:** block M (after every push, Data feeds run once, the Google birthday question).
 
 **On the device:**
-- [ ] Clock: filled Montserrat digits in every layout incl. Classic, date below, AM/PM with the 12-hour
+- [x] Clock: filled Montserrat digits in every layout incl. Classic, date below, AM/PM with the 12-hour
       clock in a 2 × 1 box; readable with reflections
-- [ ] A clock in a 1 × 1 box (editor allows it now): small digits, short date
-- [ ] Headings with a line over the list boxes (not in Classic); weather weekdays and "9° / 2°"
-- [ ] Status bar: Wi-Fi bars left of the battery (after a wake with Wi-Fi), not touching the version
-- [ ] Edit mode code screen: the 6 digits in the new font, readable
-- [ ] Month view: today a small filled square, holiday a frame, school holidays a line, appointment
+- [x] A clock in a 1 × 1 box (editor allows it now): small digits, short date
+- [x] Headings with a line over the list boxes (not in Classic); weather weekdays and "9° / 2°"
+- [x] Status bar: Wi-Fi bars left of the battery (after a wake with Wi-Fi), not touching the version
+- [x] Edit mode code screen: the 6 digits in the new font, readable
+- [x] Month view: today a small filled square, holiday a frame, school holidays a line, appointment
       dots only from links with "Im Monat markieren", birthday cake, bold weekend, KW, footer
-- [ ] Month view in a full screen, a half (2 × 3), 2 × 2, 1 × 2, 2 × 1 (two weeks) and 1 × 1 (sheet)
+- [xx] Month view in a full screen, a half (2 × 3), 2 × 2, 1 × 2, 2 × 1 (two weeks) and 1 × 1 (sheet)
       box, and in Classic: each looks tidy, nothing overlaps (the editor allows 1 × 1 now)
-- [ ] App → Data → "Feiertage und Ferien": Bundesland list, both switches turn on when a state is
+- [x] App → Data → "Feiertage und Ferien": Bundesland list, both switches turn on when a state is
       chosen; the school link field shows our link as placeholder
-- [ ] Bundesland set, Feiertage on: the holiday name after the date in the status bar on a holiday,
+- [x] Bundesland set, Feiertage on: the holiday name after the date in the status bar on a holiday,
       "★" entry in "Heute und morgen" today and tomorrow (next real one: 25 Dec, or the 6 Jan in BW / BY / ST)
-- [ ] Schulferien on: within an hour the line appears in the month view (Christmas holidays), start /
+- [x] Schulferien on: within an hour the line appears in the month view (Christmas holidays), start /
       end in the footer; Diagnostics log: "school holidays: read, n ranges"
-- [ ] After the update from build 78 the month view has **no appointment dots** until "Im Monat
+- [x] After the update from build 78 the month view has **no appointment dots** until "Im Monat
       markieren" is switched on for a link (off by default); on: dots, off: none
-- [ ] **Before** running the "Data feeds" workflow (feed missing) with Schulferien on: the log shows
+- [x] **Before** running the "Data feeds" workflow (feed missing) with Schulferien on: the log shows
       one failed attempt, then none for 6 hours (no Wi-Fi every minute; Diagnostics battery curve normal)
-- [ ] Bundesland → "Aus" (or another state): the old school holiday lines disappear at the next wake
-- [ ] "Heute und morgen" with an entry that began before today (e.g. a holiday trip) on a public
+- [x] Bundesland → "Aus" (or another state): the old school holiday lines disappear at the next wake
+- [x] "Heute und morgen" with an entry that began before today (e.g. a holiday trip) on a public
       holiday: every day once, in date order, the ★ line under today
-- [ ] Wi-Fi switched off at the router: "! WLAN" shows, the Wi-Fi bars disappear
-- [ ] A yearly all-day entry in a calendar link shows as a birthday (cake, birthday box), not as an
+- [x] Wi-Fi switched off at the router: "! WLAN" shows, the Wi-Fi bars disappear
+- [x] A yearly all-day entry in a calendar link shows as a birthday (cake, birthday box), not as an
       appointment dot; "Name (1966)" shows the age
-- [ ] After many clock changes: no disturbing ghosting from the filled digits
-- [ ] A build with all of this promoted to stable (block M, "Promote a tested beta to stable")
+- [x] After many clock changes: no disturbing ghosting from the filled digits
+- [x] A build with all of this promoted to stable (block M, "Promote a tested beta to stable")
 
 ## 9b. Stage 7b: own code base (build 80)
 
 **Confirms stage 7b:** after the rebuild everything works and looks as before. The PC renders are
 pixel-identical except the text font ([plans/STAGE7B_OWN_CODE.md](plans/STAGE7B_OWN_CODE.md), result).
 
-- [ ] Every service loads as before: weather (also a place given as "lat, lon"), stocks (incl. own
+- [x] Every service loads as before: weather (also a place given as "lat, lon"), stocks (incl. own
       names), calendar, parcels, flight with live status, printer (MQTT) and MakerWorld
-- [ ] Calendar: repeating entries (weekly on several days, "2nd Tuesday", yearly), an entry cancelled
+- [x] Calendar: repeating entries (weekly on several days, "2nd Tuesday", yearly), an entry cancelled
       or excluded in a series, all-day entries, an entry with a time from Outlook / Exchange (were
       missing before), an entry with an alarm (its title stays)
-- [ ] The screen looks as before in every layout; the text font looks slightly different (rebuilt),
+- [x] The screen looks as before in every layout; the text font looks slightly different (rebuilt),
       nothing is cut off; the problem names show "Druckercode" for a wrong printer code
-- [ ] MakerWorld numbers right-aligned in their columns; the parcel line has even gaps
-- [ ] Printer with an AMS: spools 1-4 with their fill level; with two AMS units nothing overlaps
-- [ ] Setup only through the app; `/basic` is gone (the address shows the app); with JavaScript off the
+- [x] MakerWorld numbers right-aligned in their columns; the parcel line has even gaps
+- [x] Printer with an AMS: spools 1-4 with their fill level; with two AMS units nothing overlaps
+- [x] Setup only through the app; `/basic` is gone (the address shows the app); with JavaScript off the
       page says it needs JavaScript
-- [ ] Button: tap, double tap, 2 s and 4 s holds; the BOOT button backup after a reset; the setup hold
+- [x] Button: tap, double tap, 2 s and 4 s holds; the BOOT button backup after a reset; the setup hold
       while the dashboard is refreshing
-- [ ] Battery, Wi-Fi fast connect (log: "WiFi connected in … ms (… dBm)"), time zone, update check:
+- [x] Battery, Wi-Fi fast connect (log: "WiFi connected in … ms (… dBm)"), time zone, update check:
       as before
-- [ ] Settings kept after the update to build 80 (Wi-Fi, calendar links, printer, layout, pins)
+- [x] Settings kept after the update to build 80 (Wi-Fi, calendar links, printer, layout, pins)
+
+### Build 81: birthday lines (device test, 2026-11-25)
+
+Reported: "Geburtstag Lennart Kempf t…" — the word and the long name pushed the age out of the line.
+The names are cleaned at the next calendar update (within the hour, or double tap).
+
+- [ ] Birthdays from the calendar links show the name only: "Geburtstag Anna", "Geburtstag von Anna",
+      "Anna hat Geburtstag", "Anna's birthday" all become "Anna" (the cake says it's a birthday)
+- [ ] The age stays visible in every month size: "Anna wird 60" where it fits, otherwise
+      "Lennart Kempf (30)", "Lennart K. (30)", or the name cut before the age ("Lenn… (30)")
+- [ ] The same in the birthday widget: a long name is shortened, the "(30)" stays
+- [ ] Full-screen month, side column: school holidays read "Fr 8. Jan · Ende" above the holiday's
+      name (the name is no longer cut off)
 
 ## 10. Stage 8: data store and several screens *(not built yet)*
 

@@ -454,3 +454,9 @@ only when the calendar's birthdays change).
   the side column; no appointment dots for next-month days in the two-week view; the school link is
   stored in plain text (it is meant to be a public link); the app's school-link placeholder updates only
   after saving.
+
+**Device test fix (build 81, 2026-11-25):** birthday lines were cut before the age ("Geburtstag
+Lennart Kempf t…"). Calendar birthday titles lose the word "Geburtstag" / "birthday" (`ics::birthdayName`),
+and `src/widgets/BirthdayText.h` shortens the line step by step so the age stays ("Anna wird 60" →
+"Lennart Kempf (30)" → "Lennart K. (30)" → "Lenn… (30)"); tests `test_birthday_text`, `test_personal`.
+The full-screen side column puts "Beginn" / "Ende" of school holidays on the date line.

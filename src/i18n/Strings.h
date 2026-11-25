@@ -109,8 +109,8 @@ enum class Lang : uint8_t { De, En };
   X(HlSchoolFrom,      "%s ab %s",                         "%s from %s") \
   X(HlSchoolUntil,     "%s bis %s",                        "%s until %s") \
   X(HlBirthdayAge,     "%s wird %d",                       "%s turns %d") \
-  X(HlSchoolStarts,    "%s beginnen",                      "%s start") \
-  X(HlSchoolEnds,      "%s enden",                         "%s end") \
+  X(HlSchoolStarts,    "Beginn",                           "start") \
+  X(HlSchoolEnds,      "Ende",                             "end") \
   X(HolNewYear,       "Neujahr",                            "New Year's Day") \
   X(HolEpiphany,      "Heilige Drei Könige",                "Epiphany") \
   X(HolWomensDay,     "Frauentag",                          "Women's Day") \

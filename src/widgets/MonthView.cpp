@@ -10,6 +10,7 @@
 #include "../core/AppState.h"
 #include "../i18n/Dates.h"
 #include "../personal/UserStore.h"
+#include "BirthdayText.h"
 #include "MonthModel.h"
 #include "Personal.h"
 
@@ -41,8 +42,11 @@ void drawSymbol(Kind k, int x, int y) {
   else canvas().fillRect(x, y + 3, 9, 3, GxEPD_BLACK);  // school holidays: a short line
 }
 
+int textWidth(const char* s) { return getSparseStringWidth(&epaperFont, s); }
+
 // "Mi 6. Jan  Heilige Drei Könige", "Weihnachtsferien bis Sa 9. Jan", "So 17. Jan  Anna wird 60".
-void highlightText(const Highlight& h, char* out, size_t cap, bool withDate) {
+// A birthday is shortened to maxW with its age kept ("Lennart K. (30)", BirthdayText.h).
+void highlightText(const Highlight& h, char* out, size_t cap, bool withDate, int maxW) {
   std::tm t{};
   t.tm_year = h.date.y - 1900;
   t.tm_mon = h.date.m - 1;
@@ -52,12 +56,17 @@ void highlightText(const Highlight& h, char* out, size_t cap, bool withDate) {
   i18n::formatStatusDate(t, ui_lang, date, sizeof(date));
   char what[96];
   using i18n::S;
+  if (h.kind == Kind::Birthday) {
+    char prefix[32] = "";
+    if (withDate) snprintf(prefix, sizeof(prefix), "%s  ", date);
+    bdaytext::fit(h.text, h.age, tr(S::HlBirthdayAge), maxW - textWidth(prefix), textWidth, what, sizeof(what));
+    snprintf(out, cap, "%s%s", prefix, what);
+    return;
+  }
   if (h.kind == Kind::Holiday) snprintf(what, sizeof(what), "%s", tr(h.holiday));
-  else if (h.kind == Kind::Birthday && h.age > 0) snprintf(what, sizeof(what), tr(S::HlBirthdayAge), h.text, h.age);
   else snprintf(what, sizeof(what), "%s", h.text);
   if ((h.kind == Kind::SchoolStart || h.kind == Kind::SchoolEnd) && !withDate) {
-    // Side column: the date is on the line above.
-    snprintf(out, cap, tr(h.kind == Kind::SchoolStart ? S::HlSchoolStarts : S::HlSchoolEnds), what);
+    snprintf(out, cap, "%s", what);  // side column: "Beginn" / "Ende" is on the date line (drawSide)
   } else if (h.kind == Kind::SchoolStart || h.kind == Kind::SchoolEnd) {
     snprintf(out, cap, tr(h.kind == Kind::SchoolStart ? S::HlSchoolFrom : S::HlSchoolUntil), what, date);
   } else if (withDate) {
@@ -148,7 +157,7 @@ void drawFooter(const Inputs& in, int x, int y, int w, int lines) {
     int base = y + i * month::LINE_H + 15;
     drawSymbol(h[i].kind, x, base - 10);
     char text[160];
-    highlightText(h[i], text, sizeof(text), true);
+    highlightText(h[i], text, sizeof(text), true, w - 16);
     drawFittedString(x + 14, base, w - 16, text, GxEPD_BLACK);
   }
 }
@@ -168,11 +177,17 @@ void drawSide(const Inputs& in, int x, int y, int w, int h) {
     t.tm_mon = list[i].date.m - 1;
     t.tm_mday = list[i].date.d;
     t.tm_wday = (personal::weekday(list[i].date) + 1) % 7;
-    char date[24], text[160];
+    char date[40], text[160];
     i18n::formatStatusDate(t, ui_lang, date, sizeof(date));
+    if (list[i].kind == Kind::SchoolStart || list[i].kind == Kind::SchoolEnd) {
+      // "Fr 8. Jan · Ende" above "Weihnachtsferien": the name has the whole line below.
+      size_t len = strlen(date);
+      snprintf(date + len, sizeof(date) - len, " \xC2\xB7 %s",
+               tr(list[i].kind == Kind::SchoolStart ? i18n::S::HlSchoolStarts : i18n::S::HlSchoolEnds));
+    }
     drawSymbol(list[i].kind, x, top + 5);
     drawSparseString(&epaperFont, x + 14, top + 15, date, GxEPD_BLACK);
-    highlightText(list[i], text, sizeof(text), false);
+    highlightText(list[i], text, sizeof(text), false, w - 22);
     drawFittedString(x + 14, top + 15 + month::LINE_H, w - 22, text, GxEPD_BLACK);
   }
 }
@@ -275,7 +290,7 @@ void drawSheet(LayoutItem* item, const Inputs& in, const std::tm& now) {
   Highlight h[1];
   if (month::highlights(in.today, in.state, in.school, in.lists, 3, h, 1) == 1) {
     char text[160];
-    highlightText(h[0], text, sizeof(text), true);
+    highlightText(h[0], text, sizeof(text), true, item->Width - 20);
     int y = item->PosY + item->Height - 8;
     drawSymbol(h[0].kind, item->PosX + 2, y - 10);
     drawFittedString(item->PosX + 16, y, item->Width - 20, text, GxEPD_BLACK);

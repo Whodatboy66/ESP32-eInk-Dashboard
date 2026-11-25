@@ -6,6 +6,7 @@
 #include "../personal/UserStore.h"
 #include "../ui/Canvas.h"
 #include "../ui/SparseFont.h"
+#include "BirthdayText.h"
 #include "Widgets.h"
 
 using namespace personal;
@@ -173,9 +174,9 @@ void birthdaysWidget(LayoutItem* item) {
     } else {
       drawSparseString(&epaperFont, x, y, label, GxEPD_BLACK);
     }
-    char name[96];
-    if (up[i].age > 0) snprintf(name, sizeof(name), "%s (%d)", up[i].who->name, up[i].age);
-    else snprintf(name, sizeof(name), "%s", up[i].who->name);
+    char name[96];  // the age always stays visible: "Lennart K. (30)" (BirthdayText.h)
+    bdaytext::fit(up[i].who->name, up[i].age, nullptr, right - (x + labelCol),
+                  [](const char* s) { return static_cast<int>(getSparseStringWidth(&epaperFont, s)); }, name, sizeof(name));
     drawFittedString(x + labelCol, y, right - (x + labelCol), name, GxEPD_BLACK);
     y += LINE_H;
   }
