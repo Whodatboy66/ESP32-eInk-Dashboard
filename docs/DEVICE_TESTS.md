@@ -344,6 +344,10 @@ described in the app.
 **Confirms stage 6 and the estimates of stage 10:** real numbers instead of the one estimate so far
 (about 3 % in 13 hours); `docs/POWER.md` and the app's battery estimate are written from them.
 
+**No meter needed** (2026-11-25): with stage 10 the device measures itself from its hourly battery
+readings (2-3 days on battery only, Diagnostics shows "gemessen: x % pro Tag"); this block is then
+rewritten for that. The meter way below is only for anyone who has one anyway.
+
 **Setup:** a USB power meter between the charger and the board that shows **0.1 mA or finer** and
 counts **mAh** (e.g. the FNIRSI FNB48 / FNB58 kind; a simple "USB doctor" that shows 0.00 A can't
 measure the sleep). **Battery disconnected** (otherwise the meter counts the charging current), the

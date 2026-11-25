@@ -169,6 +169,32 @@ The builder may adjust these after the PC renders; the owner reviews the renders
   isn't read at every refresh. Needs the store: a link not read this time keeps its last entries,
   marks and birthdays (today all links are combined into one result at each refresh).
 
+**Order in stage 8** (owner, 2026-11-25): data store → per calendar link (name, interval) → printer
+box and look (brought forward from stage 10; mockups first) → several screens → night sleep screen →
+picture of the day. A written plan (`plans/STAGE8_*.md`) with mockups comes before the build.
+
+### Look of the widgets (owner, 2026-11-25: "love the functionality, hate the looks")
+
+- The **printer box** gets designs per box size like the clock and the month (stage 7): today it
+  draws one fixed small layout (3 rows at fixed x positions) even in a half-screen box. Bigger boxes:
+  larger state and progress, the AMS spools as a row of filled bars with type and fill level,
+  temperatures with icons; the idle view (no MakerWorld id) uses the same space.
+- **Every AMS** (owner: two are connected, only the first is shown today) and **more per spool**:
+  brand and type ("PLA Basic"), fill level, colour (as a name or pattern: black-and-white screen),
+  from the printer's report (`tray_sub_brands`, `tray_type`, `tray_color`, `remain`).
+- A look pass over the other data widgets (stocks, parcels, weather, MakerWorld) with the same rule:
+  use the box, no fixed pixel columns, the hinted fonts (build 84). Mockups (PC renders) first, for
+  the owner to pick, then the build.
+
+### Printer box when idle (owner, 2026-11-25)
+
+- Without a MakerWorld id the idle printer already shows its own view (temperatures, AMS humidity and
+  temperature, spools; build 84). Wanted on top: the printer's **messages** (HMS warnings such as
+  "AMS humidity high", a filament runout, a failed print) in plain words, and the idle view also when a
+  MakerWorld id is set (a setting: "Wenn der Drucker ruht: MakerWorld / Drucker"). The builder checks
+  which HMS codes the report carries and keeps a short table of the common ones (code + "see the
+  printer" for the rest), within the space limits below.
+
 ### Several screens
 
 - **Opt-in.** One screen (default, and all existing devices) behaves exactly like today.
@@ -290,25 +316,6 @@ The builder may adjust these after the PC renders; the owner reviews the renders
   back to normal sleep as soon as the voltage drops. A wrong guess costs a few minutes of battery
   (owner: acceptable).
 - On beta first; to stable when it works reliably on the owner's device, otherwise it moves to Later.
-
-### Look of the widgets (owner, 2026-11-25: "love the functionality, hate the looks")
-
-- The **printer box** gets designs per box size like the clock and the month (stage 7): today it
-  draws one fixed small layout (3 rows at fixed x positions) even in a half-screen box. Bigger boxes:
-  larger state and progress, the AMS spools as a row of filled bars with type and fill level,
-  temperatures with icons; the idle view (no MakerWorld id) uses the same space.
-- A look pass over the other data widgets (stocks, parcels, weather, MakerWorld) with the same rule:
-  use the box, no fixed pixel columns, the hinted fonts (build 84). Mockups (PC renders) first, for
-  the owner to pick, then the build.
-
-### Printer box when idle (owner, 2026-11-25)
-
-- Without a MakerWorld id the idle printer already shows its own view (temperatures, AMS humidity and
-  temperature, spools; build 84). Wanted on top: the printer's **messages** (HMS warnings such as
-  "AMS humidity high", a filament runout, a failed print) in plain words, and the idle view also when a
-  MakerWorld id is set (a setting: "Wenn der Drucker ruht: MakerWorld / Drucker"). The builder checks
-  which HMS codes the report carries and keeps a short table of the common ones (code + "see the
-  printer" for the rest), within the space limits below.
 
 ### Polish before the handover
 

@@ -308,7 +308,7 @@ Implementation plan and result: [plans/STAGE7_NEW_LOOK.md](plans/STAGE7_NEW_LOOK
   published weekly by the "Data feeds" workflow from the OpenHolidays API, replaceable) per Bundesland,
   opt-in; in the status bar, "Heute und morgen", month view (build 79)
 - [x] Birthdays from yearly all-day calendar entries (setting, on by default) (build 79)
-- [ ] A device-tested beta promoted to stable (the family devices are flashed from stable)
+- [x] A device-tested beta promoted to stable (the family devices are flashed from stable)
 
 **Confirmed by:** [DEVICE_TESTS.md](DEVICE_TESTS.md) block 9.
 
@@ -332,6 +332,11 @@ fork network and gets the owner's licence.
 - [ ] Data store: each service keeps its last result in RTC memory; screens draw from it; downloads
   only when due
 - [ ] Refresh interval per data type (moved from stage 6)
+- [ ] Per calendar link: a name ("Familie", "Arbeit") and its own interval (the 2.9 MB work calendar
+  not at every refresh) (owner, 2026-11-25)
+- [ ] Printer box per box size: every AMS, filament per spool (brand, type, fill level, colour), the
+  idle view, later the printer's messages; a look pass over stocks, parcels, weather, MakerWorld.
+  Mockups first (brought forward from stage 10, owner 2026-11-25: "love the functionality, hate the looks")
 - [ ] Several screens (opt-in, up to 4): time windows (opt-in), tap = next screen for 2 / 5 / 10 min,
   hold 2 s = restart and refresh, screen dots in the status bar, presets in the app
 - [ ] Night sleep screen (opt-in, built-in graphic, "Schläft bis …", optional line for tomorrow)
@@ -357,7 +362,10 @@ fork network and gets the owner's licence.
 - [ ] Countdown box (up to 3 entries)
 - [ ] **Estimates from measured values** (moved from stage 6): the cost model in `src/core/PowerPlan.h`
   and `docs/POWER.md` from [DEVICE_TESTS.md](DEVICE_TESTS.md) block 8. First numbers (2026-11-20):
-  3 % in 13 hours, about 2-4 weeks per charge with every minute
+  3 % in 13 hours, about 2-4 weeks per charge with every minute. No USB meter needed (owner,
+  2026-11-25): the device measures itself from its hourly battery readings over 2-3 days on battery
+  only; Diagnostics shows "gemessen: x % pro Tag ≈ y Tage" next to the estimate (block 8 rewritten
+  for that when built)
 - [ ] Experiment: setup app reachable on a charger (inferred from the battery voltage), beta first;
   to stable when reliable, otherwise to Later
 - [ ] Robustness points found so far; the old `/basic` page removed
