@@ -185,9 +185,29 @@
 - [ ] **Step 1: Failing tests**: `hmsText(known code, De)` → its plain sentence; an unknown code → "Meldung am Drucker (HMS 0700_2000_0002_0001)"; `prn_idle = 1` with a MakerWorld id → the printer view is chosen (`showIdlePrinter(bool hasMwId, uint8_t prnIdle)` in `PrinterLayout.h`).
 - [ ] **Step 2: Run** → FAIL. **Step 3: Implement**, then the look pass. **Step 4: Run** tests and renders → owner review of the renders (like B2 step 5) → adjust.
 
+### Task B5: a switched-off printer gives its box to a neighbour (owner, 2026-11-25)
+
+The owner switches the printer fully off most of the time: the box shouldn't show "not reachable" with
+a warning 90 % of the day, but give its space to a neighbouring box, and come back when the printer does.
+
+**Files:**
+- Modify: `src/layout/LayoutEngine.h` / `BoxLayout.h` (pure merge), `src/widgets/Registry.cpp` (`loadLayoutFrom` with the printer off), `src/core/App.cpp` (printer state; a merge change = full redraw from the store, **no** `forceFetch`), `src/core/WakePlan.h` (a button wake ignores the printer backoff), `src/core/ConfigManager.cpp` (`prn_merge`: the neighbour's widget key, "" = automatic), `src/web/Api.cpp`, `web/app.js` (printer box: "Wenn der Drucker aus ist: Platz geben an …", only neighbours that fit), `web/i18n.js`, `src/i18n/Strings.h` ("Drucker aus" / "Printer off")
+- Test: `tests/host/test_layout.cpp`, `tests/host/test_wake_plan.cpp`
+
+**Interfaces:**
+- Produces: `int mergeTarget(const Placement* boxes, int count, int printerIdx, int preferredIdx)` → the index of a box that, with the printer's box, forms a rectangle (the preferred one if it does, else one sharing a full edge, above / below first, then left / right; -1 = none); `bool mergeBoxes(Placement* boxes, int& count, int printerIdx, int targetIdx)` (the target grows to the union, the printer box is removed).
+- State (RTC, `Bambu.cpp`): `bool printerOff` — set after **2** failed connections in a row without an auth error, cleared by the next answer. While off: no `PROBLEM_PRINTER` (a refused access code stays `PROBLEM_PRINTER_CODE`); the box merges when the idle view would be the printer's own (no MakerWorld id, or `prn_idle` = printer); with a MakerWorld idle view the box stays and shows MakerWorld.
+- Polling while off: the existing backoff (10, 20, 40, then 60 min); **a button wake polls at once** (backoff ignored), so a tap after switching the printer on brings the box back.
+
+- [ ] **Step 1: Failing tests**:
+  - `test_merge_target`: printer 2×1 above weather 2×1 (same columns) → weather; printer 2×1 next to a 2×2 → -1; a preferred box that doesn't fit → the automatic one; `mergeBoxes` makes the weather box 2×2 and removes the printer box; the classic template's pixel boxes too (same rule on rectangles).
+  - `test_bambu_tap_ignores_backoff`: `bambuRetryAfter` in the future, `buttonWake` → `p.bambu`.
+  - No fitting neighbour: the box stays and draws "Drucker aus" without the alert icon (render case `printer-off-alone`).
+- [ ] **Step 2: Run** → FAIL. **Step 3: Implement.** **Step 4: Run** host tests; renders `printer-off-merged` (planner, printer + weather), `printer-off-alone` → owner review with B2's renders.
+
 ### Task B4: part B done
 
-- [ ] `FW_BUILD` 88, whats_new, CHANGELOG, DEVICE_TESTS block 10 part B (two AMS shown, filament details, idle view setting, a printer message, the look of stocks / parcels / weather / MakerWorld), docs images, sizes.
+- [ ] (after B5) `FW_BUILD` 88, whats_new, CHANGELOG, DEVICE_TESTS block 10 part B (two AMS shown, filament details, idle view setting, a printer message, the look of stocks / parcels / weather / MakerWorld; printer switched off: no warning, the box merges into its neighbour and comes back after a tap), docs images, sizes.
 
 ---
 

@@ -235,6 +235,46 @@ inline Result buildLayout(const Template& t, uint16_t enabled) {
   return fallback;
 }
 
+// ---- A switched-off printer gives its box away (stage 8, task B5) ----
+
+constexpr int MERGE_GAP = 10;  // pixel layouts (Classic) leave small gaps between their places
+
+// Does b, with a, make one rectangle? Same columns and touching above / below, or same rows and
+// touching left / right (a gap up to MERGE_GAP counts as touching). 1 = vertical, 2 = horizontal.
+inline int mergeFit(const Rect& a, const Rect& b) {
+  auto touch = [](int endA, int startB) { return startB >= endA && startB - endA <= MERGE_GAP; };
+  if (a.x == b.x && a.w == b.w && (touch(a.y + a.h, b.y) || touch(b.y + b.h, a.y))) return 1;
+  if (a.y == b.y && a.h == b.h && (touch(a.x + a.w, b.x) || touch(b.x + b.w, a.x))) return 2;
+  return 0;
+}
+
+// The box that takes the printer's place: the preferred one if it fits, else one above / below,
+// then left / right; never the status bar. -1: none fits (the printer box stays).
+inline int mergeTarget(const Result& r, int printerIdx, int preferredIdx) {
+  const Rect& p = r.items[printerIdx].rect;
+  auto fits = [&](int i) {
+    return i >= 0 && i < r.count && i != printerIdx && r.items[i].id != WidgetId::StatusBar ? mergeFit(p, r.items[i].rect) : 0;
+  };
+  if (fits(preferredIdx)) return preferredIdx;
+  for (int pass = 1; pass <= 2; pass++)
+    for (int i = 0; i < r.count; i++)
+      if (fits(i) == pass) return i;
+  return -1;
+}
+
+// The target grows over the printer's place (and the gap between them); the printer box goes.
+inline bool mergeInto(Result& r, int printerIdx, int targetIdx) {
+  if (targetIdx < 0 || targetIdx >= r.count || !mergeFit(r.items[printerIdx].rect, r.items[targetIdx].rect)) return false;
+  const Rect a = r.items[printerIdx].rect, b = r.items[targetIdx].rect;
+  const int x0 = a.x < b.x ? a.x : b.x, y0 = a.y < b.y ? a.y : b.y;
+  const int x1 = a.x + a.w > b.x + b.w ? a.x + a.w : b.x + b.w, y1 = a.y + a.h > b.y + b.h ? a.y + a.h : b.y + b.h;
+  r.items[targetIdx].rect = Rect{(int16_t)x0, (int16_t)y0, (int16_t)(x1 - x0), (int16_t)(y1 - y0)};
+  r.items[targetIdx].grid = r.items[targetIdx].grid && r.items[printerIdx].grid;
+  for (int i = printerIdx; i + 1 < r.count; i++) r.items[i] = r.items[i + 1];
+  r.count--;
+  return true;
+}
+
 // Identifies a layout (template + which widgets where): a change means a full refresh.
 inline uint32_t signature(const Result& r) {
   uint32_t h = 2166136261u;  // FNV-1a

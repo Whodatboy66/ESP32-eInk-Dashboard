@@ -22,7 +22,7 @@
     mqtt_port: 8883, printer_name: FIRST ? '' : 'X1C', makerworld_uid: '',
     ota_auto: true, ota_beta: false, clock_24h: true,
     lang: /[?&]lang=en/.test(location.search) ? 'en' : 'de',
-    clock_interval: 1, interval_weather: 60, interval_stocks: 30, interval_calendar: 30, interval_tracking: 120, ics_names: ['Familie', 'Arbeit', ''], ics_every: [0, 1, 0], quiet_enabled: true, quiet_from: '23:00', quiet_to: '06:00', battery_mah: 3000,
+    clock_interval: 1, interval_weather: 60, interval_stocks: 30, interval_calendar: 30, interval_tracking: 120, ics_names: ['Familie', 'Arbeit', ''], ics_every: [0, 1, 0], printer_merge: '', printer_idle: 0, quiet_enabled: true, quiet_from: '23:00', quiet_to: '06:00', battery_mah: 3000,
     holiday_state: FIRST ? '' : 'BY', holidays_on: !FIRST, school_on: !FIRST, school_url: '', ics_month: [true, false, false], cal_birthdays: true,
     pin_preset: 'esp32c6_default',
     pins: { epd_cs: 1, epd_dc: 8, epd_rst: 14, epd_busy: 7, epd_sck: 23, epd_mosi: 22, display_power: 4, battery: 0, demo_button: 2 }

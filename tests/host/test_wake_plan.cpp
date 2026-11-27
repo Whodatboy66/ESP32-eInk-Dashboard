@@ -99,6 +99,17 @@ static void test_calendar_links_own_interval() {
   CHECK(!p.event && !p.calendar);
 }
 
+// Stage 8 (B5): a switched-off printer is asked again after its backoff; a tap asks at once (the owner
+// switched it on and wants its box back).
+static void test_bambu_tap_ignores_backoff() {
+  WakeInputs in = base();
+  in.bootCount = 0;
+  in.bambuRetryAfter = NOW + 1800;
+  CHECK(!planWake(in).bambu);
+  in.buttonWake = true;
+  CHECK(planWake(in).bambu);
+}
+
 // Without a real clock yet everything counts as due.
 static void test_due_without_clock() {
   WakeInputs in = base();
@@ -419,6 +430,7 @@ int main() {
   test_force_fetch_and_daily_full_redraw();
   test_due_without_clock();
   test_calendar_links_own_interval();
+  test_bambu_tap_ignores_backoff();
   test_widget_not_on_layout_is_never_fetched();
   test_calendar_needs_feeds_for_wifi();
   test_forced_fetch_brings_wifi();

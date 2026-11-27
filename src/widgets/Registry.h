@@ -34,6 +34,10 @@ uint16_t configuredWidgets();
 uint16_t enabledWidgets();
 // Builds the layout table (layout[], Widgets.h) for the configured template and widgets.
 layouts::Result loadLayout();
+// The last loaded layout's signature before a printer merge (a merge is no layout change: no
+// downloads), and whether the printer's box went to a neighbour (stage 8, B5).
+extern uint32_t layoutBaseSignature;
+extern bool layoutMerged;
 // The same for a layout that isn't saved (the setup app's exact preview): template key, box string
 // (for "custom") and the widgets switched on (templates).
 layouts::Result loadLayoutFrom(const char* tpl, const char* boxes, uint16_t showMask);

@@ -17,6 +17,8 @@ constexpr int MAX_TRAYS = 4;
 struct Tray {
   int remain;        // percent, -1 = unknown (a spool without RFID)
   char tray_type[10];  // "PLA", "" = an empty slot
+  char brand[24];    // stage 8: "PLA Basic" (tray_sub_brands), "" = unknown
+  uint32_t color;    // stage 8: RRGGBBAA (tray_color), 0 = none
 };
 
 struct Ams {
@@ -25,6 +27,12 @@ struct Ams {
   int trayCount;
   Tray trays[MAX_TRAYS];
 };
+
+// One of the printer's messages (HMS: health management): two numbers, shown as "0C00_0100_0002_0001".
+struct Hms {
+  uint32_t attr, code;
+};
+constexpr int MAX_HMS = 4;
 
 struct PrinterStatus {
   char gcode_state[20];  // RUNNING, PREPARE, PAUSE, FINISH, FAILED, IDLE, ...
@@ -35,6 +43,8 @@ struct PrinterStatus {
   int cooling_fan_speed, big_fan1_speed, big_fan2_speed;  // 0-15 (the printer's steps)
   int amsCount;
   Ams ams[MAX_AMS];
+  int hmsCount;  // stage 8
+  Hms hms[MAX_HMS];
 };
 
 // The printer sends some numbers as strings ("15", "24.5"): both are read.
@@ -69,9 +79,23 @@ inline bool readReport(JsonVariantConst print, PrinterStatus& p) {
       Tray& tray = ams.trays[ams.trayCount++];
       tray.remain = t["remain"].isNull() ? -1 : static_cast<int>(number(t["remain"]));
       std::snprintf(tray.tray_type, sizeof(tray.tray_type), "%s", t["tray_type"] | "");
+      std::snprintf(tray.brand, sizeof(tray.brand), "%s", t["tray_sub_brands"] | "");
+      tray.color = static_cast<uint32_t>(std::strtoul(t["tray_color"] | "0", nullptr, 16));
     }
   }
+  for (JsonVariantConst h : print["hms"].as<JsonArrayConst>()) {
+    if (p.hmsCount >= MAX_HMS) break;
+    p.hms[p.hmsCount].attr = h["attr"] | 0u;
+    p.hms[p.hmsCount].code = h["code"] | 0u;
+    p.hmsCount++;
+  }
   return true;
+}
+
+// A message's code as the printer and Bambu's wiki write it: "0C00_0100_0002_0001".
+inline void hmsCode(const Hms& h, char* out, size_t cap) {
+  std::snprintf(out, cap, "%04X_%04X_%04X_%04X", static_cast<unsigned>(h.attr >> 16), static_cast<unsigned>(h.attr & 0xFFFF),
+                static_cast<unsigned>(h.code >> 16), static_cast<unsigned>(h.code & 0xFFFF));
 }
 
 // Printing (also preparing and paused), or a job between 0 and 100 %.

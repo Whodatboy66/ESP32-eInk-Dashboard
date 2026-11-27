@@ -506,6 +506,21 @@ use; sleep screen and picture of the day work. Plan: [plans/STAGE8_DATA_AND_SCRE
       the other calendar's entries still update; fixing the link brings its entries back
 - [ ] Wi-Fi off for a while: weather and stocks keep their values (the "old" badge after 2 intervals)
 
+### Part B, build 88: printer box, filament, printer off, look pass
+
+- [ ] Printing: the box shows both AMS units (all spools), each with type / brand, fill level and
+      colour word + swatch; percentage, layers, time left and bar; in a 2×2 / tall box four lines per spool
+- [ ] Idle without a MakerWorld id: the printer's view (temperatures, AMS); with an id: the setting
+      **When the printer is idle** switches between MakerWorld and the printer
+- [ ] A printer message (HMS), if one comes: "Meldung (AMS): …" in a tall box, "Meldung (1)" in a low one
+- [ ] Printer switched off at its switch: after two checks (log `[Bambu] switched off: its box goes to a
+      neighbour`) the box is gone and its neighbour is larger; **no warning** in the status bar
+- [ ] Switch it on and tap: the printer box is back at once (log `answers again`), no other downloads
+- [ ] **When the printer is off** set to a box that doesn't fit: the device picks one that does
+- [ ] Look: stocks show price and the day's change (+0,8 %), the range only at full width; parcels'
+      arrival right-aligned; MakerWorld's columns fill the box
+- [ ] A wrong access code still shows "Druckercode" in the status bar
+
 ### Later parts (C, D)
 
 - [ ] One screen (default): a tap refreshes like before

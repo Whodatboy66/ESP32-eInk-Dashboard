@@ -41,6 +41,17 @@ minimal-clock-only minimal weather,agenda
 technical-no-stocks-tracking technical stocks,tracking
 planner-stale planner - stale
 planner-problems planner - problems
+printer-2x1 v1;sb1;0,0,2,1,clock;2,0,2,1,printer;0,1,2,2,agenda;2,1,2,2,month - printing
+printer-2x1-idle v1;sb1;0,0,2,1,clock;2,0,2,1,printer;0,1,2,2,agenda;2,1,2,2,month - printer-idle
+printer-2x2 v1;sb1;0,0,2,1,clock;2,0,2,2,printer;0,1,2,2,agenda;2,2,2,1,weather - printing
+printer-2x2-idle v1;sb1;0,0,2,1,clock;2,0,2,2,printer;0,1,2,2,agenda;2,2,2,1,weather - printer-idle
+printer-4x1 v1;sb1;0,0,4,1,printer;0,1,2,2,clock;2,1,2,2,month - printing
+printer-4x1-idle v1;sb1;0,0,4,1,printer;0,1,2,2,clock;2,1,2,2,month - printer-idle
+printer-2x3 v1;sb1;0,0,2,3,printer;2,0,2,1,clock;2,1,2,2,month - printing
+printer-2x3-idle v1;sb1;0,0,2,3,printer;2,0,2,1,clock;2,1,2,2,month - printer-idle
+look-stocks-4x1 v1;sb1;0,0,4,1,stocks;0,1,2,2,clock;2,1,2,2,tracking
+printer-off-merged v1;sb1;0,0,2,1,clock;2,0,2,1,printer;2,1,2,1,weather;0,1,2,2,agenda;2,2,2,1,stocks - printer-off
+printer-off-alone v1;sb1;0,0,2,1,printer;2,0,2,3,month;0,1,1,2,clock;1,1,1,2,notes - printer-off
 minimal-12h minimal - 12h
 classic-stale classic - stale
 personal personal

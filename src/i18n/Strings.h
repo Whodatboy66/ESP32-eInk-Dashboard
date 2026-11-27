@@ -58,6 +58,10 @@ enum class Lang : uint8_t { De, En };
   X(MwBoosts,          "Boosts:",                          "Boosts :") \
   X(PrinterDone,       "F: %d%%",                          "C: %d%%") \
   X(PrinterEmpty,      "LEER",                             "EMPTY") \
+  X(PrinterSlotEmpty,  "Leer",                             "Empty") \
+  X(PrinterOff,        "aus",                              "off") \
+  X(PrinterMessage,    "Meldung",                          "Message") \
+  X(ErrPrinterMerge,   "Wähle einen Kasten des Layouts oder „automatisch“.", "Choose a box of the layout or \"automatic\".") \
   X(PrinterRunning,    "Druckt",                           "RUNNING") \
   X(PrinterPrepare,    "Vorbereitung",                     "PREPARE") \
   X(PrinterPause,      "Pausiert",                         "PAUSE") \
@@ -249,6 +253,19 @@ enum class Lang : uint8_t { De, En };
   X(PtCalendarN,       "Kalender %d kann nicht gelesen werden", "Calendar %d can't be read") \
   X(PtCalendarNamed,   "%s kann nicht gelesen werden",     "%s can't be read") \
   X(CalLinkN,          "Kalender %d",                      "Calendar %d") \
+  /* ---- filament colours (stage 8, PrinterLayout.h) ---- */ \
+  X(ColBlack,         "Schwarz",                           "Black") \
+  X(ColWhite,         "Weiß",                              "White") \
+  X(ColGrey,          "Grau",                              "Grey") \
+  X(ColRed,           "Rot",                               "Red") \
+  X(ColOrange,        "Orange",                            "Orange") \
+  X(ColYellow,        "Gelb",                              "Yellow") \
+  X(ColGreen,         "Grün",                              "Green") \
+  X(ColBlue,          "Blau",                              "Blue") \
+  X(ColViolet,        "Violett",                           "Violet") \
+  X(ColPink,          "Pink",                              "Pink") \
+  X(ColBrown,         "Braun",                             "Brown") \
+  X(ColBeige,         "Beige",                             "Beige") \
   X(PfCalendar,        "Prüfe die Kalender-Links im Tab Daten.", "Check the calendar links on the Data tab.") \
   X(PtPrinter,         "Der Drucker antwortet nicht",      "The printer doesn't answer") \
   X(PfPrinter,         "Ist er eingeschaltet? Prüfe seine Adresse im Tab Daten.", "Is it switched on? Check its address on the Data tab.") \

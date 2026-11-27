@@ -297,6 +297,8 @@ void handleState() {
   secret(s, "mqtt_pass", mqtt_pass);
   s["mqtt_port"] = mqtt_port;
   s["printer_name"] = printer_name;
+  s["printer_merge"] = printer_merge;  // stage 8: who takes a switched-off printer's box ("" = automatic)
+  s["printer_idle"] = printer_idle;    // stage 8: idle with a MakerWorld id: 0 = MakerWorld, 1 = the printer
   s["makerworld_uid"] = makerworld_uid;
   s["ota_auto"] = otaAutoInstall;
   s["ota_beta"] = otaBeta;
@@ -486,6 +488,16 @@ void handleSettings() {
   plainText("weather_loc", loc, sizeof(loc), weather_location, S::LabelPlace);
   plainText("mqtt_sn", mqttSn, sizeof(mqttSn), mqtt_sn, S::LabelSerial);
   plainText("printer_name", pname, sizeof(pname), printer_name, S::LabelPrinterName);
+  char pmerge[CFG_PRINTER_MERGE_MAX];
+  copyStr(pmerge, sizeof(pmerge), printer_merge);
+  if (!o["printer_merge"].isUnbound()) {
+    const char* v = o["printer_merge"] | "";
+    bool known = !v[0];
+    for (int w = 0; w < layouts::WIDGET_COUNT && !known; w++)
+      known = strcmp(v, "status") && strcmp(v, "printer") && !strcmp(v, layouts::WIDGET_KEYS[w]);
+    if (!o["printer_merge"].is<const char*>() || !known) fail("printer_merge", tr(S::ErrPrinterMerge));
+    else copyStr(pmerge, sizeof(pmerge), v);
+  }
   plainText("makerworld_uid", mw, sizeof(mw), makerworld_uid, S::LabelMakerWorld);
 
   // Power (stage 6).
@@ -671,6 +683,9 @@ void handleSettings() {
   copyStr(weather_location, sizeof(weather_location), loc);
   copyStr(mqtt_sn, sizeof(mqtt_sn), mqttSn);
   copyStr(printer_name, sizeof(printer_name), pname);
+  copyStr(printer_merge, sizeof(printer_merge), pmerge);
+  if (o["printer_idle"].is<int>() && (o["printer_idle"].as<int>() == 0 || o["printer_idle"].as<int>() == 1))
+    printer_idle = (uint8_t)o["printer_idle"].as<int>();
   copyStr(makerworld_uid, sizeof(makerworld_uid), mw);
   copyStr(device_timezone, sizeof(device_timezone), tz);
   copyStr(stock_symbols, sizeof(stock_symbols), stocks);

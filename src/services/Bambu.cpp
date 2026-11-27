@@ -10,6 +10,7 @@
 RTC_DATA_ATTR bool isPrinting = false;
 RTC_DATA_ATTR bool previousIsPrinting = false;
 RTC_DATA_ATTR bool printViewOnScreen = false;
+RTC_DATA_ATTR bool printerOff = false;  // stage 8: no answer twice in a row (switched off)
 RTC_DATA_ATTR static time_t printFinishedAt = 0;  // when the last print ended (0 = none recently)
 bool bambuAuthRejected = false;
 

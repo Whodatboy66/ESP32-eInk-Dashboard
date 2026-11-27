@@ -38,6 +38,38 @@ void test_full_report() {
   CHECK(bambu::isPrinting(p));
 }
 
+// Stage 8: every AMS, the filament per spool (brand, colour) and the printer's messages (HMS).
+const char* TWO_AMS = R"({"print":{"gcode_state":"IDLE","percent":0,
+  "ams":{"ams":[{"id":"0","humidity_raw":"38","temp":"24.5","tray":[
+     {"id":"0","remain":80,"tray_type":"PLA","tray_sub_brands":"PLA Basic","tray_color":"FF6A13FF"},
+     {"id":"1","remain":-1,"tray_type":"PETG","tray_sub_brands":"PETG HF","tray_color":"000000FF"},
+     {"id":"2"},{"id":"3","remain":55,"tray_type":"PLA","tray_sub_brands":"","tray_color":"FFFFFFFF"}]},
+   {"id":"1","humidity_raw":"41","temp":"23.0","tray":[
+     {"id":"0","remain":20,"tray_type":"TPU","tray_sub_brands":"TPU for AMS","tray_color":"0A2989FF"}]}]},
+  "hms":[{"attr":201327360,"code":131073}]}})";
+
+void test_every_ams_and_filament() {
+  JsonDocument d = json(TWO_AMS);
+  bambu::PrinterStatus p{};
+  CHECK(bambu::readReport(d["print"], p));
+  CHECK_EQ(p.amsCount, 2);
+  CHECK_EQ(p.ams[0].trayCount, 4);
+  CHECK_EQ(p.ams[1].trayCount, 1);
+  CHECK_STR(p.ams[0].trays[0].brand, "PLA Basic");
+  CHECK_EQ(p.ams[0].trays[0].color, 0xFF6A13FFu);
+  CHECK_EQ(p.ams[0].trays[1].color, 0x000000FFu);
+  CHECK_STR(p.ams[0].trays[2].brand, "");  // an empty slot
+  CHECK_EQ(p.ams[0].trays[2].color, 0u);
+  CHECK_STR(p.ams[1].trays[0].brand, "TPU for AMS");
+  CHECK_EQ(p.ams[1].humidity, 41);
+  CHECK_EQ(p.hmsCount, 1);
+  CHECK_EQ(p.hms[0].attr, 201327360u);
+  CHECK_EQ(p.hms[0].code, 131073u);
+  char code[24];
+  bambu::hmsCode(p.hms[0], code, sizeof(code));
+  CHECK_STR(code, "0C00_0300_0002_0001");  // 201327360 = 0x0C000300, 131073 = 0x00020001
+}
+
 // Idle printers send small updates without gcode_state; only the full report (the answer to
 // "pushall") counts, so the updates don't overwrite it with zeros.
 void test_delta_ignored() {
@@ -72,6 +104,7 @@ void test_fan_percent() {
 
 int main() {
   test_full_report();
+  test_every_ams_and_filament();
   test_delta_ignored();
   test_printing_states();
   test_fan_percent();

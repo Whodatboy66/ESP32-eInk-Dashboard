@@ -10,6 +10,9 @@ extern bool isPrinting;               // RTC memory: printing (also preparing, p
 extern bool previousIsPrinting;       // RTC memory: the state before this wake's report
 extern bool printViewOnScreen;        // RTC memory: the printer view (not MakerWorld) is drawn
 extern bool bambuAuthRejected;        // the last connection was refused: wrong LAN access code
+// RTC memory (stage 8): the printer didn't answer twice in a row (usually: switched off at its switch).
+// No warning then; its box goes to a neighbour (Registry.cpp) until it answers again.
+extern bool printerOff;
 
 // The printer view stays this long after a print ends, then MakerWorld's counters come back.
 constexpr long PRINT_FINISHED_HOLD_S = 5 * 60;

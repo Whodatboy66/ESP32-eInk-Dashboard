@@ -29,7 +29,7 @@ var FIELDS = {
   pin_preset: 'device', pins: 'device', clock_interval: 'screen', quiet_enabled: 'screen', quiet_from: 'screen',
   quiet_to: 'screen', battery_mah: 'device', lang: 'device', holiday_state: 'data', holidays_on: 'data', school_on: 'data',
   school_url: 'data', ics_month: 'data', cal_birthdays: 'data', interval_weather: 'data', interval_stocks: 'data',
-  interval_calendar: 'data', interval_tracking: 'data', ics_names: 'data', ics_every: 'data'
+  interval_calendar: 'data', interval_tracking: 'data', ics_names: 'data', ics_every: 'data', printer_merge: 'data', printer_idle: 'data'
 };
 
 // ---------- helpers ----------
@@ -1419,6 +1419,17 @@ function addBirthday() {
   focusF('bdname');
 }
 
+// Stage 8 (B5): which box takes the printer's place while it is switched off ("" = automatic).
+function printerMergeField() {
+  var short = t('short'), v = cur('printer_merge') || '';
+  var keys = ['weather', 'agenda', 'month', 'stocks', 'tracking', 'clock', 'tasks', 'notes', 'birthdays'];
+  var sel = h('select', { id: uid(), 'data-f': 'in:printer_merge', onchange: function () { setVal('printer_merge', sel.value); } },
+    [h('option', { value: '', selected: !v }, t('mergeAuto'))].concat(keys.map(function (k) {
+      return h('option', { value: k, selected: k === v }, short[k] || k);
+    })));
+  return fieldBox('printer_merge', t('f_printer_merge'), sel, t('mergeNote'));
+}
+
 // Stage 8: how often each data type loads; the clock interval caps it (shown when it does).
 var INTERVALS = [15, 30, 60, 120, 180, 360];
 function intervalsCard() {
@@ -1451,7 +1462,11 @@ function dataTab() {
       textField('mqtt_sn', t('serial'), { cap: 'characters' }),
       secretField('mqtt_pass', t('accessCode'), { pw: true, note: t('accessNote') }),
       textField('mqtt_port', t('port'), { num: true, im: 'numeric', ph: '8883' }),
-      textField('makerworld_uid', t('f_makerworld_uid'), { im: 'numeric', note: t('mwNote') })),
+      textField('makerworld_uid', t('f_makerworld_uid'), { im: 'numeric', note: t('mwNote') }),
+      saved('printer_idle') !== undefined && cur('makerworld_uid') ? [h('p', { class: 'note' }, t('idleView')),
+        seg(t('idleView'), [[0, t('idleMw')], [1, t('idlePrinter')]], cur('printer_idle') || 0,
+          function (v) { setVal('printer_idle', v); render(); }, 'pi-')] : null,
+      saved('printer_merge') !== undefined ? printerMergeField() : null),
     saved('interval_weather') !== undefined ? [lbl(t('ivTitle')), intervalsCard()] : null,
     lbl(t('tasks')), tasksCard(),
     lbl(t('note')), noteCard(),

@@ -1,4 +1,6 @@
 #include "Registry.h"
+#include "../services/Bambu.h"
+#include "PrinterLayout.h"
 
 #include <stdio.h>
 #include <string.h>
@@ -50,6 +52,9 @@ uint16_t enabledWidgets() {
   uint16_t always = layouts::widgetBit(WidgetId::StatusBar) | layouts::widgetBit(WidgetId::Clock);
   return configuredWidgets() & (widget_show_mask | always);
 }
+
+uint32_t layoutBaseSignature = 0;
+bool layoutMerged = false;
 
 MissingHint missingHints[layouts::WIDGET_COUNT];
 int missingHintCount = 0;
@@ -112,6 +117,19 @@ layouts::Result loadLayoutFrom(const char* tpl, const char* boxes, uint16_t show
   } else {
     uint16_t always = layouts::widgetBit(WidgetId::StatusBar) | layouts::widgetBit(WidgetId::Clock);
     r = layouts::buildLayout(layouts::templateByKey(tpl), configuredWidgets() & (showMask | always));
+  }
+  layoutBaseSignature = layouts::signature(r);
+  // Stage 8 (B5): a switched-off printer whose box would show the printer's own view gives the box to
+  // a neighbour (printer_merge, or one that makes a rectangle with it); no neighbour: the box stays.
+  layoutMerged = false;
+  if (printerOff && prnlayout::showIdlePrinter(makerworld_uid[0] != '\0', printer_idle)) {
+    int printerIdx = -1, preferred = -1;
+    for (int i = 0; i < r.count; i++) {
+      if (r.items[i].id == WidgetId::Printer) printerIdx = i;
+      else if (printer_merge[0] && !strcmp(layouts::WIDGET_KEYS[static_cast<int>(r.items[i].id)], printer_merge))
+        preferred = i;
+    }
+    if (printerIdx >= 0) layoutMerged = layouts::mergeInto(r, printerIdx, layouts::mergeTarget(r, printerIdx, preferred));
   }
   fillTable(r);
   return r;

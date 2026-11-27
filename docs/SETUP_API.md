@@ -108,6 +108,9 @@ its own password).
   the screen in the new language); another value than `"de"` / `"en"` is a field error under `lang`.
   The answer of that save is still in the old language. `lastUpdate` stays in the language it was
   written in. Place names from `/api/places` come in that language too ("Berlin, Deutschland").
+- **Printer box (build 88, stage 8):** settings `printer_idle` (0 = MakerWorld's counters when an id is set,
+  1 = the printer's own view) and `printer_merge` (the widget key that takes a switched-off printer's box,
+  e.g. `"weather"`; `""` = automatic; `"status"` / `"printer"` / unknown keys are a field error).
 - **Data intervals (build 87, stage 8):** settings `interval_weather`, `interval_stocks`, `interval_calendar`,
   `interval_tracking`: minutes, one of 15, 30, 60, 120, 180, 360 (defaults 60, 30, 30, 120); another value is a
   field error under its key. Each data type loads when its kept data is that old; never more often than

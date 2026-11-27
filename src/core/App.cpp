@@ -36,6 +36,7 @@
 #include "ConfigManager.h"
 #include "Problems.h"
 #include "DataStore.h"
+#include "../widgets/PrinterLayout.h"
 #include "WakePlan.h"
 #include "PowerPlan.h"
 #include "../ui/Canvas.h"
@@ -319,7 +320,8 @@ void appSetup() {
   // or off) is drawn with a full refresh, everything fetched, so no ghosts of the old one stay.
   layouts::Result lay = loadLayout();
   if (lay.fellBack) DBGF("Layout \"%s\" not usable: Classic used", layout_template);
-  uint32_t laySig = layouts::signature(lay);
+  // The layout as configured (a merge for a switched-off printer isn't a change of it: no downloads).
+  uint32_t laySig = layoutBaseSignature;
   if (laySig != layoutSignature) {
     if (layoutSignature != 0 && !fullRefresh) DBG(F("Layout changed: full refresh"));
     fullRefresh = true;
@@ -434,7 +436,8 @@ void appSetup() {
   wake.bambuRefresh = refreshOf(infoBambu);
   wake.hasIcsFeeds = hasIcsFeeds();
   wake.hasAerodataboxKey = aerodatabox_key[0] != '\0';
-  wake.hasMakerworldUid = makerworld_uid[0] != '\0';
+  // MakerWorld's counters are only fetched when its view is the idle one (stage 8: prn_idle).
+  wake.hasMakerworldUid = !prnlayout::showIdlePrinter(makerworld_uid[0] != '\0', printer_idle);
   wake.isPrinting = isPrinting;
   wake.previousIsPrinting = previousIsPrinting;
   wake.pendingBambuRetry = pendingBambuRetry;
@@ -563,7 +566,15 @@ void appSetup() {
           DBGF("[Bambu] next try in %ld min", (long)(bambuBackoffSeconds(bambuFailures) / 60));
         }
         setProblem(PROBLEM_PRINTER_CODE, !bambuOk && bambuAuthRejected);
-        setProblem(PROBLEM_PRINTER, !bambuOk && !bambuAuthRejected);
+        // Stage 8: no answer is "switched off", not a problem (the owner switches it off most of the
+        // day); after two in a row its box goes to a neighbour, redrawn from the store a second later.
+        setProblem(PROBLEM_PRINTER, false);
+        const bool off = !bambuOk && !bambuAuthRejected && bambuFailures >= 2;
+        if (off != printerOff) {
+          printerOff = off;
+          DBGF("[Bambu] %s", off ? "switched off: its box goes to a neighbour" : "answers again: its box is back");
+          redrawAll = true;
+        }
         signalPrintTransition();
         forceUpdateStatusBar = true;
       }

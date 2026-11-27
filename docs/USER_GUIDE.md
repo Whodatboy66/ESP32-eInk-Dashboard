@@ -354,11 +354,11 @@ Each problem clears by itself the next time that source loads successfully. If t
 
 The printer panel switches automatically:
 
-- **While printing:** printer status: layer, progress, temperatures, fans, remaining time, AMS trays and humidity.
+- **While printing:** state, progress (percentage, layers, time left, a bar), bed and nozzle temperature, the AMS humidity and temperature, and **every AMS's spools** (build 88): type and brand ("PLA Basic"), fill level and colour. The colour is a word plus a swatch (dark colours filled, middle ones hatched, light ones an outline: the screen is black and white). Since build 88 the panel has a design for every box size, like the clock and the month: one line per spool in a low box, brand / fill bar / level / colour in a larger one ([examples](images/layouts/printer-2x2.png)).
 - **For 5 minutes after a print ends:** printer status, so you can see the finished state.
-- **Otherwise:** MakerWorld totals: likes, downloads, prints, collections and boosts, summed over all your published models.
-
-If no MakerWorld ID is set, the panel shows the idle printer status instead.
+- **Otherwise:** MakerWorld totals (likes, downloads, prints, collections, boosts), or the idle printer status: setting **When the printer is idle** under the printer on the Data tab (build 88). Without a MakerWorld ID always the printer.
+- **Messages:** a printer message (HMS) is shown with its unit and code, e.g. "Meldung (AMS): 0700_2000_0002_0001"; look it up on the printer's screen or in Bambu's wiki. In a low box the state says "Meldung (1)".
+- **Switched off** (build 88): a printer that doesn't answer twice in a row counts as switched off, without a warning. Its box goes to a neighbouring box that makes a rectangle with it (setting **When the printer is off**: automatic or a chosen box), and comes back when the printer answers again; **a tap checks at once**. If no neighbour fits, the box stays and says "aus". Only a refused access code is still shown as a problem.
 
 ## Battery and power
 

@@ -12,8 +12,10 @@
 #include "AgendaDays.h"
 #include "Dashboard.h"
 #include "FlightText.h"
+#include "DataColumns.h"
 #include "MonthView.h"
 #include "Personal.h"
+#include "PrinterLayout.h"
 #include "Registry.h"
 
 // ---- Data ----
@@ -245,25 +247,28 @@ void stockWidget(LayoutItem* item) {
     drawUnavailable(item);
     return;
   }
-  // Columns as in the original 430 px place, squeezed proportionally in a narrower one.
-  auto col = [item](int x) { return item->Width >= 430 ? x : x * item->Width / 430; };
-  const int priceX = col(152);
+  // Stage 8: columns from the box width (DataColumns.h): name, price and the day's change
+  // right-aligned, the day's range where there is room.
+  const datacols::StockColumns c = datacols::stockColumns(item->Width);
+  auto right = [](int xRight, int y, const char* s) { drawText(xRight - getSparseStringWidth(&epaperFont, s), y, s); };
   int y = item->PosY + item->RowHeight;
-  char buf[32];
+  char buf[40];
   for (int i = 0; i < stockCount; i++) {
     const StockItem& s = stocks[i];
     uint32_t arrow = s.price > s.prevClose ? MDI_ARROW_UP : s.price < s.prevClose ? MDI_ARROW_DOWN : MDI_EQUAL;
     drawSparseChar(&MDI_22_Sparse, item->PosX, y, arrow, GxEPD_BLACK);
-    drawFittedString(item->PosX + 30, y, priceX - 30 - 6, s.name, GxEPD_BLACK);  // "..." before the price
+    drawFittedString(item->PosX + c.nameX, y, c.nameEnd - c.nameX - 6, s.name, GxEPD_BLACK);  // "..." before the price
     snprintf(buf, sizeof(buf), "%.2f", s.price);
     i18n::localizeNumber(buf, ui_lang);
-    drawText(item->PosX + priceX, y, buf);
-    snprintf(buf, sizeof(buf), "%7.2f / ", s.dayHigh);
+    right(item->PosX + c.priceRight, y, buf);
+    datacols::changeText(s.price, s.prevClose, buf, sizeof(buf));
     i18n::localizeNumber(buf, ui_lang);
-    drawText(item->PosX + col(240), y, buf);
-    snprintf(buf, sizeof(buf), "%7.2f", s.dayLow);
-    i18n::localizeNumber(buf, ui_lang);
-    drawText(item->PosX + col(330), y, buf);
+    right(item->PosX + c.changeRight, y, buf);
+    if (c.rangeX) {
+      snprintf(buf, sizeof(buf), "%.2f - %.2f", s.dayLow, s.dayHigh);
+      i18n::localizeNumber(buf, ui_lang);
+      drawText(item->PosX + c.rangeX, y, buf);
+    }
     y += item->RowHeight;
   }
   drawStaleMark(item, Service::Stocks);
@@ -328,7 +333,9 @@ void trackingWidget(LayoutItem* item) {
       char date[16], eta[48];
       i18n::formatShortDate(et, ui_lang, date, sizeof(date));
       snprintf(eta, sizeof(eta), "%s %s", tr(i18n::S::TrackEta), date);
-      drawText(x, y, eta);
+      // Right-aligned at the box's end where it fits (stage 8 look pass), else after the status.
+      const int etaW = getSparseStringWidth(&epaperFont, eta), endX = item->PosX + item->Width - 6 - etaW;
+      drawText(endX > x ? endX : x, y, eta);
     }
     y += item->RowHeight;
   }
@@ -342,7 +349,7 @@ void makerWorldWidget(LayoutItem* item) {
   loadMakerWorld();
   // No user id (the stored counters stay in NVS after it is removed: device test 2026-11-25), or no
   // counters yet: the printer's own view (temperatures, AMS, spools, state).
-  if (!makerworld_uid[0] || !makerworld.available) {
+  if (prnlayout::showIdlePrinter(makerworld_uid[0] != '\0', printer_idle) || !makerworld.available) {
     bambuWidget(item);
     return;
   }
@@ -353,7 +360,7 @@ void makerWorldWidget(LayoutItem* item) {
   } stats[] = {{i18n::S::MwLikes, makerworld.likes},   {i18n::S::MwDownloads, makerworld.downloads},
                {i18n::S::MwPrints, makerworld.prints}, {i18n::S::MwCollections, makerworld.collections},
                {i18n::S::MwBoosts, makerworld.boosts}};
-  const int half = 196;
+  const int half = item->Width / 2 - 4;  // stage 8: two columns from the box width
   for (int i = 0; i < 5; i++) {
     int x = item->PosX + (i % 2) * (half + 4), y = item->PosY + 19 + (i / 2) * item->RowHeight;
     if (y > item->PosY + item->Height) break;

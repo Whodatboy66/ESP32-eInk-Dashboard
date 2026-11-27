@@ -339,6 +339,8 @@ Implementation plan: [plans/STAGE8_DATA_AND_SCREENS.md](plans/STAGE8_DATA_AND_SC
 - [ ] Printer box per box size: every AMS, filament per spool (brand, type, fill level, colour), the
   idle view, later the printer's messages; a look pass over stocks, parcels, weather, MakerWorld.
   Mockups first (brought forward from stage 10, owner 2026-11-25: "love the functionality, hate the looks")
+- [ ] Printer switched off (owner, 2026-11-25): no "not reachable" warning; its box merges into a neighbour
+  (automatic or chosen in the app) and comes back when the printer answers (a tap checks at once)
 - [ ] Several screens (opt-in, up to 4): time windows (opt-in), tap = next screen for 2 / 5 / 10 min,
   hold 2 s = restart and refresh, screen dots in the status bar, presets in the app
 - [ ] Night sleep screen (opt-in, built-in graphic, "Schläft bis …", optional line for tomorrow)

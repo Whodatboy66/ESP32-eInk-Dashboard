@@ -26,6 +26,8 @@ char wifi_ssid[CFG_WIFI_SSID_MAX], wifi_pass[CFG_WIFI_PASS_MAX];
 char mqtt_ip[CFG_MQTT_IP_MAX], mqtt_sn[CFG_MQTT_SN_MAX], mqtt_pass[CFG_MQTT_PASS_MAX];
 uint16_t mqtt_port;
 char printer_name[CFG_PRINTER_NAME_MAX];
+char printer_merge[CFG_PRINTER_MERGE_MAX];
+uint8_t printer_idle = 0;
 // Data sources
 char device_timezone[CFG_TIMEZONE_MAX];
 char weather_location[CFG_WEATHER_LOC_MAX];
@@ -90,6 +92,7 @@ const TextSetting TEXT_SETTINGS[] = {
     {"ics_name0", ics_names[0], sizeof(ics_names[0])},  // stage 8
     {"ics_name1", ics_names[1], sizeof(ics_names[1])},
     {"ics_name2", ics_names[2], sizeof(ics_names[2])},
+    {"prn_merge", printer_merge, sizeof(printer_merge)},  // stage 8 (B5)
 };
 static_assert(ICS_MAX_FEEDS == 3, "one TEXT_SETTINGS entry per calendar link");
 
@@ -114,6 +117,7 @@ void configLoad() {
   static const char* const INTERVAL_KEYS[4] = {"int_wx", "int_stk", "int_cal", "int_trk"};
   static const uint16_t INTERVAL_DEFAULTS[4] = {datastore::DEFAULT_WEATHER_MIN, datastore::DEFAULT_STOCKS_MIN,
                                                 datastore::DEFAULT_CALENDAR_MIN, datastore::DEFAULT_TRACKING_MIN};
+  printer_idle = preferences.getUChar("prn_idle", 0) ? 1 : 0;
   const uint8_t every = preferences.getUChar("ics_every", 0);  // 2 bits per link
   for (int i = 0; i < ICS_MAX_FEEDS; i++) {
     ics_every[i] = (every >> (2 * i)) & 3;
@@ -214,6 +218,7 @@ void configSave() {
   uint8_t every = 0;
   for (int i = 0; i < ICS_MAX_FEEDS; i++) every |= (ics_every[i] & 3) << (2 * i);
   preferences.putUChar("ics_every", every);
+  preferences.putUChar("prn_idle", printer_idle);
   preferences.putUShort("int_wx", data_interval[0]);
   preferences.putUShort("int_stk", data_interval[1]);
   preferences.putUShort("int_cal", data_interval[2]);

@@ -74,7 +74,11 @@ uint16_t bootCount = 0;
 bool isPrinting = false, previousIsPrinting = false, printViewOnScreen = false, bambuAuthRejected = false;
 uint32_t otaAvailBuild = 0;
 char otaAvailVersion[16] = "";
-bool showPrintView() { return false; }
+bool renderPrinting = false;  // the variants "printing" / "printer-idle" (stage 8 part B)
+bool printerOff = false;      // the variant "printer-off" (stage 8, B5)
+char printer_merge[CFG_PRINTER_MERGE_MAX] = "";
+uint8_t printer_idle = 0;
+bool showPrintView() { return renderPrinting; }
 // The e-paper display of the screens that do their own refresh (setup, update): an 800 x 480
 // bitmap here; they draw on canvas(), which is the image being written.
 DashboardDisplay& getDisplay() {
@@ -260,6 +264,48 @@ int main(int argc, char** argv) {
     problems = PROBLEM_CALENDAR | PROBLEM_WEATHER;
     icsFailedMask = 0x02;  // calendar link 2
   }
+  if (argc > 4 && (std::string(argv[4]) == "printing" || std::string(argv[4]) == "printer-idle")) {
+    // A printer with two AMS units (stage 8 part B), printing or idle; idle without a MakerWorld id so
+    // the box shows the printer's own view.
+    const bool printing = std::string(argv[4]) == "printing";
+    renderPrinting = printing;
+    if (!printing) makerworld_uid[0] = '\0';
+    bambu::PrinterStatus& p = printer;
+    p = bambu::PrinterStatus();
+    snprintf(p.gcode_state, sizeof(p.gcode_state), "%s", printing ? "RUNNING" : "IDLE");
+    p.percent = printing ? 42 : 0;
+    p.remainTime = printing ? 95 : 0;
+    p.layer_num = printing ? 76 : 0;
+    p.total_layer_num = printing ? 180 : 0;
+    p.bed_temp = printing ? 60 : 24;
+    p.nozzle_temp = printing ? 220 : 26;
+    p.amsCount = 2;
+    if (printing) {  // one message from the AMS (the tall box has a line for it)
+      p.hmsCount = 1;
+      p.hms[0] = bambu::Hms{0x07002000u, 0x00020001u};
+    }
+    const struct { int remain; const char* type; const char* brand; uint32_t color; } trays[2][4] = {
+        {{80, "PLA", "PLA Basic", 0xFF6A13FF}, {-1, "PETG", "PETG HF", 0x000000FF}, {-1, "", "", 0},
+         {55, "PLA", "PLA Matte", 0xFFFFFFFF}},
+        {{20, "TPU", "TPU for AMS", 0x0A2989FF}, {100, "PLA", "PLA Silk+", 0xC12E1FFF}, {65, "ABS", "ABS", 0x898989FF},
+         {35, "PLA", "PLA Basic", 0x00AE42FF}}};
+    for (int a = 0; a < 2; a++) {
+      p.ams[a].humidity = a ? 41 : 38;
+      p.ams[a].temp = a ? 23.0f : 24.5f;
+      p.ams[a].trayCount = 4;
+      for (int j = 0; j < 4; j++) {
+        bambu::Tray& tr = p.ams[a].trays[j];
+        tr.remain = trays[a][j].remain;
+        snprintf(tr.tray_type, sizeof(tr.tray_type), "%s", trays[a][j].type);
+        snprintf(tr.brand, sizeof(tr.brand), "%s", trays[a][j].brand);
+        tr.color = trays[a][j].color;
+      }
+    }
+  }
+  if (argc > 4 && std::string(argv[4]) == "printer-off") {  // stage 8 (B5): switched off, no MakerWorld id
+    printerOff = true;
+    makerworld_uid[0] = '\0';
+  }
   if (argc > 4 && std::string(argv[4]) == "long") renderSample = 2;
   if (argc > 4 && std::string(argv[4]) == "12h1258") RENDER_TIME += 3 * 3600 + 17 * 60;  // 12:58, widest 12 h
   if (argc > 3) {
@@ -289,6 +335,7 @@ int main(int argc, char** argv) {
   canvas().fillScreen(GxEPD_WHITE);
   FullScreenParts parts;
   parts.printer = parts.weather = parts.agenda = parts.stocks = parts.month = parts.tracking = true;
+  parts.printView = showPrintView();  // stage 8: the "printing" variants draw the printer view
   drawFullScreen(parts);
 
   writePbm(screen, out);

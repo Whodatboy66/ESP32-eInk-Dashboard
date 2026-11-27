@@ -155,8 +155,9 @@ inline WakePlan planWake(const WakeInputs& in) {
   p.bambu = bambuMqtt && ((((in.isPrinting || in.previousIsPrinting) && dueByWakes(in.bambuRefresh, in.bootCount, in.stepMin)) ||
                            dueByWakes(BAMBU_IDLE_REFRESH_MIN, in.bootCount, in.stepMin)) ||
                           in.pendingBambuRetry);
-  // A printer that didn't answer (usually: switched off) is asked again only after its backoff.
-  if (p.bambu && in.bambuRetryAfter && now < in.bambuRetryAfter) p.bambu = false;
+  // A printer that didn't answer (usually: switched off) is asked again only after its backoff; a tap
+  // asks at once (stage 8: switched on again, its box comes back).
+  if (p.bambu && in.bambuRetryAfter && now < in.bambuRetryAfter && !in.buttonWake) p.bambu = false;
   p.bambuRetry = p.bambu && in.pendingBambuRetry;
   // The "print finished" window just ended: redraw so the MakerWorld view replaces the printer view.
   if (bambuMqtt && in.printViewOnScreen && !in.showPrintView) p.bambu = true;

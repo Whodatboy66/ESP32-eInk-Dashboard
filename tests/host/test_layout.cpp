@@ -179,7 +179,53 @@ static void test_status_marks() {
   CHECK_EQ(statusbar::holidaySpace(100, 450, 600), 0);  // too little: no name rather than overlap
 }
 
+// Stage 8 (B5): a switched-off printer gives its box to a neighbour that makes a rectangle with it.
+static layouts::Item at(WidgetId id, int x, int y, int w, int h) {
+  layouts::Item it{};
+  it.id = id;
+  it.rect = layouts::Rect{(int16_t)x, (int16_t)y, (int16_t)w, (int16_t)h};
+  return it;
+}
+
+static void test_printer_merge() {
+  using layouts::Result;
+  Result r;
+  r.items[r.count++] = at(WidgetId::StatusBar, 0, 0, 800, 28);
+  r.items[r.count++] = at(WidgetId::Printer, 400, 28, 400, 150);
+  r.items[r.count++] = at(WidgetId::Weather, 400, 178, 400, 150);  // below, same columns
+  r.items[r.count++] = at(WidgetId::Agenda, 0, 28, 400, 300);      // left, but twice as high
+  CHECK_EQ(layouts::mergeTarget(r, 1, -1), 2);   // automatic: the one below
+  CHECK_EQ(layouts::mergeTarget(r, 1, 3), 2);    // the preferred one doesn't fit: automatic
+  CHECK(layouts::mergeInto(r, 1, 2));
+  CHECK_EQ(r.count, 3);
+  const layouts::Item* w = nullptr;
+  for (int i = 0; i < r.count; i++)
+    if (r.items[i].id == WidgetId::Weather) w = &r.items[i];
+  CHECK(w && w->rect.y == 28 && w->rect.h == 300 && w->rect.x == 400 && w->rect.w == 400);
+  for (int i = 0; i < r.count; i++) CHECK(r.items[i].id != WidgetId::Printer);
+  // Side by side with the same height; never the status bar.
+  Result s;
+  s.items[s.count++] = at(WidgetId::StatusBar, 0, 0, 800, 28);
+  s.items[s.count++] = at(WidgetId::Printer, 0, 28, 400, 150);
+  s.items[s.count++] = at(WidgetId::Stocks, 400, 28, 400, 150);
+  CHECK_EQ(layouts::mergeTarget(s, 1, -1), 2);
+  CHECK_EQ(layouts::mergeTarget(s, 1, 0), 2);  // the status bar can't take it
+  // Nothing fits: -1 (the box stays and says "Drucker aus").
+  Result n;
+  n.items[n.count++] = at(WidgetId::Printer, 0, 28, 400, 150);
+  n.items[n.count++] = at(WidgetId::Agenda, 400, 28, 400, 300);
+  CHECK_EQ(layouts::mergeTarget(n, 0, -1), -1);
+  // Classic's pixel places may have a small gap: up to 10 px still count as touching.
+  Result c;
+  c.items[c.count++] = at(WidgetId::Printer, 0, 360, 430, 110);
+  c.items[c.count++] = at(WidgetId::Stocks, 0, 250, 430, 104);
+  CHECK_EQ(layouts::mergeTarget(c, 0, -1), 1);
+  CHECK(layouts::mergeInto(c, 0, 1));
+  CHECK(c.items[0].rect.y == 250 && c.items[0].rect.h == 220);
+}
+
 int main() {
+  test_printer_merge();
   test_status_marks();
   test_heading_rule();
   test_weather_days_for_width();

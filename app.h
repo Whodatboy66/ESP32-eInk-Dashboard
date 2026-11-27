@@ -33,6 +33,11 @@ extern char wifi_ssid[CFG_WIFI_SSID_MAX], wifi_pass[CFG_WIFI_PASS_MAX];
 extern char mqtt_ip[CFG_MQTT_IP_MAX], mqtt_sn[CFG_MQTT_SN_MAX], mqtt_pass[CFG_MQTT_PASS_MAX];
 extern uint16_t mqtt_port;
 extern char printer_name[CFG_PRINTER_NAME_MAX];
+// Stage 8: the widget (key, e.g. "weather") that takes a switched-off printer's box; "" = automatic.
+constexpr unsigned CFG_PRINTER_MERGE_MAX = 12;
+extern char printer_merge[CFG_PRINTER_MERGE_MAX];
+// Stage 8: what an idle printer's box shows with a MakerWorld id (prnlayout::IDLE_MAKERWORLD / IDLE_PRINTER).
+extern uint8_t printer_idle;
 
 // ---- Data sources ----
 extern char device_timezone[CFG_TIMEZONE_MAX];
